@@ -26,7 +26,7 @@ export function readJsonBody(req) {
   });
 }
 
-export function nodeHandler(core, env = process.env) {
+export function nodeHandler(core, env = process.env, extra = {}) {
   return async (req, res) => {
     let out;
     if (req.method !== "POST") {
@@ -34,14 +34,20 @@ export function nodeHandler(core, env = process.env) {
     } else {
       try {
         const body = await readJsonBody(req);
-        out = await core({ authHeader: req.headers.authorization, body, env });
+        out = await core({ authHeader: req.headers.authorization, body, env, ...extra });
       } catch (e) {
         out = { status: e.status || 500, json: { error: e.status === 413 ? "Richiesta troppo grande." : "Richiesta non valida." } };
       }
     }
     res.statusCode = out.status;
-    res.setHeader("content-type", "application/json; charset=utf-8");
     res.setHeader("cache-control", "no-store");
+    // Risposta in testo semplice per chi la mostra così com'è (Comandi Rapidi).
+    if (typeof out.text === "string") {
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.end(out.text);
+      return;
+    }
+    res.setHeader("content-type", "application/json; charset=utf-8");
     res.end(JSON.stringify(out.json));
   };
 }

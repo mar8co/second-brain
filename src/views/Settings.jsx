@@ -1,6 +1,7 @@
 // Impostazioni: modalità dati, AI, esportazione, aggiunta da iPhone.
 import { Download, LogOut } from "lucide-react";
 import { Page, TopBar } from "../components/Layout.jsx";
+import QuickShare from "../components/QuickShare.jsx";
 
 function Section({ title, children }) {
   return (
@@ -11,7 +12,7 @@ function Section({ title, children }) {
   );
 }
 
-export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings }) {
+export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast }) {
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), items: archive.items }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -70,11 +71,16 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
             <p>
               <strong>Più veloce:</strong> copia il link (es. da Instagram: ··· → Copia link), apri Second Brain e tocca “Incolla link”.
             </p>
-            <p>
-              <strong>Comandi Rapidi (da provare):</strong> un comando può aprire <code className="break-all rounded bg-sunken px-1">{window.location.origin}/aggiungi?url=</code> seguito
-              dal link condiviso. Le istruzioni sono nel README; la condivisione diretta dal foglio Condividi non è ancora verificata.
-            </p>
+            {!syncMode && (
+              <p className="text-muted">Il salvataggio rapido senza aprire l'app richiede la modalità sincronizzata (Supabase).</p>
+            )}
           </Section>
+
+          {syncMode && (
+            <Section title="Salvataggio rapido da iPhone">
+              <QuickShare toast={toast} />
+            </Section>
+          )}
 
           <Section title="Backup">
             <p>Scarica tutto l'archivio (senza i file caricati) in formato JSON.</p>

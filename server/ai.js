@@ -11,15 +11,32 @@
 
 import { verifyRequest } from "./auth.js";
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+// Modelli consigliati da Google per i nuovi progetti (ottobre 2026): i 2.5
+// restano attivi solo per chi li usava già. Se il modello scelto non è
+// disponibile per la chiave, si prova il successivo.
+export const DEFAULT_MODEL = "gemini-3.5-flash-lite";
+const FALLBACK_MODELS = ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"];
 
 export function aiConfigured(env) {
   return Boolean(env.GEMINI_API_KEY);
 }
 
-export async function callGemini({ env, prompt, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch }) {
-  const model = env.GEMINI_MODEL || DEFAULT_MODEL;
-  // GEMINI_API_BASE serve solo ai test end-to-end (finto Gemini locale).
+export function modelChain(env) {
+  const first = env.GEMINI_MODEL || DEFAULT_MODEL;
+  return [first, ...FALLBACK_MODELS.filter((m) => m !== first)];
+}
+
+// Il "thinking" consumerebbe il budget di token del JSON: lo riduciamo al minimo.
+export function thinkingConfig(model) {
+  if (model.includes("2.5")) return { thinkingBudget: 0 };
+  if (/^gemini-3/.test(model)) return { thinkingLevel: "low" };
+  return null;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function geminiRequest({ env, model, prompt, schema, maxTokens, temperature, fetchImpl, withThinking }) {
+  // GEMINI_API_BASE serve solo ai test (finto Gemini locale).
   const apiBase = env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
   const url = `${apiBase}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
   const generationConfig = {
@@ -28,36 +45,75 @@ export async function callGemini({ env, prompt, schema, maxTokens = 1024, temper
     responseMimeType: "application/json",
     responseSchema: schema,
   };
-  // Sui modelli 2.5 il "thinking" consumerebbe il budget di token del JSON.
-  if (model.includes("2.5")) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  const thinking = withThinking ? thinkingConfig(model) : null;
+  if (thinking) generationConfig.thinkingConfig = thinking;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 25_000);
-  let res;
   try {
-    res = await fetchImpl(url, {
+    const res = await fetchImpl(url, {
       method: "POST",
       signal: ctrl.signal,
       headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
       body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
     });
+    const data = await res.json().catch(() => null);
+    return { res, data };
   } catch {
     throw new AiError(502, "Impossibile contattare il servizio AI.");
   } finally {
     clearTimeout(timer);
   }
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    if (res.status === 429) throw new AiError(429, "Limite del servizio AI raggiunto: riprova più tardi.");
-    if (res.status === 400 || res.status === 403) throw new AiError(502, "Il servizio AI ha rifiutato la richiesta (chiave o modello non validi?).");
-    throw new AiError(502, "Errore dal servizio AI.");
+}
+
+// Messaggio di Google (non contiene la chiave), accorciato.
+function googleMessage(data) {
+  const m = data?.error?.message;
+  return typeof m === "string" ? m.replace(/\s+/g, " ").slice(0, 200) : "";
+}
+
+export async function callGemini({ env, prompt, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch, retryDelayMs = 1500 }) {
+  const models = modelChain(env);
+  let lastError = null;
+  for (const model of models) {
+    let withThinking = true;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { res, data } = await geminiRequest({ env, model, prompt, schema, maxTokens, temperature, fetchImpl, withThinking });
+      if (res.ok) {
+        const text = (data?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
+        try {
+          return { out: JSON.parse(text), model };
+        } catch {
+          lastError = new AiError(502, "Risposta AI non valida (incompleta o non in JSON).");
+          break;
+        }
+      }
+      const msg = googleMessage(data);
+      // Parametro "thinking" non supportato da questo modello: riprova senza.
+      if (res.status === 400 && withThinking && /thinking/i.test(msg)) {
+        withThinking = false;
+        continue;
+      }
+      if (res.status === 401 || res.status === 403 || (res.status === 400 && /api key/i.test(msg))) {
+        throw new AiError(502, `Google ha rifiutato la chiave Gemini (${res.status}). Controlla GEMINI_API_KEY su Vercel.${msg ? ` Dettaglio: ${msg}` : ""}`);
+      }
+      if (res.status === 429) {
+        throw new AiError(429, `Limite del servizio AI raggiunto: riprova più tardi.${msg ? ` Dettaglio: ${msg}` : ""}`);
+      }
+      // Modello inesistente o non disponibile per questa chiave: prova il successivo.
+      if (res.status === 404 || (res.status === 400 && /model/i.test(msg))) {
+        lastError = new AiError(502, `Modello ${model} non disponibile (${res.status}).${msg ? ` Dettaglio: ${msg}` : ""}`);
+        break;
+      }
+      // Google sovraccarico o errore temporaneo: breve attesa e nuovo tentativo.
+      if (res.status >= 500 && attempt < 2) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      throw new AiError(502, `Errore dal servizio AI (${res.status}).${msg ? ` Dettaglio: ${msg}` : ""}`);
+    }
   }
-  const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new AiError(502, "Risposta AI non valida.");
-  }
+  throw lastError || new AiError(502, "Errore dal servizio AI.");
 }
 
 export class AiError extends Error {
@@ -108,6 +164,12 @@ export function sanitizeClassify(out) {
     categories: strArr(out?.categories, 2, 40).map((s) => s.trim()).filter(Boolean),
     tags: [...new Set(strArr(out?.tags, 6, 40).map((s) => s.trim().toLowerCase()).filter(Boolean))],
   };
+}
+
+// Usata anche dai salvataggi in background (server/share.js).
+export async function classifyWithAi({ env, item, known = [], fetchImpl }) {
+  const { out, model } = await callGemini({ env, prompt: buildClassifyPrompt(item, known), schema: CLASSIFY_SCHEMA, maxTokens: 2048, fetchImpl });
+  return { ...sanitizeClassify(out), model };
 }
 
 // ---------- ask ----------
@@ -175,8 +237,7 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
       const item = body?.item;
       if (!item || typeof item !== "object") return { status: 400, json: { error: "Elemento mancante." } };
       const known = strArr(body?.categories, 60, 40);
-      const out = await callGemini({ env, prompt: buildClassifyPrompt(item, known), schema: CLASSIFY_SCHEMA, maxTokens: 512, fetchImpl });
-      return { status: 200, json: { ...sanitizeClassify(out), model: env.GEMINI_MODEL || DEFAULT_MODEL } };
+      return { status: 200, json: await classifyWithAi({ env, item, known, fetchImpl }) };
     }
     if (action === "ask") {
       const question = str(body?.question, 500).trim();
@@ -185,8 +246,8 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
       if (!items.length) {
         return { status: 200, json: { answer: "", sufficient: false, sources: [] } };
       }
-      const out = await callGemini({ env, prompt: buildAskPrompt(question, items), schema: ASK_SCHEMA, maxTokens: 1024, fetchImpl });
-      return { status: 200, json: { ...sanitizeAsk(out, items.map((i) => i.id)), model: env.GEMINI_MODEL || DEFAULT_MODEL } };
+      const { out, model } = await callGemini({ env, prompt: buildAskPrompt(question, items), schema: ASK_SCHEMA, maxTokens: 4096, fetchImpl });
+      return { status: 200, json: { ...sanitizeAsk(out, items.map((i) => i.id)), model } };
     }
     return { status: 400, json: { error: "Azione non valida." } };
   } catch (e) {

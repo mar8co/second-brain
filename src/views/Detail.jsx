@@ -181,7 +181,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           {item.ai ? (
             <section className="rounded-2xl border border-ai/30 bg-ai/5 p-3.5">
               <div className="flex items-center justify-between">
-                <AiBadge>Generato dall'AI · da verificare</AiBadge>
+                <AiBadge>{item.ai.applied ? "Categorie e tag assegnati dall'AI · da verificare" : "Generato dall'AI · da verificare"}</AiBadge>
                 {ai && (
                   <button type="button" className="text-sm font-medium text-ai" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
                     {busy === "classify" ? "…" : "Rigenera"}
