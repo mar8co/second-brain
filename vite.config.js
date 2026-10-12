@@ -3,6 +3,7 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { handleExtract } from "./server/extract.js";
 import { handleAi } from "./server/ai.js";
+import { handleShare } from "./server/share.js";
 import { nodeHandler } from "./server/node-adapter.js";
 
 // In `npm run dev` gli endpoint /api/* sono serviti da un middleware che usa lo
@@ -41,6 +42,7 @@ export default defineConfig(({ mode }) => {
       react(),
       devApi("/api/extract", handleExtract, apiEnv),
       devApi("/api/ai", handleAi, apiEnv),
+      devApi("/api/share", handleShare, apiEnv),
       VitePWA({
         registerType: "autoUpdate",
         injectRegister: "auto",

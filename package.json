@@ -15,6 +15,7 @@
   "dependencies": {
     "@mozilla/readability": "^0.6.0",
     "@supabase/supabase-js": "^2.117.3",
+    "@vercel/functions": "^2.2.13",
     "linkedom": "^0.18.13",
     "lucide-react": "^1.55.0",
     "pdfjs-dist": "^6.4.299",

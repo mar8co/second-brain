@@ -41,7 +41,7 @@ create index if not exists items_user_created_idx on public.items (user_id, crea
 
 -- updated_at automatico.
 create or replace function public.touch_updated_at() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   new.updated_at := now();
   return new;
@@ -55,19 +55,19 @@ alter table public.items enable row level security;
 
 drop policy if exists "items_select_own" on public.items;
 create policy "items_select_own" on public.items
-  for select to authenticated using (user_id = auth.uid());
+  for select to authenticated using (user_id = (select auth.uid()));
 
 drop policy if exists "items_insert_own" on public.items;
 create policy "items_insert_own" on public.items
-  for insert to authenticated with check (user_id = auth.uid());
+  for insert to authenticated with check (user_id = (select auth.uid()));
 
 drop policy if exists "items_update_own" on public.items;
 create policy "items_update_own" on public.items
-  for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 
 drop policy if exists "items_delete_own" on public.items;
 create policy "items_delete_own" on public.items
-  for delete to authenticated using (user_id = auth.uid());
+  for delete to authenticated using (user_id = (select auth.uid()));
 
 -- ---------------------------------------------------------------------------
 -- Storage: bucket PRIVATO "files" (15 MB, tipi ammessi), un file per elemento
@@ -87,19 +87,119 @@ on conflict (id) do update
 drop policy if exists "files_select_own" on storage.objects;
 create policy "files_select_own" on storage.objects
   for select to authenticated
-  using (bucket_id = 'files' and (storage.foldername(name))[1] = auth.uid()::text);
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
 drop policy if exists "files_insert_own" on storage.objects;
 create policy "files_insert_own" on storage.objects
   for insert to authenticated
-  with check (bucket_id = 'files' and (storage.foldername(name))[1] = auth.uid()::text);
+  with check (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
 drop policy if exists "files_update_own" on storage.objects;
 create policy "files_update_own" on storage.objects
   for update to authenticated
-  using (bucket_id = 'files' and (storage.foldername(name))[1] = auth.uid()::text);
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
 
 drop policy if exists "files_delete_own" on storage.objects;
 create policy "files_delete_own" on storage.objects
   for delete to authenticated
-  using (bucket_id = 'files' and (storage.foldername(name))[1] = auth.uid()::text);
+  using (bucket_id = 'files' and (storage.foldername(name))[1] = (select auth.uid())::text);
+
+-- ---------------------------------------------------------------------------
+-- Salvataggio rapido da Comandi Rapidi (POST /api/share), senza aprire l'app.
+-- Ogni utente può avere un codice personale; nel database c'è solo il suo
+-- hash SHA-256. Il server chiama share_save/share_update con il codice: le
+-- funzioni trovano l'utente e scrivono solo nei suoi elementi.
+-- ---------------------------------------------------------------------------
+create table if not exists public.share_tokens (
+  user_id     uuid primary key references auth.users (id) on delete cascade,
+  token_hash  text not null unique,
+  created_at  timestamptz not null default now()
+);
+
+alter table public.share_tokens enable row level security;
+
+drop policy if exists "share_tokens_select_own" on public.share_tokens;
+create policy "share_tokens_select_own" on public.share_tokens
+  for select to authenticated using (user_id = (select auth.uid()));
+
+-- Crea (o sostituisce) il codice dell'utente collegato e lo restituisce una volta.
+create or replace function public.create_share_token() returns text
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := auth.uid();
+  tok text;
+begin
+  if uid is null then raise exception 'not_authenticated'; end if;
+  tok := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
+  insert into public.share_tokens (user_id, token_hash)
+  values (uid, encode(sha256(convert_to(tok, 'UTF8')), 'hex'))
+  on conflict (user_id) do update set token_hash = excluded.token_hash, created_at = now();
+  return tok;
+end $$;
+
+create or replace function public.revoke_share_token() returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  delete from public.share_tokens where user_id = auth.uid();
+end $$;
+
+create or replace function public.share_user(p_token text) returns uuid
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  uid uuid;
+begin
+  if p_token is null or length(p_token) < 32 then raise exception 'invalid_token'; end if;
+  select user_id into uid from public.share_tokens
+  where token_hash = encode(sha256(convert_to(p_token, 'UTF8')), 'hex');
+  if uid is null then raise exception 'invalid_token'; end if;
+  return uid;
+end $$;
+
+-- Nuovo elemento per il proprietario del codice. Restituisce id e categorie
+-- già usate (per suggerire all'AI quelle esistenti).
+create or replace function public.share_save(p_token text, p_item jsonb) returns jsonb
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := public.share_user(p_token);
+  r public.items;
+  new_id uuid;
+  cats text[];
+begin
+  r := jsonb_populate_record(null::public.items, p_item);
+  insert into public.items (user_id, type, url, title, note, status, status_detail, text_source)
+  values (uid, coalesce(r.type, 'link'), r.url, r.title, r.note, coalesce(r.status, 'saved'), r.status_detail, r.text_source)
+  returning id into new_id;
+  select coalesce(array_agg(distinct c), '{}') into cats
+  from public.items i cross join lateral unnest(i.categories) as c
+  where i.user_id = uid;
+  return jsonb_build_object('id', new_id, 'categories', to_jsonb(cats));
+end $$;
+
+-- Aggiorna un elemento del proprietario del codice con i dati letti e l'AI.
+create or replace function public.share_update(p_token text, p_id uuid, p_patch jsonb) returns void
+language plpgsql security definer set search_path = '' as $$
+declare
+  uid uuid := public.share_user(p_token);
+  cur public.items;
+  r public.items;
+begin
+  select * into cur from public.items where id = p_id and user_id = uid;
+  if not found then raise exception 'not_found'; end if;
+  r := jsonb_populate_record(cur, p_patch);
+  update public.items set
+    final_url = r.final_url, title = r.title, description = r.description, site_name = r.site_name,
+    image_url = r.image_url, extracted_text = r.extracted_text, text_source = r.text_source, place = r.place,
+    categories = r.categories, tags = r.tags, status = r.status, status_detail = r.status_detail,
+    ai = r.ai, processed_at = r.processed_at
+  where id = p_id and user_id = uid;
+end $$;
+
+revoke all on function public.create_share_token() from public, anon;
+revoke all on function public.revoke_share_token() from public, anon;
+revoke all on function public.share_user(text) from public, anon, authenticated;
+revoke all on function public.share_save(text, jsonb) from public;
+revoke all on function public.share_update(text, uuid, jsonb) from public;
+grant execute on function public.create_share_token() to authenticated;
+grant execute on function public.revoke_share_token() to authenticated;
+grant execute on function public.share_save(text, jsonb) to anon, authenticated;
+grant execute on function public.share_update(text, uuid, jsonb) to anon, authenticated;

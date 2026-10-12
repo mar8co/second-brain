@@ -41,6 +41,21 @@ export function useArchive(store, { ai }) {
     };
   }, [store]);
 
+  // Quando l'app torna in primo piano ricarico in silenzio: gli elementi
+  // salvati da Comandi Rapidi (o da un altro dispositivo) compaiono da soli.
+  useEffect(() => {
+    if (store?.mode !== "sync") return;
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      store
+        .list()
+        .then((list) => setItems(list.sort(byDate)))
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [store]);
+
   const upsert = useCallback((it) => {
     setItems((list) => {
       const i = list.findIndex((x) => x.id === it.id);

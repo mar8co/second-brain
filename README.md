@@ -65,7 +65,7 @@ Per provarlo sull'iPhone nella stessa rete: `npx vite --host` e apri l'indirizzo
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | nel bundle del client (pubbliche per design, protette da RLS) | sì, per la modalità sincronizzata |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | solo funzioni `/api` (verificano il token di sessione) | sì |
 | `GEMINI_API_KEY` | solo funzioni `/api` | no: senza, niente AI |
-| `GEMINI_MODEL` | solo funzioni `/api` | no (default `gemini-2.5-flash`) |
+| `GEMINI_MODEL` | solo funzioni `/api` | no (default `gemini-3.5-flash-lite`; se non disponibile per la chiave si prova `gemini-3.8-flash`, poi `gemini-3.6-flash`) |
 | `ALLOWED_EMAILS` | solo funzioni `/api`, elenco separato da virgole | no, consigliata: limita `/api` alla tua email |
 
 Non impostare mai `EXTRACT_ALLOW_PRIVATE` né `GEMINI_API_BASE` in produzione: esistono solo per i test.
@@ -163,14 +163,25 @@ L'app accetta anche indirizzi già compilati, pensati per Comandi Rapidi:
 - `https://<tuo-dominio>/aggiungi?text=<testo condiviso>`: se il testo contiene un link, il link viene estratto e il resto diventa la nota;
 - `&title=<titolo>` facoltativo.
 
-### Comando Rapido "Salva in Second Brain" (non ancora verificato su dispositivo)
+### Salvataggio in background (consigliato, da verificare su dispositivo)
+
+Il Comando invia il link a `POST /api/share` e **non apre l'app**: l'elemento viene salvato subito, poi il server legge il link e, se `GEMINI_API_KEY` è configurata, assegna riassunto, categorie e tag (marcati "assegnati dall'AI · da verificare"). Su Vercel il lavoro continua dopo la risposta grazie a `waitUntil`.
+
+1. In Second Brain: Impostazioni → **Salvataggio rapido da iPhone** → **Crea codice** e copialo. Nel database resta solo il suo hash SHA-256; si può rigenerare o disattivare.
+2. App Comandi → nuovo comando → ⓘ: attiva **Mostra nel foglio di condivisione** (tipi: URL e Testo).
+3. Azione **Ottieni contenuti di URL**: URL `https://<tuo-dominio>/api/share`; in "Mostra di più" Metodo **POST**, Corpo richiesta **JSON** con due campi Testo: `token` = il codice, `text` = **Input comando rapido**.
+4. Azione **Mostra notifica** con **Contenuti dell'URL**: mostra "Link salvato in Second Brain…" oppure il motivo dell'errore.
+
+Richiede la modalità sincronizzata e le funzioni SQL `share_save`/`share_update` di `supabase/schema.sql` (verificano il codice e scrivono solo negli elementi del suo proprietario; il linter di Supabase le segnala come "SECURITY DEFINER eseguibili da anon": è voluto, l'accesso è protetto dal codice).
+
+### Comando Rapido che apre l'app (alternativa)
 
 1. App Comandi → nuovo comando → Dettagli: attiva **Mostra nel foglio di condivisione**, tipi accettati: URL e Testo.
 2. Azione **Codifica URL** sull'input del comando.
-3. Azione **Testo**: `https://<tuo-dominio>/aggiungi?text=` seguito dal risultato codificato.
-4. Azione **Apri URL**.
+3. Azione **Testo**: `https://<tuo-dominio>/aggiungi?text=` seguito da **Testo codificato URL**.
+4. Azione **Apri URL** con il Testo.
 
-Da verificare: iOS apre il link in Safari, non sempre nella PWA installata. In modalità sincronizzata non è un problema (accedi anche in Safari), in modalità locale invece Safari e la PWA hanno archivi separati.
+iOS apre il link in Safari, non sempre nella PWA installata: in modalità sincronizzata basta aver fatto l'accesso anche in Safari.
 
 **Web Share Target API** (comparire direttamente nel foglio Condividi): non è implementata. Safari su iOS non la supporta per le PWA; su Android Chrome sì, e si potrebbe aggiungere un `share_target` nel manifest che punti a `/aggiungi`. Non va considerata funzionante finché non è implementata e provata.
 
@@ -178,7 +189,7 @@ Da verificare: iOS apre il link in Safari, non sempre nella PWA installata. In m
 
 ```bash
 npm run lint       # ESLint
-npm test           # Vitest: 73 test su ricerca, link, modello dati, lettura pagine, anti-SSRF, AI
+npm test           # Vitest: 81 test su ricerca, link, modello dati, lettura pagine, anti-SSRF, AI
 npm run build      # build di produzione + service worker
 npm run test:e2e   # Playwright (Chromium, viewport iPhone, modalità locale, pagine e Gemini finti)
 ```
