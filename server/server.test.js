@@ -224,6 +224,45 @@ describe("Gemini: modelli, nuovi tentativi ed errori", () => {
     expect(n).toBe(3);
   });
 
+  it("modello sovraccarico (503 \"high demand\") → un nuovo tentativo, poi il modello successivo", async () => {
+    const urls = [];
+    const r = await callGemini({
+      env, prompt: "p", schema: {}, retryDelayMs: 0,
+      fetchImpl: async (url) => (urls.push(url), url.includes("gemini-3.5-flash-lite") ? err(503, "This model is currently experiencing high demand.") : ok({ d: 4 })),
+    });
+    expect(r).toEqual({ out: { d: 4 }, model: "gemini-3.8-flash" });
+    expect(urls.filter((u) => u.includes("gemini-3.5-flash-lite"))).toHaveLength(2);
+  });
+
+  it("tutti i modelli sovraccarichi: messaggio in italiano, senza il testo inglese di Google", async () => {
+    let n = 0;
+    const e = await callGemini({ env, prompt: "p", schema: {}, retryDelayMs: 0, fetchImpl: async () => (n++, err(503, "This model is currently experiencing high demand.")) }).catch((x) => x);
+    expect(e.status).toBe(503);
+    expect(e.message).toBe("Il servizio AI di Google è sovraccarico in questo momento: riprova tra qualche minuto.");
+    // Due tentativi per ciascuno dei tre modelli.
+    expect(n).toBe(6);
+  });
+
+  it("ultimo modello non disponibile: resta il messaggio del sovraccarico", async () => {
+    const e = await callGemini({
+      env, prompt: "p", schema: {}, retryDelayMs: 0,
+      fetchImpl: async (url) => (url.includes("gemini-3.6-flash") ? err(404, "models/gemini-3.6-flash is not found") : err(503, "high demand")),
+    }).catch((x) => x);
+    expect(e.message).toMatch(/sovraccarico/);
+  });
+
+  it("limite gratuito (429) di un modello → prova il successivo", async () => {
+    const urls = [];
+    const r = await callGemini({ env, prompt: "p", schema: {}, fetchImpl: async (url) => (urls.push(url), urls.length === 1 ? err(429, "quota") : ok({ e: 5 })) });
+    expect(r).toEqual({ out: { e: 5 }, model: "gemini-3.8-flash" });
+  });
+
+  it("nessuna risposta dal primo modello (rete o tempo scaduto) → prova il successivo", async () => {
+    let n = 0;
+    const r = await callGemini({ env, prompt: "p", schema: {}, fetchImpl: async () => (++n === 1 ? Promise.reject(new Error("aborted")) : ok({ f: 6 })) });
+    expect(r).toEqual({ out: { f: 6 }, model: "gemini-3.8-flash" });
+  });
+
   it("thinking non supportato → riprova senza", async () => {
     const bodies = [];
     const r = await callGemini({

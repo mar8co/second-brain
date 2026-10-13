@@ -88,12 +88,12 @@ async function transcriptionPatch(read, what) {
   }
 }
 
-export async function enrichMedia({ item, media, known = [], env, fetchImpl }) {
+export async function enrichMedia({ item, media, known = [], env, fetchImpl, deadline = Date.now() + 230_000 }) {
   const what = media.kind === "video" ? "Trascrizione" : "Lettura delle slide";
-  const patch = await transcriptionPatch(() => transcribeFiles({ env, kind: media.kind, files: media.files, fetchImpl }), what);
+  const patch = await transcriptionPatch(() => transcribeFiles({ env, kind: media.kind, files: media.files, fetchImpl, deadline }), what);
   patch.processed_at = new Date().toISOString();
   if (patch.extracted_text) patch.status_detail = [patch.status_detail, SHARED_FILE_NOTE].filter(Boolean).join(" ");
-  return withAi({ item, patch, known, env, fetchImpl });
+  return withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000 });
 }
 
 // Lettura del link + AI. Scrive il risultato con un solo aggiornamento.
@@ -113,14 +113,15 @@ export async function enrichShared({ item, known = [], env, fetchImpl, deadline 
       patch = { status: "saved", status_detail: "Analisi non eseguita: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
     }
   }
-  return classify ? withAi({ item, patch, known, env, fetchImpl }) : patch;
+  // L'AI ha il tempo che resta prima della durata massima della funzione (300 s).
+  return classify ? withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000 }) : patch;
 }
 
-async function withAi({ item, patch, known, env, fetchImpl }) {
+async function withAi({ item, patch, known, env, fetchImpl, deadline }) {
   const cur = { ...item, ...patch };
   if (aiConfigured(env) && hasContent(cur)) {
     try {
-      const r = await classifyWithAi({ env, item: aiPayload(cur), known, fetchImpl });
+      const r = await classifyWithAi({ env, item: aiPayload(cur), known, fetchImpl, deadline: Math.min(deadline ?? Infinity, Date.now() + 60_000) });
       // Salvataggio senza app: le categorie e i tag dell'AI vengono assegnati
       // subito (resta traccia in `ai.applied`, la scheda lo dice).
       patch.ai = { summary: r.summary, categories: r.categories, tags: r.tags, model: r.model, generated_at: new Date().toISOString(), applied: true };
