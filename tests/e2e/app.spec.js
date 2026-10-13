@@ -36,6 +36,20 @@ test("link incollato nella chat: salvato e mostrato come messaggio", async ({ pa
   await expect(page.getByRole("button", { name: "Ricette 1" })).toBeVisible();
 });
 
+test("trascrizione incollata a mano su un link: salvata e mostrata come testo estratto", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Chiedi o cerca nei tuoi contenuti").fill(`${FIX}/ricetta`);
+  await page.getByRole("button", { name: "Invia" }).click();
+  await page.getByRole("link", { name: /Pasta al limone in 10 minuti/ }).click();
+  await page.getByText("Trascrizione del video").click();
+  await page.getByLabel("Testo della trascrizione").fill("Mettete il pecorino nella ciotola e mantecate fuori dal fuoco.");
+  await page.getByRole("button", { name: "Salva trascrizione" }).click();
+  await expect(page.getByText("Trascrizione salvata")).toBeVisible();
+  await page.getByText(/Testo estratto/).click();
+  await expect(page.getByText("fonte: trascrizione incollata da te")).toBeVisible();
+  await expect(page.getByText("mantecate fuori dal fuoco")).toBeVisible();
+});
+
 test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
