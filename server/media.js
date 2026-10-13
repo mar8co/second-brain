@@ -1,10 +1,12 @@
 // Trascrizione di video e lettura dei caroselli con Gemini.
 //
-// I file arrivano dal Comando Rapido (l'audio del video, oppure le slide come
-// immagini o PDF): l'app non scarica nulla da Instagram, legge solo ciò che
-// l'utente condivide. I file non vengono conservati: resta il testo.
+// Due ingressi:
+//  - file inviati dal Comando Rapido (audio del video, slide come immagini o PDF);
+//  - media pubblici di un post (video, immagini del carosello) ottenuti da
+//    server/social.js a partire dal solo link.
 // I link di YouTube (anche Shorts) li legge Gemini direttamente, è una
 // funzione ufficiale dell'API per i video pubblici.
+// I file non vengono conservati: resta solo il testo, marcato come dell'AI.
 
 import { callGemini } from "./ai.js";
 
@@ -113,8 +115,8 @@ function toText(kind, out) {
   return slides.map((s, i) => `Slide ${i + 1}: ${s.trim()}`).join("\n\n").trim();
 }
 
-async function readWithGemini({ env, kind, parts, fetchImpl }) {
-  const { out, model } = await callGemini({ env, prompt: prompt(kind), parts, schema: SCHEMA, maxTokens: 8192, temperature: 0, fetchImpl, timeoutMs: 40_000 });
+async function readWithGemini({ env, kind, parts, fetchImpl, timeoutMs = 40_000 }) {
+  const { out, model } = await callGemini({ env, prompt: prompt(kind), parts, schema: SCHEMA, maxTokens: 8192, temperature: 0, fetchImpl, timeoutMs });
   return { title: String(out?.title || "").trim().slice(0, 200), text: toText(kind, out).slice(0, MAX_TEXT), model };
 }
 
@@ -157,6 +159,106 @@ export function youtubeUrl(url) {
 }
 
 export async function transcribeYoutube({ env, url, fetchImpl }) {
-  const r = await readWithGemini({ env, kind: "video", parts: [{ file_data: { file_uri: url } }], fetchImpl });
+  const r = await readWithGemini({ env, kind: "video", parts: [{ file_data: { file_uri: url } }], fetchImpl, timeoutMs: 90_000 });
   return { ...r, textSource: "trascrizione dell'AI (YouTube)" };
+}
+
+// ---------- media pubblici scaricati dal server ----------
+
+const geminiBase = (env) => env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Scarica un media pubblico (URL https restituito dal servizio che legge il post).
+export async function downloadMedia(url, { maxBytes, timeoutMs = 20_000, fetchImpl = fetch }) {
+  if (!/^https:\/\//i.test(String(url || "")) && !/^http:\/\/127\.0\.0\.1[:/]/.test(String(url || ""))) throw new Error("indirizzo del media non valido");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetchImpl(url, { signal: ctrl.signal, redirect: "follow" });
+    if (!res.ok) throw new Error(`download non riuscito (${res.status})`);
+    const len = Number(res.headers.get("content-length") || 0);
+    if (len && len > maxBytes) throw new Error("file troppo grande");
+    const data = Buffer.from(await res.arrayBuffer());
+    if (data.length > maxBytes) throw new Error("file troppo grande");
+    if (!data.length) throw new Error("file vuoto");
+    return { data, mime: String(res.headers.get("content-type") || "").split(";")[0].trim().toLowerCase() };
+  } catch (e) {
+    throw new Error(e.name === "AbortError" ? "download troppo lento" : e.message, { cause: e });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Files API di Gemini (caricamento "resumable"): per i video troppo grandi da
+// mandare dentro la richiesta. Google li cancella da solo dopo 48 ore.
+export async function uploadToGemini({ env, data, mime, fetchImpl = fetch, deadline = Date.now() + 120_000 }) {
+  const start = await fetchImpl(`${geminiBase(env)}/upload/v1beta/files`, {
+    method: "POST",
+    headers: {
+      "x-goog-api-key": env.GEMINI_API_KEY,
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(data.length),
+      "X-Goog-Upload-Header-Content-Type": mime,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ file: { display_name: "second-brain-media" } }),
+  });
+  const uploadUrl = start.headers.get("x-goog-upload-url");
+  if (!start.ok || !uploadUrl) throw new Error(`caricamento su Gemini non avviato (${start.status})`);
+  const up = await fetchImpl(uploadUrl, {
+    method: "POST",
+    headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize", "content-length": String(data.length) },
+    body: data,
+  });
+  const info = await up.json().catch(() => null);
+  let file = info?.file;
+  if (!up.ok || !file?.uri) throw new Error(`caricamento su Gemini non riuscito (${up.status})`);
+  // I video vengono elaborati da Google prima di poter essere usati.
+  while (file.state === "PROCESSING") {
+    if (Date.now() + 3000 > deadline) throw new Error("Gemini sta ancora elaborando il video");
+    await sleep(2000);
+    const r = await fetchImpl(`${geminiBase(env)}/v1beta/${file.name}`, { headers: { "x-goog-api-key": env.GEMINI_API_KEY } });
+    file = (await r.json().catch(() => null)) || file;
+  }
+  if (file.state === "FAILED") throw new Error("Gemini non è riuscito a elaborare il video");
+  return { file_data: { mime_type: file.mimeType || mime, file_uri: file.uri } };
+}
+
+// Oltre questa dimensione il video va caricato con la Files API invece che
+// dentro la richiesta (il base64 aumenta il peso di un terzo).
+const INLINE_MAX = 14 * 1024 * 1024;
+const VIDEO_MAX = 200 * 1024 * 1024;
+
+// Video pubblico → parte per Gemini. Se il server non riesce a scaricarlo,
+// si prova a far leggere l'indirizzo direttamente a Gemini.
+export async function videoPart({ env, url, fetchImpl = fetch, deadline }) {
+  let media;
+  try {
+    media = await downloadMedia(url, { maxBytes: VIDEO_MAX, timeoutMs: 30_000, fetchImpl });
+  } catch {
+    return { file_data: { mime_type: "video/mp4", file_uri: url } };
+  }
+  const mime = /^(video|audio)\//.test(media.mime) ? media.mime : "video/mp4";
+  if (media.data.length <= INLINE_MAX) return { inline_data: { mime_type: mime, data: media.data.toString("base64") } };
+  return uploadToGemini({ env, data: media.data, mime, fetchImpl, deadline });
+}
+
+const IMAGE_MAX = 8 * 1024 * 1024;
+
+// Immagini del carosello, in ordine. Quelle non scaricabili vengono indicate.
+export async function imageParts({ urls, fetchImpl = fetch }) {
+  const got = await Promise.all(
+    urls.map((u) =>
+      downloadMedia(u, { maxBytes: IMAGE_MAX, timeoutMs: 15_000, fetchImpl })
+        .then((m) => ({ inline_data: { mime_type: /^image\//.test(m.mime) ? m.mime : "image/jpeg", data: m.data.toString("base64") } }))
+        .catch(() => null),
+    ),
+  );
+  return { parts: got.filter(Boolean), missing: got.filter((g) => !g).length };
+}
+
+// Parti già pronte (video o slide) → { title, text, model }.
+export function readMedia({ env, kind, parts, fetchImpl, timeoutMs = 90_000 }) {
+  return readWithGemini({ env, kind, parts, fetchImpl, timeoutMs });
 }

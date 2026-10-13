@@ -32,7 +32,8 @@ async function post(path, body, { timeoutMs = 30000 } = {}) {
 }
 
 export const api = {
-  extract: (url) => post("/api/extract", { url }),
+  // Trascrivere un Reel o leggere un carosello può richiedere qualche minuto.
+  extract: (url) => post("/api/extract", { url }, { timeoutMs: 295000 }),
   aiStatus: () => post("/api/ai", { action: "status" }, { timeoutMs: 10000 }),
   classify: (item, categories) => post("/api/ai", { action: "classify", item, categories }),
   ask: (question, items) => post("/api/ai", { action: "ask", question, items }, { timeoutMs: 45000 }),

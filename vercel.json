@@ -1,10 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
+  "fluid": true,
   "functions": {
     "api/ai.js": { "maxDuration": 30 },
-    "api/extract.js": { "maxDuration": 30 },
-    "api/share.js": { "maxDuration": 60 }
+    "api/extract.js": { "maxDuration": 300 },
+    "api/share.js": { "maxDuration": 300 }
   },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "headers": [

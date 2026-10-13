@@ -65,6 +65,10 @@ export default function QuickShare({ toast }) {
         Con un Comando Rapido il link viene salvato <strong>senza aprire l'app</strong>: il server lo legge e l'AI assegna categorie e tag
         in background. Ti serve un codice personale.
       </p>
+      <p>
+        Reel, TikTok, video di Facebook, YouTube e Shorts vengono <strong>trascritti</strong> e i caroselli <strong>letti slide per
+        slide</strong> a partire dal solo link (post pubblici). Può servire qualche minuto.
+      </p>
       {error && <ErrorBox>{error}</ErrorBox>}
       {token ? (
         <div className="rounded-xl border border-line bg-sunken p-3">
@@ -103,11 +107,11 @@ export default function QuickShare({ toast }) {
         </ol>
       </details>
       <details className="text-sm">
-        <summary className="cursor-pointer font-medium">Video da trascrivere (Reel, TikTok…)</summary>
+        <summary className="cursor-pointer font-medium">Facoltativo: inviare il file di un video</summary>
         <p className="mt-2">
-          Dal link si legge solo la didascalia. Per far capire il video condividi il <strong>file</strong>: scaricalo da Instagram quando c'è
-          l'opzione "Scarica", oppure fai una registrazione schermo. Poi da Foto → Condividi → questo comando. Si invia solo l'audio, che
-          l'AI trascrive in background; il file non viene conservato.
+          Serve solo se un video non si riesce a leggere dal link (per esempio perché è privato). Scaricalo quando c'è l'opzione "Scarica",
+          oppure fai una registrazione schermo, poi da Foto → Condividi → questo comando. Si invia solo l'audio, che l'AI trascrive in
+          background; il file non viene conservato.
         </p>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5">
           <li>Nuovo comando → ⓘ → <strong>Mostra nel foglio di condivisione</strong>, tipi: <strong>Contenuti multimediali</strong>.</li>
@@ -118,12 +122,12 @@ export default function QuickShare({ toast }) {
           </li>
           <li>Aggiungi <strong>Mostra notifica</strong> con <strong>Contenuti dell'URL</strong>.</li>
         </ol>
-        <p className="mt-2 text-muted">I link di YouTube e Shorts non servono il file: basta il comando normale, il video viene trascritto direttamente.</p>
       </details>
       <details className="text-sm">
-        <summary className="cursor-pointer font-medium">Caroselli da leggere slide per slide</summary>
+        <summary className="cursor-pointer font-medium">Facoltativo: inviare gli screenshot di un carosello</summary>
         <p className="mt-2">
-          Fai uno screenshot di ogni slide, selezionali in Foto nell'ordine e condividili con questo comando: l'AI legge il testo di ogni slide.
+          Serve solo se un carosello non si riesce a leggere dal link. Fai uno screenshot di ogni slide, selezionali in Foto nell'ordine e
+          condividili con questo comando: l'AI legge il testo di ogni slide.
         </p>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5">
           <li>Nuovo comando → ⓘ → <strong>Mostra nel foglio di condivisione</strong>, tipi: <strong>Immagini</strong>.</li>

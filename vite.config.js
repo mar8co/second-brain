@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
-import { handleExtract } from "./server/extract.js";
+import { handleRead } from "./server/social.js";
 import { handleAi } from "./server/ai.js";
 import { handleShare } from "./server/share.js";
 import { nodeHandler } from "./server/node-adapter.js";
@@ -30,6 +30,8 @@ export default defineConfig(({ mode }) => {
     GEMINI_API_KEY: e.GEMINI_API_KEY,
     GEMINI_MODEL: e.GEMINI_MODEL,
     GEMINI_API_BASE: e.GEMINI_API_BASE,
+    APIFY_TOKEN: e.APIFY_TOKEN,
+    APIFY_API_BASE: e.APIFY_API_BASE,
     ALLOWED_EMAILS: e.ALLOWED_EMAILS,
     // Solo in locale e senza Supabase: endpoint senza login (server su localhost).
     ALLOW_NO_AUTH: supabaseUrl ? "" : "1",
@@ -40,7 +42,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
-      devApi("/api/extract", handleExtract, apiEnv),
+      devApi("/api/extract", handleRead, apiEnv),
       devApi("/api/ai", handleAi, apiEnv),
       devApi("/api/share", handleShare, apiEnv, { allowFiles: true }),
       VitePWA({
