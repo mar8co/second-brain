@@ -11,11 +11,10 @@ import { useSettings } from "./hooks/useSettings.js";
 import { isSyncMode, supabase } from "./lib/supabase.js";
 import { createLocalStore } from "./lib/store/local.js";
 import { createRemoteStore } from "./lib/store/remote.js";
-import Home from "./views/Home.jsx";
+import Chat from "./views/Chat.jsx";
 import Archive from "./views/Archive.jsx";
 import Add from "./views/Add.jsx";
 import Detail from "./views/Detail.jsx";
-import Ask from "./views/Ask.jsx";
 import Settings from "./views/Settings.jsx";
 import Login from "./views/Login.jsx";
 
@@ -50,18 +49,20 @@ function Shell({ auth }) {
   if (m) view = <Detail key={m[1]} id={m[1]} store={store} {...common} />;
   else if (path === "/aggiungi") view = <Add {...common} />;
   else if (path === "/archivio") view = <Archive {...common} />;
-  else if (path === "/chiedi") view = <Ask {...common} />;
   else if (path === "/impostazioni")
     view = (
       <Settings {...common} syncMode={isSyncMode} session={auth.session} signOut={auth.signOut} aiStatus={aiStatus} settings={settings} setSettings={setSettings} />
     );
-  else view = <Home {...common} syncMode={isSyncMode} />;
+  // "/" e il vecchio "/chiedi?q=…" portano alla chat.
+  else view = <Chat key="chat" {...common} syncMode={isSyncMode} />;
 
+  // Barra in basso solo sulle due schermate principali.
+  const main = path === "/" || path === "/chiedi" || path === "/archivio";
   return (
     <>
       {view}
-      <BottomNav path={path} navigate={navigate} />
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom))] z-40 flex justify-center px-4">
+      {main && <BottomNav path={path} navigate={navigate} />}
+      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 top-[calc(3.5rem+max(env(safe-area-inset-top),0.75rem))] z-40 flex justify-center px-4">
         {toastMsg && <div className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-bg shadow-lg">{toastMsg}</div>}
       </div>
     </>

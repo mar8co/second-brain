@@ -36,7 +36,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   if (!item) {
     return (
       <>
-        <TopBar title="Elemento" onBack={() => back("/archivio")} />
+        <TopBar title="Elemento" onBack={() => back("/")} />
         <Page>
           {archive.loading ? null : (
             <EmptyState title="Elemento non trovato" action={<button className="btn-primary" onClick={() => navigate("/archivio")}>Vai all'archivio</button>}>
@@ -85,7 +85,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
     <>
       <TopBar
         title={typeLabel(item.type)}
-        onBack={() => back("/archivio")}
+        onBack={() => back("/")}
         right={
           <button type="button" className="btn px-2 text-accent" onClick={() => setEditing(true)} aria-label="Modifica">
             <Pencil className="h-5 w-5" aria-hidden="true" />

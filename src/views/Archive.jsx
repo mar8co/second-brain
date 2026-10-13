@@ -1,7 +1,7 @@
 // Archivio: ricerca testuale istantanea + filtri per tipo, categoria, tag, data.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Search, Settings, SlidersHorizontal, X } from "lucide-react";
 import { Page, TopBar } from "../components/Layout.jsx";
 import { ItemList } from "../components/ItemCard.jsx";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
@@ -30,7 +30,14 @@ export default function Archive({ archive, query, navigate, openItem }) {
 
   return (
     <>
-      <TopBar title="Archivio" />
+      <TopBar
+        title="Archivio"
+        left={
+          <button type="button" className="btn -ml-2 px-2 text-ink" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
+            <Settings className="h-6 w-6" aria-hidden="true" />
+          </button>
+        }
+      />
       <Page>
         <div role="search">
           <label htmlFor="arch-q" className="sr-only">Cerca nell'archivio</label>
@@ -107,7 +114,7 @@ export default function Archive({ archive, query, navigate, openItem }) {
             <Spinner />
           ) : results.length === 0 ? (
             items.length === 0 ? (
-              <EmptyState title="Ancora niente qui" action={<button className="btn-primary" onClick={() => navigate("/aggiungi")}>Aggiungi</button>}>
+              <EmptyState title="Ancora niente qui">
                 Quando salvi qualcosa, lo trovi in questo elenco.
               </EmptyState>
             ) : (
@@ -116,7 +123,7 @@ export default function Archive({ archive, query, navigate, openItem }) {
                 {q && (
                   <>
                     {" "}Oppure{" "}
-                    <a className="font-medium text-accent underline" href={`/chiedi?q=${encodeURIComponent(q)}`} onClick={(e) => { e.preventDefault(); navigate(`/chiedi?q=${encodeURIComponent(q)}`); }}>
+                    <a className="font-medium text-accent underline" href={`/?q=${encodeURIComponent(q)}`} onClick={(e) => { e.preventDefault(); navigate(`/?q=${encodeURIComponent(q)}`); }}>
                       fai una domanda
                     </a>
                     .

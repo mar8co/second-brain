@@ -11,11 +11,27 @@ async function addLink(page, url, note) {
   await page.getByRole("button", { name: "Salva", exact: true }).click();
 }
 
-test("home vuota con invito a salvare", async ({ page }) => {
+test("chat vuota; barra con solo Chat e Archivio; ingranaggio → Impostazioni", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Second Brain" })).toBeVisible();
-  await expect(page.getByText("L'archivio è vuoto")).toBeVisible();
+  await expect(page.getByText("La chat è vuota")).toBeVisible();
   await expect(page.getByText("Modalità locale")).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Navigazione principale" });
+  await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
+  await page.getByRole("button", { name: "Impostazioni" }).click();
+  await expect(page).toHaveURL(/\/impostazioni$/);
+  await page.getByRole("button", { name: "Aggiungi manualmente" }).click();
+  await expect(page).toHaveURL(/\/aggiungi$/);
+});
+
+test("link incollato nella chat: salvato e mostrato come messaggio", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Chiedi o cerca nei tuoi contenuti").fill(`${FIX}/ricetta`);
+  await page.getByRole("button", { name: "Invia" }).click();
+  await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toBeVisible();
+  await expect(page.getByText("Oggi")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ricette 1" })).toBeVisible();
 });
 
 test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ page }) => {
@@ -35,7 +51,7 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
   await expect(page.getByRole("heading", { name: "Idea regalo per Giulia" })).toBeVisible();
   await page.goto("/");
   await expect(page.getByText("Idea regalo per Giulia")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Acquisti 1" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Acquisti 1" })).toBeVisible();
 
   await page.getByText("Idea regalo per Giulia").click();
   page.once("dialog", (d) => d.accept());
@@ -44,7 +60,7 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
   await expect(page.getByText("Ancora niente qui")).toBeVisible();
 });
 
-test("link leggibile: Analizzato, testo estratto e proposte AI accettabili", async ({ page }) => {
+test("link leggibile: Analizzato, testo estratto, categorie assegnate dall'AI", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByRole("heading", { name: "Pasta al limone in 10 minuti" })).toBeVisible();
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
@@ -55,11 +71,9 @@ test("link leggibile: Analizzato, testo estratto e proposte AI accettabili", asy
   await page.getByText("Testo estratto").click();
   await expect(page.getByText(/fonte: testo della pagina/)).toBeVisible();
 
-  // Proposte AI: etichettate, non applicate finché non le accetto
-  await expect(page.getByText("Generato dall'AI · da verificare")).toBeVisible();
+  // Categorie e tag assegnati dall'AI, etichettati come tali
+  await expect(page.getByText("Categorie e tag assegnati dall'AI · da verificare")).toBeVisible();
   await expect(page.getByText("Ricetta veloce di pasta al limone.")).toBeVisible();
-  await expect(page.getByText("Nessuna", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Accetta tutte" }).click();
   await expect(page.locator("li.chip", { hasText: "Ricette" })).toBeVisible();
   await expect(page.locator("li.chip", { hasText: "#pasta" })).toBeVisible();
 });
@@ -103,22 +117,27 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Trattoria Da Enzo")).toBeVisible();
 
-  // Domanda con risposta basata sulle fonti
+  // Domanda nella chat: risposta basata sulle fonti, che si possono aprire
   await page.goto("/");
-  await page.getByLabel("Cerca o fai una domanda").fill("come si fa la pasta al limone?");
-  await page.getByRole("button", { name: "Chiedi", exact: true }).click();
-  await expect(page).toHaveURL(/\/chiedi\?q=/);
-  await expect(page.getByText("Risposta generata dall'AI dai tuoi elementi")).toBeVisible();
-  await expect(page.getByText(/scorza di limone/).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Fonti usate" })).toBeVisible();
-  await page.getByRole("link", { name: /Pasta al limone in 10 minuti/ }).click();
-  await expect(page).toHaveURL(/\/elemento\//);
+  const box = page.getByLabel("Chiedi o cerca nei tuoi contenuti");
+  await box.fill("come si fa la pasta al limone?");
+  await box.press("Enter");
+  await expect(page.getByText("come si fa la pasta al limone?")).toBeVisible();
+  await expect(page.getByText("Risposta dai tuoi contenuti")).toBeVisible();
+  await expect(page.getByText(/scorza di limone, burro/)).toBeVisible();
+  await expect(page.getByText("Fonti", { exact: true })).toBeVisible();
 
   // Domanda senza riscontri nell'archivio
-  await page.goto("/chiedi");
-  await page.getByLabel("La tua domanda").fill("orari della palestra?");
-  await page.getByRole("button", { name: "Chiedi" }).click();
-  await expect(page.getByText("Nell'archivio non trovo nulla su questo.")).toBeVisible();
+  await box.fill("orari della palestra?");
+  await page.getByRole("button", { name: "Invia" }).click();
+  await expect(page.getByText("Nei tuoi contenuti non trovo nulla su questo.")).toBeVisible();
+
+  // La cronologia resta dopo il ricaricamento; il filtro per categoria nasconde le domande
+  await page.reload();
+  await expect(page.getByText("orari della palestra?")).toBeVisible();
+  await page.getByRole("button", { name: "Tutto" }).waitFor();
+  await page.locator("main a", { hasText: "Pasta al limone in 10 minuti" }).last().click();
+  await expect(page).toHaveURL(/\/elemento\//);
 });
 
 test("carica un file di testo: testo estratto e cercabile", async ({ page }) => {

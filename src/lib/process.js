@@ -3,17 +3,23 @@
 //
 // I dati letti dalla fonte riempiono i campi "verificati" (titolo,
 // descrizione, testo estratto) senza sovrascrivere ciò che l'utente ha scritto;
-// le proposte dell'AI finiscono solo nel campo `ai`.
+// categorie e tag dell'AI vengono assegnati (con traccia in `ai.applied`).
 
 import { api } from "./api.js";
 import { aiPayload, extractionPatch, hasContent } from "./enrich.js";
 
 export { aiPayload, extractionPatch };
 
-export async function classifyItem(item, { store, categories }) {
+// apply=true (dopo un nuovo salvataggio): categorie e tag dell'AI vengono
+// assegnati subito, marcati come tali; altrimenti restano proposte.
+export async function classifyItem(item, { store, categories, apply = false }) {
   const r = await api.classify(aiPayload(item), categories);
+  const ai = { summary: r.summary, categories: r.categories, tags: r.tags, model: r.model, generated_at: new Date().toISOString() };
+  if (!apply) return store.update(item.id, { ai });
   return store.update(item.id, {
-    ai: { summary: r.summary, categories: r.categories, tags: r.tags, model: r.model, generated_at: new Date().toISOString() },
+    ai: { ...ai, applied: true },
+    categories: [...(item.categories || []), ...r.categories.filter((c) => !(item.categories || []).includes(c))],
+    tags: [...(item.tags || []), ...r.tags.filter((t) => !(item.tags || []).includes(t))],
   });
 }
 
@@ -38,7 +44,7 @@ export async function processItem(item, { store, onUpdate, ai, categories = [] }
   }
   if (ai && hasContent(cur)) {
     try {
-      cur = await classifyItem(cur, { store, categories });
+      cur = await classifyItem(cur, { store, categories, apply: true });
       onUpdate(cur);
     } catch {
       /* le proposte AI sono facoltative: l'elemento resta valido senza */
