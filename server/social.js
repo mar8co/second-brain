@@ -12,7 +12,6 @@
 import { extractUrl } from "../src/lib/detect.js";
 import { aiConfigured } from "./ai.js";
 import { extractUrlInfo } from "./extract.js";
-import { verifyRequest } from "./auth.js";
 import { imageParts, readMedia, transcribeYoutube, videoPart, youtubeUrl } from "./media.js";
 
 const MAX_SLIDES = 20;
@@ -46,7 +45,8 @@ export function socialTarget(raw) {
   }
   const host = u.hostname.toLowerCase().replace(/^(www|m|mobile|web)\./, "");
   const path = u.pathname;
-  if ((host === "instagram.com" || host === "instagr.am") && /^\/(?:[\w.]+\/)?(p|reel|reels|tv)\/[\w-]+/.test(path)) {
+  // Anche i link "share" di Instagram: Apify li segue fino al post.
+  if ((host === "instagram.com" || host === "instagr.am") && /^\/(?:[\w.]+\/)?(p|reel|reels|tv|share)\/[\w-]+/.test(path)) {
     return { platform: "instagram", url: cleanUrl(url) };
   }
   if (host === "tiktok.com" && (/\/(video|photo)\/\d+/.test(path) || /^\/t\/\w+/.test(path))) return { platform: "tiktok", url: cleanUrl(url) };
@@ -64,18 +64,22 @@ export function socialConfigured(env) {
 
 // ---------- Apify ----------
 
+// Actor ufficiali o più usati per un singolo post (prezzi del piano gratuito,
+// ottobre 2026: circa 0,003-0,006 $ a post).
 const ACTORS = {
   instagram: "apify~instagram-scraper",
-  tiktok: "clockworks~tiktok-scraper",
-  facebook: "apify~facebook-reels-scraper",
+  // Salva video, slide e sottotitoli nello spazio di Apify: i link diretti di
+  // TikTok scadono e funzionano solo dall'indirizzo che li ha richiesti.
+  tiktok: "clockworks~tiktok-video-scraper",
+  facebook: "apify~facebook-posts-scraper",
 };
 
 function actorInput(platform, url) {
   if (platform === "instagram") return { directUrls: [url], resultsType: "posts", resultsLimit: 1, addParentData: false };
   if (platform === "tiktok") {
-    return { postURLs: [url], resultsPerPage: 1, shouldDownloadVideos: true, shouldDownloadSubtitles: true, shouldDownloadSlideshowImages: true, shouldDownloadCovers: false };
+    return { postURLs: [url], shouldDownloadVideos: true, shouldDownloadSlideshowImages: true, shouldDownloadCovers: false, downloadSubtitlesOptions: "DOWNLOAD_SUBTITLES" };
   }
-  return { startUrls: [{ url }], resultsLimit: 1 };
+  return { startUrls: [{ url }], resultsLimit: 1, captionText: false };
 }
 
 export class SocialError extends Error {}
@@ -99,18 +103,30 @@ async function runActor({ env, platform, url, fetchImpl, timeoutSec }) {
     clearTimeout(timer);
   }
   const data = await res.json().catch(() => null);
-  if (res.status === 401) throw new SocialError("Apify ha rifiutato la chiave: controlla APIFY_TOKEN su Vercel.");
-  if (res.status === 402 || res.status === 403) throw new SocialError("Crediti gratuiti di Apify del mese esauriti: si ricaricano all'inizio del mese.");
-  if (res.status === 408) throw new SocialError(`${SITE[platform]} ha risposto troppo lentamente: riprova dalla scheda.`);
-  if (res.status === 429) throw new SocialError("Troppe richieste ad Apify: riprova tra poco.");
-  if (!res.ok) throw new SocialError(`Lettura del post non riuscita (Apify ${res.status}).`);
-  const items = Array.isArray(data) ? data.filter((x) => x && typeof x === "object") : [];
-  const item = items.find((x) => !x.error && !x.errorDescription);
+  if (!res.ok) throw new SocialError(apifyError(res.status, data?.error?.type, platform));
+  // Lettura non finita entro il tempo dell'API: arriva lo stato della corsa invece dei dati.
+  if (!Array.isArray(data)) throw new SocialError(apifyError(408, "run-timeout", platform));
+  const items = data.filter((x) => x && typeof x === "object");
+  const item = items.find((x) => !x.error && !x.errorDescription && !x.errorCode);
   if (!item) {
-    const why = items[0]?.errorDescription || items[0]?.error || "";
+    const bad = items[0] || {};
+    const why = [bad.errorDescription || (typeof bad.error === "string" ? bad.error : ""), bad.errorCode].filter(Boolean).join(", ");
     throw new SocialError(`Post non leggibile: privato, rimosso o non disponibile.${why ? ` (${String(why).slice(0, 120)})` : ""}`);
   }
   return item;
+}
+
+// Errori dell'API di Apify (stato HTTP e `error.type`) → messaggio per la scheda.
+export function apifyError(status, type = "", platform = "") {
+  const t = String(type || "");
+  if (status === 401 || /token/.test(t)) return "Apify ha rifiutato la chiave: controlla APIFY_TOKEN su Vercel.";
+  // Limiti di memoria e di letture contemporanee (anche con stato 402): passano da soli.
+  if (/memory-limit|concurrent-runs/.test(t)) return "Troppi link letti insieme: riprova tra poco dalla scheda.";
+  if (status === 402 || /usage|payment|x402|credit|charge/.test(t)) return "Crediti gratuiti di Apify del mese esauriti: si ricaricano all'inizio del mese.";
+  if (status === 408 || /timeout/.test(t)) return `${SITE[platform] || "Il sito"} ha risposto troppo lentamente: riprova dalla scheda.`;
+  if (status === 429) return "Troppe richieste ad Apify: riprova tra poco.";
+  if (status === 403) return "Apify ha rifiutato la richiesta: la chiave non ha i permessi per avviare la lettura.";
+  return `Lettura del post non riuscita (Apify ${status}${t ? `, ${t}` : ""}).`;
 }
 
 // ---------- risultato di Apify → forma comune ----------
@@ -126,10 +142,15 @@ export function normalizeInstagram(it) {
   const children = Array.isArray(it.childPosts) ? it.childPosts : [];
   if (it.type === "Sidecar" || children.length > 1) {
     const fromChildren = children.map((c) => (isUrl(c?.displayUrl) ? c.displayUrl : Array.isArray(c?.images) ? c.images.find(isUrl) : null));
-    const urls = (fromChildren.some(Boolean) ? fromChildren : (it.images || [])).filter(isUrl);
-    if (urls.length) return { caption, author, kind: "slides", imageUrls: urls.slice(0, MAX_SLIDES), cover };
+    const fallback = [it.images, it.carouselImages].find((l) => Array.isArray(l) && l.some(isUrl)) || [];
+    const urls = (fromChildren.some(Boolean) ? fromChildren : fallback).filter(isUrl);
+    // Le slide video vengono lette come immagine (la copertina): il parlato no.
+    const videoSlides = children.filter((c) => isUrl(c?.videoUrl)).length;
+    if (urls.length) return { caption, author, kind: "slides", imageUrls: urls.slice(0, MAX_SLIDES), total: urls.length, videoSlides, cover };
   }
-  if (isUrl(it.videoUrl)) return { caption, author, kind: "video", videoUrl: it.videoUrl, cover, duration: Number(it.videoDuration) || null };
+  // Reel: il video (con il testo a schermo); se manca, la sola traccia audio.
+  const video = [it.videoUrl, it.audioUrl].find(isUrl);
+  if (video) return { caption, author, kind: "video", videoUrl: video, cover, duration: Number(it.videoDuration) || null };
   const images = [it.displayUrl, ...(Array.isArray(it.images) ? it.images : [])].filter(isUrl);
   if (images.length) return { caption, author, kind: "slides", imageUrls: [...new Set(images)].slice(0, MAX_SLIDES), cover };
   return { caption, author, kind: null, cover };
@@ -140,27 +161,102 @@ export function normalizeTiktok(it) {
   const author = str(it.authorMeta?.name) || str(it.authorMeta?.nickName);
   const meta = it.videoMeta || {};
   const cover = [meta.coverUrl, meta.originalCoverUrl, it.covers?.default].find(isUrl) || null;
+  // Prima i sottotitoli nella lingua originale, poi quelli tradotti in automatico ("MT").
   const subtitles = (Array.isArray(meta.subtitleLinks) ? meta.subtitleLinks : [])
-    .map((s) => ({ language: String(s?.language || ""), url: [s?.downloadLink, s?.tiktokLink].find(isUrl) }))
-    .filter((s) => s.url);
+    .map((s) => ({ language: String(s?.language || ""), url: [s?.downloadLink, s?.tiktokLink].find(isUrl), translated: s?.source === "MT" }))
+    .filter((s) => s.url)
+    .sort((a, b) => a.translated - b.translated);
   const slides = (Array.isArray(it.slideshowImageLinks) ? it.slideshowImageLinks : [])
     .map((s) => (isUrl(s) ? s : [s?.downloadLink, s?.tiktokLink].find(isUrl)))
     .filter(Boolean);
   if (it.isSlideshow || slides.length) {
-    if (slides.length) return { caption, author, kind: "slides", imageUrls: slides.slice(0, MAX_SLIDES), cover };
+    if (slides.length) return { caption, author, kind: "slides", imageUrls: slides.slice(0, MAX_SLIDES), total: slides.length, cover };
   }
   const video = [...(Array.isArray(it.mediaUrls) ? it.mediaUrls : []), meta.downloadAddr, it.videoUrl].find(isUrl);
   if (video || subtitles.length) return { caption, author, kind: "video", videoUrl: video || null, subtitles, cover, duration: Number(meta.duration) || null };
   return { caption, author, kind: null, cover };
 }
 
+// apify/facebook-posts-scraper restituisce forme diverse: il nodo del Reel
+// (/reel/ID), il nodo del video (watch?v=ID, /videos/ID) o il post di una pagina.
 export function normalizeFacebook(it) {
-  const caption = str(it.text) || str(it.caption) || str(it.description) || str(it.message);
-  const author = str(it.pageName) || str(it.user?.name) || str(it.author?.name) || str(it.ownerName);
-  const video = [it.videoUrl, it.playable_url_quality_hd, it.playable_url, it.hdUrl, it.sdUrl, it.video?.hd_url, it.video?.sd_url, it.media?.[0]?.videoUrl].find(isUrl);
-  const cover = [it.thumbnailUrl, it.thumbnail, it.previewImage, it.media?.[0]?.thumbnail].find(isUrl) || null;
-  if (video) return { caption, author, kind: "video", videoUrl: video, cover };
-  return { caption, author, kind: null, cover };
+  const reel = it.short_form_video_context || {};
+  const pv = reel.playback_video || it.playback_video || {};
+  const media = (Array.isArray(it.media) ? it.media : []).find((m) => m?.__typename === "Video") || {};
+  const delivery = [pv.videoDeliveryLegacyFields, it.videoDeliveryLegacyFields, media.videoDeliveryLegacyFields].filter(Boolean);
+  const video = [
+    ...delivery.flatMap((d) => [d.browser_native_hd_url, d.browser_native_sd_url]),
+    pv.browser_native_hd_url,
+    pv.browser_native_sd_url,
+  ].find(isUrl);
+  const caption = str(it.message?.text) || str(it.text) || str(it.previewDescription) || str(it.previewTitle) || str(it.message);
+  const author = str(it.pageName) || str(reel.video_owner?.name) || str(it.user?.name) || str(it.owner?.name);
+  const cover = [pv.thumbnailImage?.uri, pv.preferred_thumbnail?.image?.uri, it.preferred_thumbnail?.image?.uri, reel.video?.first_frame_thumbnail, media.thumbnail].find(isUrl) || null;
+  const captionsUrl = [pv.captions_url, it.captions_url, media.captions_url].find(isUrl);
+  const subtitles = captionsUrl ? [{ language: "", url: captionsUrl, translated: false }] : [];
+  if (video) return { caption, author, kind: "video", videoUrl: video, subtitles, cover };
+  // Il post è un video, ma Facebook non ne ha dato il file.
+  const hadVideo = Boolean(it.short_form_video_context || it.playback_video || media.__typename || it.__typename === "Video" || delivery.length);
+  // Post con foto: lette come slide.
+  const photos = (Array.isArray(it.media) ? it.media : [])
+    .filter((m) => m?.__typename === "Photo")
+    .map((m) => [m.photo_image?.uri, m.image?.uri, m.thumbnail].find(isUrl))
+    .filter(Boolean);
+  if (photos.length) return { caption, author, kind: "slides", imageUrls: [...new Set(photos)].slice(0, MAX_SLIDES), total: photos.length, cover: cover || photos[0] };
+  return { caption, author, kind: null, cover, hadVideo };
+}
+
+// Link di condivisione (share/r, share/v, fb.watch) → link diretto del video,
+// seguendo i reindirizzamenti pubblici. Se non riesce resta il link originale.
+export async function resolveFacebookUrl(url, fetchImpl = fetch) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return url;
+  }
+  const host = u.hostname.toLowerCase().replace(/^(www|m|mobile|web)\./, "");
+  if (host !== "fb.watch" && !/^\/share\//.test(u.pathname)) return url;
+  try {
+    const res = await fetchImpl(url, { redirect: "follow", signal: AbortSignal.timeout(4000) });
+    res.body?.cancel?.().catch?.(() => {});
+    const final = res.url || "";
+    const id = facebookVideoId(final);
+    if (!id) return url;
+    return /\/reel\//.test(decodeURIComponent(final)) ? `https://www.facebook.com/reel/${id}` : `https://www.facebook.com/watch/?v=${id}`;
+  } catch {
+    return url;
+  }
+}
+
+// Link di un video o Reel di Facebook (anche se non risolto).
+export function isFacebookVideoLink(url) {
+  if (facebookVideoId(url)) return true;
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const host = u.hostname.toLowerCase().replace(/^(www|m|mobile|web)\./, "");
+  if (host === "fb.watch") return true;
+  return /^\/(reel|watch)(\/|$)|^\/share\/[rv]\/|^\/[^/]+\/videos(\/|$)/.test(u.pathname);
+}
+
+export function facebookVideoId(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!/(^|\.)facebook\.com$/i.test(u.hostname)) return null;
+  // Pagina di accesso: il video richiesto è nel parametro "next".
+  if (/^\/login/.test(u.pathname) && u.searchParams.get("next")) return facebookVideoId(u.searchParams.get("next"));
+  const m = u.pathname.match(/\/reel\/(\d+)/) || u.pathname.match(/\/videos\/(?:[^/]+\/)?(\d+)/);
+  if (m) return m[1];
+  const v = u.searchParams.get("v");
+  return v && /^\d+$/.test(v) ? v : null;
 }
 
 const NORMALIZE = { instagram: normalizeInstagram, tiktok: normalizeTiktok, facebook: normalizeFacebook };
@@ -195,6 +291,9 @@ async function fetchSubtitles(subtitles, fetchImpl) {
 
 const remaining = (deadline) => deadline - Date.now();
 
+// Trascrizione incompleta: video lungo, oppure AI bloccata a ripetere una frase.
+export const cutNote = (r) => (r.looped ? "trascrizione interrotta dall'AI, salvata solo la prima parte" : "video lungo, trascritta solo la prima parte");
+
 // I file salvati da Apify (video di TikTok) possono richiedere la chiave:
 // la si aggiunge solo per gli indirizzi di Apify.
 function mediaFetch(env, fetchImpl) {
@@ -213,11 +312,23 @@ function mediaFetch(env, fetchImpl) {
 // Post social (non YouTube) → campi nella forma di extractUrlInfo. Gli errori
 // della trascrizione non fanno perdere didascalia e autore già letti.
 async function readPost({ env, platform, url, fetchImpl, deadline }) {
-  const timeoutSec = Math.max(30, Math.min(150, Math.floor(remaining(deadline) / 1000) - 100));
-  const post = NORMALIZE[platform](await runActor({ env, platform, url, fetchImpl, timeoutSec }));
+  const timeoutSec = () => Math.max(30, Math.min(150, Math.floor(remaining(deadline) / 1000) - 100));
+  const target = platform === "facebook" ? await resolveFacebookUrl(url, fetchImpl) : url;
+  let post = NORMALIZE[platform](await runActor({ env, platform, url: target, fetchImpl, timeoutSec: timeoutSec() }));
+  // Facebook: a volte il Reel arriva senza video; la pagina "watch" dello
+  // stesso video di solito lo contiene (la didascalia resta quella del Reel).
+  const fbId = platform === "facebook" && post.kind !== "video" && !/\/watch/.test(target) ? facebookVideoId(target) : null;
+  if (fbId && remaining(deadline) > 120_000) {
+    try {
+      const again = normalizeFacebook(await runActor({ env, platform, url: `https://www.facebook.com/watch/?v=${fbId}`, fetchImpl, timeoutSec: timeoutSec() }));
+      if (again.kind === "video") post = { ...again, caption: post.caption || again.caption, author: post.author || again.author, cover: post.cover || again.cover };
+    } catch {
+      /* resta il primo risultato */
+    }
+  }
   const out = { siteName: SITE[platform], description: post.caption, image: post.cover, author: post.author, text: null, textSource: null, missing: [] };
   const media = mediaFetch(env, fetchImpl);
-  const geminiTimeout = () => Math.max(10_000, Math.min(120_000, remaining(deadline) - 5_000));
+  const ai = { timeoutMs: 120_000, deadline: deadline - 5_000 };
 
   if (post.kind === "video") {
     if (post.subtitles?.length) {
@@ -228,9 +339,10 @@ async function readPost({ env, platform, url, fetchImpl, deadline }) {
     if (remaining(deadline) < 40_000) return { ...out, missing: ["tempo esaurito prima della trascrizione"] };
     try {
       const part = await videoPart({ env, url: post.videoUrl, fetchImpl: media, deadline: deadline - 30_000 });
-      const r = await readMedia({ env, kind: "video", parts: [part], fetchImpl, timeoutMs: geminiTimeout() });
-      if (!r.text) return { ...out, aiTitle: r.title, missing: ["nel video non c'è parlato da trascrivere"] };
-      return { ...out, aiTitle: r.title, text: r.text, textSource: "trascrizione dell'AI (video)" };
+      const r = await readMedia({ env, kind: "video", parts: [part], fetchImpl, ...ai });
+      if (!r.text) return { ...out, aiTitle: r.title, missing: ["nel video non c'è né parlato né testo da trascrivere"] };
+      const missing = r.truncated ? [cutNote(r)] : [];
+      return { ...out, aiTitle: r.title, text: r.text, textSource: "trascrizione dell'AI (video)", missing };
     } catch (e) {
       return { ...out, missing: [`trascrizione non riuscita (${e.message})`] };
     }
@@ -240,8 +352,10 @@ async function readPost({ env, platform, url, fetchImpl, deadline }) {
     const { parts, missing: lost } = await imageParts({ urls: post.imageUrls, fetchImpl: media });
     if (!parts.length) return { ...out, missing: ["non sono riuscito a scaricare le slide"] };
     try {
-      const r = await readMedia({ env, kind: "slides", parts, fetchImpl, timeoutMs: geminiTimeout() });
+      const r = await readMedia({ env, kind: "slides", parts, fetchImpl, ...ai });
       const missing = lost ? [`${lost} slide su ${post.imageUrls.length} non scaricabili`] : [];
+      if (post.total > post.imageUrls.length) missing.push(`lette solo le prime ${post.imageUrls.length} slide su ${post.total}`);
+      if (post.videoSlides) missing.push(`${post.videoSlides} slide video lette solo come immagine, parlato non trascritto`);
       if (!r.text) missing.push("nelle slide non c'è testo");
       return { ...out, aiTitle: r.title, text: r.text || null, textSource: r.text ? "testo delle slide letto dall'AI" : null, missing };
     } catch (e) {
@@ -249,7 +363,9 @@ async function readPost({ env, platform, url, fetchImpl, deadline }) {
     }
   }
 
-  return { ...out, missing: ["il post non contiene video o immagini leggibili"] };
+  const videoTarget = platform === "facebook" && (post.hadVideo || isFacebookVideoLink(target));
+  const none = videoTarget ? "Facebook non ha fornito il file del video" : "il post non contiene video o immagini leggibili";
+  return { ...out, missing: [none] };
 }
 
 function captionTitle(caption) {
@@ -267,12 +383,14 @@ export async function readLink(rawUrl, { env, fetchImpl = fetch, deadline = Date
   if (target.platform === "youtube") {
     const base = await extractUrlInfo(rawUrl, { allowPrivate });
     if (base.error || !aiConfigured(env)) return base;
+    // Il dettaglio dei soli metadati ("trascrizione non disponibile…") viene sostituito.
     try {
-      const r = await transcribeYoutube({ env, url: target.url, fetchImpl });
-      if (!r.text) return { ...base, detail: [base.detail, "Nel video non c'è parlato da trascrivere."].filter(Boolean).join(" ") };
+      const r = await transcribeYoutube({ env, url: target.url, fetchImpl, deadline: deadline - 5_000 });
+      if (!r.text) return { ...base, detail: "Titolo e autore letti da YouTube; nel video non c'è né parlato né testo da trascrivere." };
+      if (r.truncated) return { ...base, title: base.title || r.title || null, text: r.text, textSource: r.textSource, status: "partial", detail: `Letto in parte: ${cutNote(r)}.` };
       return { ...base, title: base.title || r.title || null, text: r.text, textSource: r.textSource, status: "analyzed", detail: null };
     } catch (e) {
-      return { ...base, detail: [base.detail, `Trascrizione non riuscita: ${e.message}`].filter(Boolean).join(" ") };
+      return { ...base, detail: `Titolo e autore letti da YouTube; trascrizione non riuscita: ${e.message}` };
     }
   }
 
@@ -318,15 +436,4 @@ export async function readLink(rawUrl, { env, fetchImpl = fetch, deadline = Date
     status,
     detail,
   };
-}
-
-// Core dell'endpoint POST /api/extract (lettura del link dall'app).
-export async function handleRead({ authHeader, body, env, fetchImpl }) {
-  const auth = await verifyRequest({ authHeader, env });
-  if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
-  const raw = body?.url;
-  if (typeof raw !== "string" || raw.length > 4000) return { status: 400, json: { error: "Link mancante o troppo lungo." } };
-  const out = await readLink(raw, { env, fetchImpl });
-  if (out.error) return { status: 400, json: { error: out.error } };
-  return { status: 200, json: out };
 }

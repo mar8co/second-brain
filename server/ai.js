@@ -73,18 +73,47 @@ function googleMessage(data) {
 }
 
 // `parts`: contenuti aggiuntivi prima del testo (audio, immagini, PDF, video YouTube).
-export async function callGemini({ env, prompt, parts, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch, retryDelayMs = 1500, timeoutMs = 25_000 }) {
+// `deadline` (facoltativa): oltre quell'istante niente nuovi tentativi né altri modelli.
+export async function callGemini(opts) {
+  const looped = {};
+  try {
+    return await callModels(opts, looped);
+  } catch (e) {
+    // Un modello si era bloccato in un ciclo e gli altri non hanno risposto:
+    // resta la parte scritta prima del ciclo, come per una risposta lunga.
+    if (looped.partial && !e.partial) throw Object.assign(new AiError(502, "Risposta dell'AI interrotta."), looped);
+    throw e;
+  }
+}
+
+async function callModels({ env, prompt, parts, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch, retryDelayMs = 1500, timeoutMs = 25_000, deadline = Infinity }, looped) {
   const models = modelChain(env);
   let lastError = null;
+  const timeLeft = () => deadline - Date.now() - 2_000;
   for (const model of models) {
     let withThinking = true;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const { res, data } = await geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, withThinking, timeoutMs });
+      if (timeLeft() < 8_000) throw lastError || new AiError(502, "Tempo esaurito per il servizio AI.");
+      const { res, data } = await geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, withThinking, timeoutMs: Math.min(timeoutMs, timeLeft()) });
       if (res.ok) {
-        const text = (data?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
+        const candidate = data?.candidates?.[0];
+        const text = (candidate?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
         try {
           return { out: JSON.parse(text), model };
         } catch {
+          if (candidate?.finishReason === "MAX_TOKENS") {
+            // Il modello si è bloccato ripetendo la stessa frase: si prova il
+            // successivo, tenendo da parte il testo scritto prima del ciclo.
+            const at = loopStart(text);
+            if (at >= 0) {
+              if (!looped.partial) Object.assign(looped, { partial: text.slice(0, at), model, looped: true });
+              lastError = new AiError(502, "l'AI si è bloccata ripetendo la stessa frase.");
+              break;
+            }
+            // Risposta davvero lunga, tagliata al limite di token: gli altri
+            // modelli hanno lo stesso limite. Chi chiama può usare la parte ricevuta.
+            throw Object.assign(new AiError(502, "Risposta troppo lunga per il limite dell'AI."), { partial: text, model });
+          }
           lastError = new AiError(502, "Risposta AI non valida (incompleta o non in JSON).");
           break;
         }
@@ -107,7 +136,7 @@ export async function callGemini({ env, prompt, parts, schema, maxTokens = 1024,
         break;
       }
       // Google sovraccarico o errore temporaneo: breve attesa e nuovo tentativo.
-      if (res.status >= 500 && attempt < 2) {
+      if (res.status >= 500 && attempt < 2 && timeLeft() - retryDelayMs * (attempt + 1) > 8_000) {
         await sleep(retryDelayMs * (attempt + 1));
         continue;
       }
@@ -116,6 +145,26 @@ export async function callGemini({ env, prompt, parts, schema, maxTokens = 1024,
   }
   throw lastError || new AiError(502, "Errore dal servizio AI.");
 }
+
+// Se la parte finale del testo è la stessa sequenza ripetuta (ciclo del
+// modello, es. "e poi e poi e poi…") invece di una risposta lunga, restituisce
+// la posizione in cui il ciclo comincia; altrimenti -1.
+export function loopStart(text, window = 1200, maxPeriod = 300) {
+  const s = String(text || "");
+  if (s.length < window) return -1;
+  const from = s.length - window;
+  for (let p = 1; p <= maxPeriod; p++) {
+    let i = from;
+    while (i + p < s.length && s[i] === s[i + p]) i++;
+    if (i + p < s.length) continue;
+    let start = from;
+    while (start > 0 && s[start - 1] === s[start - 1 + p]) start--;
+    return start;
+  }
+  return -1;
+}
+
+export const endsInLoop = (text) => loopStart(text) >= 0;
 
 export class AiError extends Error {
   constructor(status, message) {

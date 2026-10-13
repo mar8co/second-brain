@@ -125,9 +125,9 @@ Basta il link, dall'app o dal Comando Rapido (`server/social.js`):
 2. Il server scarica i media e **Gemini** trascrive il parlato del video (e il testo in sovrimpressione) oppure legge il testo di ogni slide, nell'ordine. Se un TikTok ha i sottotitoli, si usano quelli senza AI.
 3. YouTube e Shorts non passano da Apify: Gemini guarda il video pubblico dal link (funzione ufficiale dell'API).
 
-Il testo finisce in "Testo estratto" con la fonte ("trascrizione dell'AI", "testo delle slide letto dall'AI" o "sottotitoli del video"), poi l'AI assegna titolo, categorie e tag. I media non vengono conservati. Un video può richiedere fino a qualche minuto: le function hanno una durata massima di 300 secondi (`vercel.json`, con Fluid compute).
+Il testo finisce in "Testo estratto" con la fonte ("trascrizione dell'AI", "testo delle slide letto dall'AI" o "sottotitoli del video"), poi l'AI assegna titolo, categorie e tag. I media non vengono conservati. Un video può richiedere fino a qualche minuto: le function hanno una durata massima di 300 secondi (`vercel.json`, con Fluid compute). Anche quando il link è salvato dall'app (modalità sincronizzata) la lettura prosegue sul server (`server/read.js`), che scrive il risultato con il token dell'utente: si può chiudere l'app.
 
-Limiti: solo post pubblici; un post privato, rimosso o non disponibile risulta "Non accessibile" con il motivo. Senza `APIFY_TOKEN` si legge solo quello che la pagina espone pubblicamente (spesso nulla per Instagram) e la scheda dice cosa manca. L'app non usa il tuo account, non manda i tuoi cookie e non aggira login o CAPTCHA.
+Limiti: solo post pubblici; un post privato, rimosso o non disponibile risulta "Non accessibile" con il motivo. Nei caroselli le slide video vengono lette solo come immagine (il parlato no) e si leggono al massimo 20 slide; dei video molto lunghi si trascrive solo la prima parte: in tutti questi casi lo stato è "Analisi parziale" e la scheda dice cosa manca. Senza `APIFY_TOKEN` si legge solo quello che la pagina espone pubblicamente (spesso nulla per Instagram) e la scheda dice cosa manca. L'app non usa il tuo account, non manda i tuoi cookie e non aggira login o CAPTCHA.
 
 Alternative quando il link non basta: condividere il file del video o gli screenshot delle slide con il Comando Rapido (vedi sotto), oppure incollare una trascrizione nella scheda.
 
@@ -236,5 +236,5 @@ I test end-to-end coprono: salvataggio di note, link e file; persistenza dopo il
 - Pagine molto dinamiche (contenuto caricato da JavaScript) danno solo titolo e descrizione.
 - La ricerca carica tutti gli elementi nel browser: va bene fino a qualche migliaia di elementi.
 - Le domande considerano al massimo i 12 elementi più pertinenti trovati per parole chiave: una domanda con parole diverse da quelle salvate può non trovarli (non c'è ricerca semantica).
-- Se chiudi l'app durante "In elaborazione", l'elemento può restare in quello stato: usa "Rianalizza".
+- Per i link normali (non social) letti dall'app, se chiudi l'app durante "In elaborazione" l'elemento può restare in quello stato: usa "Rianalizza".
 - L'esportazione JSON non include i file caricati.

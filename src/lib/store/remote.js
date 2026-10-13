@@ -70,6 +70,12 @@ export function createRemoteStore(supabase) {
       return data;
     },
 
+    async get(id) {
+      const { data, error } = await supabase.from("items").select("*").eq("id", id).single();
+      check(error, "Impossibile leggere l'elemento");
+      return data;
+    },
+
     async update(id, patch) {
       const clean = sanitizeItem(patch);
       delete clean.id;

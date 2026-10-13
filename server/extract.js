@@ -33,7 +33,7 @@ function hostOf(u) {
 function clip(s, n) {
   if (!s) return null;
   const t = cleanText(s);
-  return t.length > n ? `${t.slice(0, n)}…` : t;
+  return t.length > n ? `${t.slice(0, n - 1)}…` : t;
 }
 
 function result(base, patch) {

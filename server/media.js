@@ -94,9 +94,9 @@ function prompt(kind) {
   ];
   if (kind === "video") {
     return [
-      "Trascrivi il parlato di questo video o audio, parola per parola, nella lingua originale.",
+      "Trascrivi il parlato di questo video o audio, parola per parola, nella lingua originale, e il testo importante in sovrimpressione.",
       ...common,
-      "- transcript: la trascrizione completa. Se ci sono testi in sovrimpressione importanti, aggiungili alla fine dopo \"Testo a schermo:\". Se non c'è parlato, stringa vuota.",
+      "- transcript: la trascrizione completa del parlato. Se ci sono testi in sovrimpressione importanti, aggiungili alla fine dopo \"Testo a schermo:\". Se non c'è parlato ma c'è testo a schermo, scrivi solo \"Testo a schermo: ...\". Stringa vuota solo se non ci sono né parlato né testo a schermo.",
       "- slides: array vuoto.",
     ].join("\n");
   }
@@ -115,9 +115,42 @@ function toText(kind, out) {
   return slides.map((s, i) => `Slide ${i + 1}: ${s.trim()}`).join("\n\n").trim();
 }
 
-async function readWithGemini({ env, kind, parts, fetchImpl, timeoutMs = 40_000 }) {
-  const { out, model } = await callGemini({ env, prompt: prompt(kind), parts, schema: SCHEMA, maxTokens: 8192, temperature: 0, fetchImpl, timeoutMs });
-  return { title: String(out?.title || "").trim().slice(0, 200), text: toText(kind, out).slice(0, MAX_TEXT), model };
+// Valore di una stringa JSON anche se la risposta è stata interrotta a metà.
+export function partialJsonString(raw, key) {
+  const m = new RegExp(`"${key}"\\s*:\\s*"`).exec(String(raw || ""));
+  if (!m) return "";
+  let body = "";
+  for (let i = m.index + m[0].length; i < raw.length; i++) {
+    const c = raw[i];
+    if (c === "\\") {
+      // Sequenza di escape completa, altrimenti (troncata in fondo) ci si ferma.
+      const len = raw[i + 1] === "u" ? 6 : 2;
+      if (i + len > raw.length) break;
+      body += raw.slice(i, i + len);
+      i += len - 1;
+    } else if (c === '"') break;
+    else body += c;
+  }
+  try {
+    return JSON.parse(`"${body}"`);
+  } catch {
+    return body;
+  }
+}
+
+async function readWithGemini({ env, kind, parts, fetchImpl, timeoutMs = 40_000, deadline }) {
+  try {
+    // Temperatura 1: quella consigliata da Google per Gemini 3; più bassa può
+    // far ripetere al modello la stessa frase all'infinito.
+    const { out, model } = await callGemini({ env, prompt: prompt(kind), parts, schema: SCHEMA, maxTokens: 8192, temperature: 1, fetchImpl, timeoutMs, deadline });
+    return { title: String(out?.title || "").trim().slice(0, 200), text: toText(kind, out).slice(0, MAX_TEXT), model };
+  } catch (e) {
+    // Video lungo (risposta ferma al limite di token) o AI bloccata in un ciclo:
+    // si tiene la parte trascritta.
+    const text = kind === "video" && e.partial ? partialJsonString(e.partial, "transcript").trim() : "";
+    if (!text) throw e;
+    return { title: partialJsonString(e.partial, "title").trim().slice(0, 200), text: text.slice(0, MAX_TEXT), model: e.model, truncated: true, looped: Boolean(e.looped) };
+  }
 }
 
 // File condivisi → { title, text, textSource, model }.
@@ -158,8 +191,8 @@ export function youtubeUrl(url) {
   return id && /^[\w-]{6,20}$/.test(id) ? `https://www.youtube.com/watch?v=${id}` : null;
 }
 
-export async function transcribeYoutube({ env, url, fetchImpl }) {
-  const r = await readWithGemini({ env, kind: "video", parts: [{ file_data: { file_uri: url } }], fetchImpl, timeoutMs: 90_000 });
+export async function transcribeYoutube({ env, url, fetchImpl, deadline }) {
+  const r = await readWithGemini({ env, kind: "video", parts: [{ file_data: { file_uri: url } }], fetchImpl, timeoutMs: 90_000, deadline });
   return { ...r, textSource: "trascrizione dell'AI (YouTube)" };
 }
 
@@ -208,7 +241,7 @@ export async function uploadToGemini({ env, data, mime, fetchImpl = fetch, deadl
   if (!start.ok || !uploadUrl) throw new Error(`caricamento su Gemini non avviato (${start.status})`);
   const up = await fetchImpl(uploadUrl, {
     method: "POST",
-    headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize", "content-length": String(data.length) },
+    headers: { "X-Goog-Upload-Offset": "0", "X-Goog-Upload-Command": "upload, finalize" },
     body: data,
   });
   const info = await up.json().catch(() => null);
@@ -219,9 +252,12 @@ export async function uploadToGemini({ env, data, mime, fetchImpl = fetch, deadl
     if (Date.now() + 3000 > deadline) throw new Error("Gemini sta ancora elaborando il video");
     await sleep(2000);
     const r = await fetchImpl(`${geminiBase(env)}/v1beta/${file.name}`, { headers: { "x-goog-api-key": env.GEMINI_API_KEY } });
-    file = (await r.json().catch(() => null)) || file;
+    // Un errore momentaneo (503, 429…) non è lo stato del file: si riprova al giro dopo.
+    const next = r.ok ? await r.json().catch(() => null) : null;
+    if (next?.state) file = next;
   }
   if (file.state === "FAILED") throw new Error("Gemini non è riuscito a elaborare il video");
+  if (file.state !== "ACTIVE" || !file.uri) throw new Error("Gemini non ha reso disponibile il video");
   return { file_data: { mime_type: file.mimeType || mime, file_uri: file.uri } };
 }
 
@@ -231,15 +267,19 @@ const INLINE_MAX = 14 * 1024 * 1024;
 const VIDEO_MAX = 200 * 1024 * 1024;
 
 // Video pubblico → parte per Gemini. Se il server non riesce a scaricarlo,
-// si prova a far leggere l'indirizzo direttamente a Gemini.
+// si prova a far leggere l'indirizzo direttamente a Gemini (fino a 15 MB);
+// non per i file salvati su Apify, che richiedono la chiave.
 export async function videoPart({ env, url, fetchImpl = fetch, deadline }) {
   let media;
   try {
     media = await downloadMedia(url, { maxBytes: VIDEO_MAX, timeoutMs: 30_000, fetchImpl });
-  } catch {
+  } catch (e) {
+    if (/^https:\/\/api\.apify\.com\//i.test(url)) throw e;
     return { file_data: { mime_type: "video/mp4", file_uri: url } };
   }
-  const mime = /^(video|audio)\//.test(media.mime) ? media.mime : "video/mp4";
+  // Anche la sola traccia audio (MP4) va dichiarata come video/mp4: alcuni
+  // modelli rifiutano audio/mp4.
+  const mime = /^video\//.test(media.mime) ? media.mime : "video/mp4";
   if (media.data.length <= INLINE_MAX) return { inline_data: { mime_type: mime, data: media.data.toString("base64") } };
   return uploadToGemini({ env, data: media.data, mime, fetchImpl, deadline });
 }
@@ -259,6 +299,6 @@ export async function imageParts({ urls, fetchImpl = fetch }) {
 }
 
 // Parti già pronte (video o slide) → { title, text, model }.
-export function readMedia({ env, kind, parts, fetchImpl, timeoutMs = 90_000 }) {
-  return readWithGemini({ env, kind, parts, fetchImpl, timeoutMs });
+export function readMedia({ env, kind, parts, fetchImpl, timeoutMs = 90_000, deadline }) {
+  return readWithGemini({ env, kind, parts, fetchImpl, timeoutMs, deadline });
 }

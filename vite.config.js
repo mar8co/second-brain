@@ -1,7 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
-import { handleRead } from "./server/social.js";
+import { handleRead } from "./server/read.js";
 import { handleAi } from "./server/ai.js";
 import { handleShare } from "./server/share.js";
 import { nodeHandler } from "./server/node-adapter.js";
