@@ -1,6 +1,8 @@
 // Funzioni pure per arricchire un elemento (usate sia dall'app sia dal
 // server per i salvataggi in background): nessuna dipendenza dal browser.
 
+import { cleanList } from "./item.js";
+
 export const TRANSCRIPT_SOURCE = "trascrizione incollata da te";
 
 export function extractionPatch(item, r) {
@@ -27,6 +29,34 @@ export function extractionPatch(item, r) {
     if (!item.title && r.place.name) patch.title = r.place.name;
   }
   return patch;
+}
+
+// Un lavoro in background calcola la patch sull'elemento letto all'inizio
+// (`before`); intanto l'utente può averlo modificato. Prima di scrivere si
+// riparte dall'elemento attuale (`fresh`): titolo, descrizione e trascrizione
+// cambiati nel frattempo restano, categorie e tag dell'AI si aggiungono ai
+// suoi, e se ha già rigenerato le proposte dell'AI si tengono le sue.
+// Restituisce null se l'elemento non esiste più.
+export function rebasePatch(fresh, before, patch) {
+  if (!fresh) return null;
+  const out = { ...patch };
+  if ((fresh.title || null) !== (before.title || null)) delete out.title;
+  if ((fresh.description || null) !== (before.description || null)) delete out.description;
+  if (fresh.text_source === TRANSCRIPT_SOURCE) {
+    delete out.extracted_text;
+    delete out.text_source;
+  }
+  if (out.ai) {
+    if ((fresh.ai?.generated_at || null) !== (before.ai?.generated_at || null)) {
+      delete out.ai;
+      delete out.categories;
+      delete out.tags;
+    } else if (out.ai.applied) {
+      out.categories = cleanList([...(fresh.categories || []), ...(out.ai.categories || [])], 10);
+      out.tags = cleanList([...(fresh.tags || []), ...(out.ai.tags || [])]).map((t) => t.toLowerCase());
+    }
+  }
+  return out;
 }
 
 export function hasContent(item) {

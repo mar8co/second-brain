@@ -194,12 +194,25 @@ begin
   where id = p_id and user_id = uid;
 end $$;
 
+-- Legge un elemento del proprietario del codice: prima di scrivere il
+-- risultato il server riparte da qui, così le modifiche fatte nell'app
+-- durante l'elaborazione restano. null se l'elemento non esiste più.
+create or replace function public.share_get(p_token text, p_id uuid) returns jsonb
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  uid uuid := public.share_user(p_token);
+begin
+  return (select to_jsonb(i) from public.items i where i.id = p_id and i.user_id = uid);
+end $$;
+
 revoke all on function public.create_share_token() from public, anon;
 revoke all on function public.revoke_share_token() from public, anon;
 revoke all on function public.share_user(text) from public, anon, authenticated;
 revoke all on function public.share_save(text, jsonb) from public;
 revoke all on function public.share_update(text, uuid, jsonb) from public;
+revoke all on function public.share_get(text, uuid) from public;
 grant execute on function public.create_share_token() to authenticated;
 grant execute on function public.revoke_share_token() to authenticated;
 grant execute on function public.share_save(text, jsonb) to anon, authenticated;
 grant execute on function public.share_update(text, uuid, jsonb) to anon, authenticated;
+grant execute on function public.share_get(text, uuid) to anon, authenticated;

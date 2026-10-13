@@ -10,11 +10,24 @@ export class ApiError extends Error {
   }
 }
 
-async function post(path, body, { timeoutMs = 30000 } = {}) {
+// Token di sessione. `minTokenMs`: per i lavori che il server prosegue in
+// background il token deve restare valido fino alla fine, altrimenti il server
+// non riesce a scrivere il risultato. Se scade prima, viene rinnovato ora.
+async function accessToken(minTokenMs) {
+  const { data } = await supabase.auth.getSession();
+  let session = data?.session;
+  if (session && minTokenMs && (session.expires_at || 0) * 1000 - Date.now() < minTokenMs) {
+    const r = await supabase.auth.refreshSession().catch(() => null);
+    if (r?.data?.session) session = r.data.session;
+  }
+  return session?.access_token || null;
+}
+
+async function post(path, body, { timeoutMs = 30000, minTokenMs = 0 } = {}) {
   const headers = { "content-type": "application/json" };
   if (supabase) {
-    const { data } = await supabase.auth.getSession();
-    if (data?.session?.access_token) headers.authorization = `Bearer ${data.session.access_token}`;
+    const token = await accessToken(minTokenMs);
+    if (token) headers.authorization = `Bearer ${token}`;
   }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -33,7 +46,9 @@ async function post(path, body, { timeoutMs = 30000 } = {}) {
 
 export const api = {
   // Trascrivere un Reel o leggere un carosello può richiedere qualche minuto.
-  extract: (url) => post("/api/extract", { url }, { timeoutMs: 295000 }),
+  // Con `id` (modalità sincronizzata) i post social proseguono sul server e
+  // la risposta è { background: true }.
+  extract: (url, opts = {}) => post("/api/extract", { url, ...opts }, { timeoutMs: 295000, minTokenMs: opts.id ? 360_000 : 0 }),
   aiStatus: () => post("/api/ai", { action: "status" }, { timeoutMs: 10000 }),
   classify: (item, categories) => post("/api/ai", { action: "classify", item, categories }),
   ask: (question, items) => post("/api/ai", { action: "ask", question, items }, { timeoutMs: 45000 }),

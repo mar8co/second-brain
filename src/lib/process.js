@@ -23,15 +23,52 @@ export async function classifyItem(item, { store, categories, apply = false }) {
   });
 }
 
-export async function processItem(item, { store, onUpdate, ai, categories = [] }) {
+// Attende che il server finisca la lettura in background (stato diverso da
+// "in elaborazione"). Se l'app va in background il controllo riprende al ritorno.
+export async function waitForServer(id, { store, onUpdate, everyMs = 4000, maxMs = 330_000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+  const until = now() + maxMs;
+  let cur = null;
+  while (now() < until) {
+    await sleep(everyMs);
+    try {
+      cur = await store.get(id);
+    } catch {
+      continue;
+    }
+    if (cur && cur.status !== "processing") {
+      onUpdate(cur);
+      return cur;
+    }
+  }
+  return cur;
+}
+
+export async function processItem(item, { store, onUpdate, ai, categories = [], wait = waitForServer }) {
   let cur = item;
   if (item.url && !item.file_path) {
     cur = await store.update(item.id, { status: "processing", status_detail: null });
     onUpdate(cur);
     let patch;
     try {
-      const r = await api.extract(item.url);
-      patch = extractionPatch(cur, r);
+      // Modalità sincronizzata: per i post social il server lavora in
+      // background, scrive lui il risultato (AI compresa) e qui si aspetta.
+      const opts = store.mode === "sync" ? { id: item.id, ai: Boolean(ai), categories } : {};
+      const r = await api.extract(item.url, opts);
+      if (r?.background) {
+        const done = await wait(item.id, { store, onUpdate });
+        if (done && done.status !== "processing") return done;
+        // Tempo scaduto: si ricontrolla (l'ultimo controllo può essere vecchio
+        // o fallito). Se il database non risponde non si scrive nulla.
+        const last = await store.get(item.id).catch(() => null);
+        if (!last) return done || cur;
+        if (last.status !== "processing") {
+          onUpdate(last);
+          return last;
+        }
+        // Il lavoro sul server si è interrotto senza scrivere (dura al massimo
+        // 5 minuti): stato finale, così la scheda propone "Rianalizza".
+        patch = { status: "saved", status_detail: "Analisi non completata: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
+      } else patch = extractionPatch(cur, r);
     } catch (e) {
       patch = {
         status: "saved",

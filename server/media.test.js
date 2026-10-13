@@ -102,6 +102,20 @@ describe("trascrizione dal Comando Rapido", () => {
     expect(patch.status_detail).toMatch(/non viene conservato/);
   });
 
+  it("audio lungo, trascrizione tagliata al limite dell'AI: letto in parte, e la scheda lo dice", async () => {
+    const db = fakeDb();
+    const cut = '{"title": "Podcast", "transcript": "Prima parte del podcast, poi';
+    const fetchImpl = async (url, init) => {
+      const parts = JSON.parse(init.body).contents[0].parts;
+      if (parts.some((p) => p.inline_data)) return new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: cut }] } }] }), { status: 200 });
+      return reply({ summary: "Podcast.", categories: [], tags: [] });
+    };
+    await handleShare({ body: { token: TOKEN, files: [{ name: "a.m4a", type: "audio/mp4", data: Buffer.from("A") }] }, env, db, fetchImpl });
+    const { patch } = db.calls.update[0];
+    expect(patch).toMatchObject({ status: "partial", extracted_text: "Prima parte del podcast, poi" });
+    expect(patch.status_detail).toMatch(/^Letto in parte: file lungo, trascritta solo la prima parte\. Il file non viene conservato/);
+  });
+
   it("audio rifiutato come audio/mp4: riprova come video/mp4", async () => {
     const db = fakeDb();
     const g = fakeGemini({ title: "T", transcript: "Ciao a tutti.", slides: [] }, { failMime: "audio/mp4" });

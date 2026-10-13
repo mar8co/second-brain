@@ -13,8 +13,8 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { detectType, extractUrl } from "../src/lib/detect.js";
-import { extractionPatch, hasContent, aiPayload } from "../src/lib/enrich.js";
-import { cleanList } from "../src/lib/item.js";
+import { extractionPatch, hasContent, aiPayload, rebasePatch } from "../src/lib/enrich.js";
+import { cleanList, sanitizeItem } from "../src/lib/item.js";
 import { aiConfigured, classifyWithAi } from "./ai.js";
 import { checkMedia, transcribeFiles } from "./media.js";
 import { readLink, socialTarget } from "./social.js";
@@ -36,6 +36,7 @@ export function supabaseShareDb(env) {
   };
   return {
     save: (token, item) => call("share_save", { p_token: token, p_item: item }),
+    get: (token, id) => call("share_get", { p_token: token, p_id: id }),
     update: (token, id, patch) => call("share_update", { p_token: token, p_id: id, p_patch: patch }),
   };
 }
@@ -78,8 +79,9 @@ async function transcriptionPatch(read, what) {
       ...(r.title ? { title: r.title } : {}),
       extracted_text: r.text,
       text_source: r.textSource,
-      status: "analyzed",
-      status_detail: null,
+      // Risposta tagliata al limite dell'AI: c'è solo la prima parte.
+      status: r.truncated ? "partial" : "analyzed",
+      status_detail: r.truncated ? `Letto in parte: ${r.looped ? "trascrizione interrotta dall'AI, salvata" : "file lungo, trascritta"} solo la prima parte.` : null,
     };
   } catch (e) {
     return { status: "saved", status_detail: `${what} non riuscita: ${e.message}` };
@@ -90,7 +92,7 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl }) {
   const what = media.kind === "video" ? "Trascrizione" : "Lettura delle slide";
   const patch = await transcriptionPatch(() => transcribeFiles({ env, kind: media.kind, files: media.files, fetchImpl }), what);
   patch.processed_at = new Date().toISOString();
-  if (patch.status === "analyzed") patch.status_detail = SHARED_FILE_NOTE;
+  if (patch.extracted_text) patch.status_detail = [patch.status_detail, SHARED_FILE_NOTE].filter(Boolean).join(" ");
   return withAi({ item, patch, known, env, fetchImpl });
 }
 
@@ -98,7 +100,8 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl }) {
 // Reel, TikTok, post Facebook e video YouTube vengono anche trascritti, i
 // caroselli letti slide per slide (server/social.js). Il tempo è limitato
 // dalla durata massima della funzione: resta margine per l'AI e il salvataggio.
-export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000 }) {
+// `classify: false` quando l'utente ha disattivato l'AI automatica nell'app.
+export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000, classify = true }) {
   let patch = {};
   if (item.url) {
     try {
@@ -110,7 +113,7 @@ export async function enrichShared({ item, known = [], env, fetchImpl, deadline 
       patch = { status: "saved", status_detail: "Analisi non eseguita: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
     }
   }
-  return withAi({ item, patch, known, env, fetchImpl });
+  return classify ? withAi({ item, patch, known, env, fetchImpl }) : patch;
 }
 
 async function withAi({ item, patch, known, env, fetchImpl }) {
@@ -171,13 +174,28 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
   const id = saved?.id;
   const known = Array.isArray(saved?.categories) ? saved.categories : [];
 
+  // Scrive il risultato. Se intanto l'utente ha modificato l'elemento
+  // nell'app, le sue modifiche restano (rebasePatch); se l'ha eliminato, niente.
+  // sanitizeItem: gli stessi limiti di lunghezza del database (altrimenti la
+  // scrittura fallisce e l'elemento resta "in elaborazione").
+  const before = { ...item, description: null, categories: [], tags: [], ai: null };
+  const write = async (patch) => {
+    let fresh;
+    try {
+      fresh = store.get ? await store.get(token, id) : before;
+    } catch {
+      fresh = before;
+    }
+    const next = rebasePatch(fresh, before, patch);
+    if (next && Object.keys(next).length) await store.update(token, id, sanitizeItem(next));
+  };
   const job = media
     ? enrichMedia({ item, media, known, env, fetchImpl })
-        .then((patch) => store.update(token, id, patch))
+        .then(write)
         .catch((e) => console.warn("share: trascrizione non riuscita", e?.message))
     : item.url || aiConfigured(env)
     ? enrichShared({ item, known, env, fetchImpl })
-        .then((patch) => (Object.keys(patch).length ? store.update(token, id, patch) : null))
+        .then(write)
         .catch((e) => console.warn("share: elaborazione non riuscita", e?.message))
     : null;
   // Su Vercel il lavoro continua dopo la risposta; altrove (sviluppo) si aspetta.
