@@ -9,6 +9,7 @@ import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
 import { isImage } from "../lib/files.js";
+import { TRANSCRIPT_SOURCE } from "../lib/enrich.js";
 
 function mapsLink(place) {
   const p = new URLSearchParams();
@@ -23,6 +24,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
   const [fileUrl, setFileUrl] = useState(null);
+  const [transcript, setTranscript] = useState("");
   const [openedAt] = useState(() => Date.now());
 
   useEffect(() => {
@@ -68,6 +70,14 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
       navigate("/archivio", { replace: true });
     });
   };
+
+  const saveTranscript = () =>
+    run("transcript", async () => {
+      const saved = await archive.update(item.id, { extracted_text: transcript.trim(), text_source: TRANSCRIPT_SOURCE });
+      if (ai) await archive.classify(saved || { ...item, extracted_text: transcript.trim(), text_source: TRANSCRIPT_SOURCE }, { apply: true });
+      toast("Trascrizione salvata");
+      setTranscript("");
+    });
 
   const aiCats = (item.ai?.categories || []).filter((c) => !(item.categories || []).includes(c));
   const aiTags = (item.ai?.tags || []).filter((t) => !(item.tags || []).includes(t));
@@ -211,6 +221,20 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
               <Sparkles className="h-4 w-4" aria-hidden="true" /> {busy === "classify" ? "Analizzo…" : "Proponi categorie e tag con l'AI"}
             </button>
           ) : null}
+
+          {item.url && item.type !== "file" && (
+            <details className="card p-3.5" open={!item.extracted_text || item.text_source === TRANSCRIPT_SOURCE}>
+              <summary className="cursor-pointer font-medium">Trascrizione del video</summary>
+              <p className="mt-2 text-sm text-muted">
+                L'app legge solo la didascalia pubblica. Per capire cosa si dice nel video, trascrivilo con un sito come reelgrab.ink e incolla qui il testo.
+              </p>
+              <label htmlFor="transcript" className="sr-only">Testo della trascrizione</label>
+              <textarea id="transcript" className="input mt-2 min-h-[110px]" placeholder="Incolla la trascrizione…" value={transcript} onChange={(e) => setTranscript(e.target.value)} />
+              <button type="button" className="btn-ghost mt-2 w-full" disabled={!!busy || !transcript.trim()} onClick={saveTranscript}>
+                {busy === "transcript" ? "Salvo…" : "Salva trascrizione"}
+              </button>
+            </details>
+          )}
 
           {item.extracted_text && (
             <details className="card p-3.5">

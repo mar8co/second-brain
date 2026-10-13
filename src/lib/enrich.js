@@ -1,6 +1,8 @@
 // Funzioni pure per arricchire un elemento (usate sia dall'app sia dal
 // server per i salvataggi in background): nessuna dipendenza dal browser.
 
+export const TRANSCRIPT_SOURCE = "trascrizione incollata da te";
+
 export function extractionPatch(item, r) {
   const patch = {
     final_url: r.finalUrl || null,
@@ -12,6 +14,11 @@ export function extractionPatch(item, r) {
     status_detail: r.detail || null,
     processed_at: new Date().toISOString(),
   };
+  // La trascrizione incollata a mano non viene sostituita da una nuova lettura.
+  if (item.text_source === TRANSCRIPT_SOURCE) {
+    delete patch.extracted_text;
+    delete patch.text_source;
+  }
   // Mai sovrascrivere titolo e descrizione inseriti a mano.
   if (!item.title && r.title) patch.title = r.title;
   if (!item.description && r.description) patch.description = r.description;

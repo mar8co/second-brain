@@ -115,8 +115,8 @@ export function useArchive(store, { ai }) {
   const reprocess = useCallback((item) => runProcess(item), [runProcess]);
 
   const classify = useCallback(
-    async (item) => {
-      const it = await classifyItem(item, { store, categories: catRef.current });
+    async (item, { apply = false } = {}) => {
+      const it = await classifyItem(item, { store, categories: catRef.current, apply });
       upsert(it);
       return it;
     },
