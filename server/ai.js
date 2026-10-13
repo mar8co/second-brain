@@ -35,7 +35,7 @@ export function thinkingConfig(model) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function geminiRequest({ env, model, prompt, schema, maxTokens, temperature, fetchImpl, withThinking }) {
+async function geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, withThinking, timeoutMs }) {
   // GEMINI_API_BASE serve solo ai test (finto Gemini locale).
   const apiBase = env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
   const url = `${apiBase}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
@@ -49,13 +49,13 @@ async function geminiRequest({ env, model, prompt, schema, maxTokens, temperatur
   if (thinking) generationConfig.thinkingConfig = thinking;
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 25_000);
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, {
       method: "POST",
       signal: ctrl.signal,
       headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
+      body: JSON.stringify({ contents: [{ role: "user", parts: [...(parts || []), { text: prompt }] }], generationConfig }),
     });
     const data = await res.json().catch(() => null);
     return { res, data };
@@ -72,13 +72,14 @@ function googleMessage(data) {
   return typeof m === "string" ? m.replace(/\s+/g, " ").slice(0, 200) : "";
 }
 
-export async function callGemini({ env, prompt, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch, retryDelayMs = 1500 }) {
+// `parts`: contenuti aggiuntivi prima del testo (audio, immagini, PDF, video YouTube).
+export async function callGemini({ env, prompt, parts, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch, retryDelayMs = 1500, timeoutMs = 25_000 }) {
   const models = modelChain(env);
   let lastError = null;
   for (const model of models) {
     let withThinking = true;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const { res, data } = await geminiRequest({ env, model, prompt, schema, maxTokens, temperature, fetchImpl, withThinking });
+      const { res, data } = await geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, withThinking, timeoutMs });
       if (res.ok) {
         const text = (data?.candidates?.[0]?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
         try {

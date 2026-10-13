@@ -8,14 +8,14 @@ import { nodeHandler } from "./server/node-adapter.js";
 
 // In `npm run dev` gli endpoint /api/* sono serviti da un middleware che usa lo
 // stesso core delle function Vercel (server/*): comportamento identico.
-function devApi(path, core, env) {
+function devApi(path, core, env, extra) {
   return {
     name: `dev-api${path.replace(/\//g, "-")}`,
     configureServer(server) {
-      server.middlewares.use(path, nodeHandler(core, env));
+      server.middlewares.use(path, nodeHandler(core, env, extra));
     },
     configurePreviewServer(server) {
-      server.middlewares.use(path, nodeHandler(core, env));
+      server.middlewares.use(path, nodeHandler(core, env, extra));
     },
   };
 }
@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
       react(),
       devApi("/api/extract", handleExtract, apiEnv),
       devApi("/api/ai", handleAi, apiEnv),
-      devApi("/api/share", handleShare, apiEnv),
+      devApi("/api/share", handleShare, apiEnv, { allowFiles: true }),
       VitePWA({
         registerType: "autoUpdate",
         injectRegister: "auto",

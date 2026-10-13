@@ -110,7 +110,9 @@ Instagram mostra i contenuti solo a chi ha fatto l'accesso. L'app **non** usa il
 
 - nella maggior parte dei casi il Reel risulta **"Non accessibile"**: resta il link, apribile con "Apri l'originale";
 - se Instagram espone pubblicamente la didascalia nei metadati, viene salvata come **"Analisi parziale"**;
-- audio e video non vengono mai analizzati.
+- dal link, audio e video non vengono analizzati.
+
+Per far capire il video condividi il **file** (scaricato da Instagram quando lo consente, o una registrazione schermo) con il Comando "video da trascrivere": vedi sotto. Per i caroselli si condividono gli screenshot delle slide. In alternativa, nella scheda di un link si può incollare una trascrizione.
 
 Per ritrovare un Reel, scrivi una nota al momento del salvataggio ("esercizi per la schiena", "ristorante a Lisbona"): la ricerca e le domande la usano.
 
@@ -172,6 +174,16 @@ Il Comando invia il link a `POST /api/share` e **non apre l'app**: l'elemento vi
 3. Azione **Ottieni contenuti di URL**: URL `https://<tuo-dominio>/api/share`; in "Mostra di più" Metodo **POST**, Corpo richiesta **JSON** con due campi Testo: `token` = il codice, `text` = **Input comando rapido**.
 4. Azione **Mostra notifica** con **Contenuti dell'URL**: mostra "Link salvato in Second Brain…" oppure il motivo dell'errore.
 
+### Video e caroselli: trascrizione con l'AI (da verificare su dispositivo)
+
+`POST /api/share` accetta anche un corpo **Modulo** (`multipart/form-data`) con `token` e uno o più `file`:
+
+- **video**: il Comando estrae solo l'audio (**Codifica contenuti multimediali → Solo audio**) e lo invia; Gemini lo trascrive parola per parola;
+- **carosello**: gli screenshot delle slide, ridimensionati, convertiti in JPEG e uniti con **Crea PDF**; Gemini legge il testo slide per slide;
+- **YouTube / Shorts**: basta il link; Gemini guarda il video pubblico direttamente (funzione ufficiale dell'API).
+
+Il testo finisce in "Testo estratto" (fonte: trascrizione dell'AI), poi l'AI assegna titolo, categorie e tag. I file non vengono conservati. Limite: 4 MB per invio (limite delle function Vercel). Le istruzioni passo passo sono in Impostazioni → Salvataggio rapido.
+
 Richiede la modalità sincronizzata e le funzioni SQL `share_save`/`share_update` di `supabase/schema.sql` (verificano il codice e scrivono solo negli elementi del suo proprietario; il linter di Supabase le segnala come "SECURITY DEFINER eseguibili da anon": è voluto, l'accesso è protetto dal codice).
 
 ### Comando Rapido che apre l'app (alternativa)
@@ -202,8 +214,8 @@ I test end-to-end coprono: salvataggio di note, link e file; persistenza dopo il
 
 ## Limiti noti
 
-- Nessuna trascrizione di video e nessuna lettura di Reel dietro login (vedi sopra).
-- Il testo nelle immagini (OCR) non viene letto; i PDF scansionati senza testo neppure. Dei PDF si leggono al massimo le prime 50 pagine.
+- Dai link di Instagram, TikTok e Facebook non si trascrive nulla: serve condividere il file (vedi sopra). Nessuna lettura di contenuti dietro login.
+- Il testo nelle immagini caricate dall'app (OCR) non viene letto (solo quelle inviate dal Comando dei caroselli); i PDF scansionati senza testo neppure. Dei PDF si leggono al massimo le prime 50 pagine.
 - Pagine molto dinamiche (contenuto caricato da JavaScript) danno solo titolo e descrizione.
 - La ricerca carica tutti gli elementi nel browser: va bene fino a qualche migliaia di elementi.
 - Le domande considerano al massimo i 12 elementi più pertinenti trovati per parole chiave: una domanda con parole diverse da quelle salvate può non trovarli (non c'è ricerca semantica).
