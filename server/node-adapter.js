@@ -1,6 +1,8 @@
 // Adattatore tra (req, res) di Node/Vercel e i core framework-agnostic in
 // server/*. Usato dalle function in api/ e dal middleware di sviluppo di Vite.
 
+import { MAX_UPLOAD_BYTES, parseMultipart } from "./media.js";
+
 const MAX_BODY = 256 * 1024;
 
 export function readJsonBody(req) {
@@ -26,6 +28,34 @@ export function readJsonBody(req) {
   });
 }
 
+// Corpo "Modulo" con file (Comandi Rapidi): letto grezzo, poi diviso nei campi.
+function readRawBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(Object.assign(new Error("too_large"), { status: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+async function readBody(req, allowFiles) {
+  const ct = String(req.headers["content-type"] || "");
+  if (/^multipart\/form-data/i.test(ct)) {
+    if (!allowFiles) throw Object.assign(new Error("bad_body"), { status: 400 });
+    return parseMultipart(await readRawBody(req, MAX_UPLOAD_BYTES), ct);
+  }
+  return readJsonBody(req);
+}
+
 export function nodeHandler(core, env = process.env, extra = {}) {
   return async (req, res) => {
     let out;
@@ -33,10 +63,11 @@ export function nodeHandler(core, env = process.env, extra = {}) {
       out = { status: 405, json: { error: "Metodo non consentito." } };
     } else {
       try {
-        const body = await readJsonBody(req);
+        const body = await readBody(req, Boolean(extra.allowFiles));
         out = await core({ authHeader: req.headers.authorization, body, env, ...extra });
       } catch (e) {
-        out = { status: e.status || 500, json: { error: e.status === 413 ? "Richiesta troppo grande." : "Richiesta non valida." } };
+        const error = e.status === 413 ? "File troppo grande (massimo 4 MB): per i video invia solo l'audio, per le slide riduci le immagini." : "Richiesta non valida.";
+        out = extra.allowFiles ? { status: e.status || 500, text: error } : { status: e.status || 500, json: { error } };
       }
     }
     res.statusCode = out.status;

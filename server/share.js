@@ -16,6 +16,7 @@ import { extractionPatch, hasContent, aiPayload } from "../src/lib/enrich.js";
 import { cleanList } from "../src/lib/item.js";
 import { extractUrlInfo } from "./extract.js";
 import { aiConfigured, classifyWithAi } from "./ai.js";
+import { checkMedia, transcribeFiles, transcribeYoutube, youtubeUrl } from "./media.js";
 
 const MAX_TEXT = 5000;
 
@@ -50,6 +51,48 @@ export function itemFromShared(rawText) {
   return { type: "note", note: text, status: "saved", status_detail: "Testo inviato da Comandi Rapidi.", text_source: "inserito da te" };
 }
 
+// Audio di un video o slide di un carosello → elemento iniziale.
+export function itemFromMedia(kind, rawText) {
+  const text = String(rawText || "").trim().slice(0, MAX_TEXT);
+  const url = extractUrl(text);
+  const note = (url ? text.replace(/\bhttps?:\/\/\S+/i, "") : text).trim() || null;
+  return {
+    type: kind === "video" ? "video" : "social",
+    url: url || null,
+    title: kind === "video" ? "Video condiviso" : "Carosello condiviso",
+    note,
+    status: "processing",
+    status_detail: kind === "video" ? "Trascrizione in corso…" : "Lettura delle slide in corso…",
+  };
+}
+
+const SHARED_FILE_NOTE = "Il file non viene conservato: resta solo il testo, che può contenere errori.";
+
+// Trascrizione (file condivisi o video YouTube) → patch.
+async function transcriptionPatch(read, what) {
+  try {
+    const r = await read();
+    if (!r.text) return { status: "partial", status_detail: `${what}: non ho trovato parole da trascrivere.` };
+    return {
+      ...(r.title ? { title: r.title } : {}),
+      extracted_text: r.text,
+      text_source: r.textSource,
+      status: "analyzed",
+      status_detail: null,
+    };
+  } catch (e) {
+    return { status: "saved", status_detail: `${what} non riuscita: ${e.message}` };
+  }
+}
+
+export async function enrichMedia({ item, media, known = [], env, fetchImpl }) {
+  const what = media.kind === "video" ? "Trascrizione" : "Lettura delle slide";
+  const patch = await transcriptionPatch(() => transcribeFiles({ env, kind: media.kind, files: media.files, fetchImpl }), what);
+  patch.processed_at = new Date().toISOString();
+  if (patch.status === "analyzed") patch.status_detail = SHARED_FILE_NOTE;
+  return withAi({ item, patch, known, env, fetchImpl });
+}
+
 // Lettura del link + AI. Scrive il risultato con un solo aggiornamento.
 export async function enrichShared({ item, known = [], env, fetchImpl }) {
   let patch = {};
@@ -62,7 +105,22 @@ export async function enrichShared({ item, known = [], env, fetchImpl }) {
     } catch {
       patch = { status: "saved", status_detail: "Analisi non eseguita: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
     }
+    // YouTube (anche Shorts): Gemini guarda il video pubblico e lo trascrive.
+    const yt = youtubeUrl(item.url);
+    if (yt && aiConfigured(env)) {
+      const t = await transcriptionPatch(() => transcribeYoutube({ env, url: yt, fetchImpl }), "Trascrizione del video");
+      if (t.extracted_text) {
+        const { title, ...rest } = t;
+        patch = { ...patch, ...rest, ...(item.title || patch.title ? {} : { title }) };
+      } else {
+        patch.status_detail = [patch.status_detail, t.status_detail].filter(Boolean).join(" ");
+      }
+    }
   }
+  return withAi({ item, patch, known, env, fetchImpl });
+}
+
+async function withAi({ item, patch, known, env, fetchImpl }) {
   const cur = { ...item, ...patch };
   if (aiConfigured(env) && hasContent(cur)) {
     try {
@@ -101,7 +159,12 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
     return { status: 401, json: { error: "Codice mancante o non valido: crealo in Impostazioni → Salvataggio rapido." } };
   }
   const raw = body?.text ?? body?.url;
-  const item = itemFromShared(typeof raw === "string" ? raw : "");
+  const media = Array.isArray(body?.files) && body.files.length ? checkMedia(body.files) : null;
+  if (media?.error) return { status: 400, json: { error: media.error } };
+  if (media && !aiConfigured(env)) {
+    return { status: 503, json: { error: "Per trascrivere video e slide serve l'AI: manca GEMINI_API_KEY sul server." } };
+  }
+  const item = media ? itemFromMedia(media.kind, typeof raw === "string" ? raw : "") : itemFromShared(typeof raw === "string" ? raw : "");
   if (!item) return { status: 400, json: { error: "Niente da salvare: il Comando non ha inviato testo o link." } };
 
   const store = db || supabaseShareDb(env);
@@ -115,7 +178,11 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
   const id = saved?.id;
   const known = Array.isArray(saved?.categories) ? saved.categories : [];
 
-  const job = item.url || aiConfigured(env)
+  const job = media
+    ? enrichMedia({ item, media, known, env, fetchImpl })
+        .then((patch) => store.update(token, id, patch))
+        .catch((e) => console.warn("share: trascrizione non riuscita", e?.message))
+    : item.url || aiConfigured(env)
     ? enrichShared({ item, known, env, fetchImpl })
         .then((patch) => (Object.keys(patch).length ? store.update(token, id, patch) : null))
         .catch((e) => console.warn("share: elaborazione non riuscita", e?.message))
@@ -124,9 +191,12 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
   if (job && waitUntil) waitUntil(job);
   else if (job) await job;
 
-  const what = item.url ? "Link salvato" : "Nota salvata";
-  return {
-    status: 200,
-    json: { ok: true, id, message: item.url ? `${what} in Second Brain: lo analizzo in background.` : `${what} in Second Brain.` },
-  };
+  const message = media
+    ? media.kind === "video"
+      ? "Video ricevuto in Second Brain: lo trascrivo in background."
+      : `Carosello ricevuto in Second Brain (${media.files.length} file): leggo le slide in background.`
+    : item.url
+      ? "Link salvato in Second Brain: lo analizzo in background."
+      : "Nota salvata in Second Brain.";
+  return { status: 200, json: { ok: true, id, message } };
 }

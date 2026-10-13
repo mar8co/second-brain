@@ -102,6 +102,40 @@ export default function QuickShare({ toast }) {
           <li>Aggiungi <strong>Mostra notifica</strong> con la variabile <strong>Contenuti dell'URL</strong>: ti dirà se il salvataggio è riuscito.</li>
         </ol>
       </details>
+      <details className="text-sm">
+        <summary className="cursor-pointer font-medium">Video da trascrivere (Reel, TikTok…)</summary>
+        <p className="mt-2">
+          Dal link si legge solo la didascalia. Per far capire il video condividi il <strong>file</strong>: scaricalo da Instagram quando c'è
+          l'opzione "Scarica", oppure fai una registrazione schermo. Poi da Foto → Condividi → questo comando. Si invia solo l'audio, che
+          l'AI trascrive in background; il file non viene conservato.
+        </p>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5">
+          <li>Nuovo comando → ⓘ → <strong>Mostra nel foglio di condivisione</strong>, tipi: <strong>Contenuti multimediali</strong>.</li>
+          <li>Aggiungi <strong>Codifica contenuti multimediali</strong> con l'Input comando rapido e attiva <strong>Solo audio</strong>.</li>
+          <li>
+            Aggiungi <strong>Ottieni contenuti di URL</strong> con lo stesso indirizzo, Metodo <strong>POST</strong>, Corpo richiesta{" "}
+            <strong>Modulo</strong>: campo <code>token</code> (Testo) = il tuo codice; campo <code>file</code> (File) = <strong>Contenuti multimediali codificati</strong>.
+          </li>
+          <li>Aggiungi <strong>Mostra notifica</strong> con <strong>Contenuti dell'URL</strong>.</li>
+        </ol>
+        <p className="mt-2 text-muted">I link di YouTube e Shorts non servono il file: basta il comando normale, il video viene trascritto direttamente.</p>
+      </details>
+      <details className="text-sm">
+        <summary className="cursor-pointer font-medium">Caroselli da leggere slide per slide</summary>
+        <p className="mt-2">
+          Fai uno screenshot di ogni slide, selezionali in Foto nell'ordine e condividili con questo comando: l'AI legge il testo di ogni slide.
+        </p>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5">
+          <li>Nuovo comando → ⓘ → <strong>Mostra nel foglio di condivisione</strong>, tipi: <strong>Immagini</strong>.</li>
+          <li>Aggiungi <strong>Ridimensiona immagine</strong> (Input comando rapido) a larghezza <strong>1080</strong>.</li>
+          <li>Aggiungi <strong>Converti immagine</strong> in <strong>JPEG</strong>, poi <strong>Crea PDF</strong> con le immagini convertite.</li>
+          <li>
+            Aggiungi <strong>Ottieni contenuti di URL</strong> come sopra (POST, Modulo): <code>token</code> = il tuo codice; <code>file</code> (File) = il <strong>PDF</strong>.
+          </li>
+          <li>Aggiungi <strong>Mostra notifica</strong> con <strong>Contenuti dell'URL</strong>.</li>
+        </ol>
+        <p className="mt-2 text-muted">Limite: 4 MB per invio. Se il video è lungo, dividilo in due parti.</p>
+      </details>
     </div>
   );
 }
