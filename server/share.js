@@ -4,8 +4,9 @@
 // 1. Il Comando invia { token, text } (text = ciò che è stato condiviso).
 // 2. Il token personale (creato in Impostazioni, salvato su Supabase solo come
 //    hash SHA-256) identifica l'utente: l'elemento viene salvato subito.
-// 3. Si risponde al Comando e, dopo la risposta, il server legge il link e
-//    chiede all'AI riassunto, categorie e tag (se GEMINI_API_KEY è presente).
+// 3. Si risponde al Comando e, dopo la risposta, il server legge il link
+//    (trascrive video e caroselli dei social, vedi social.js) e chiede all'AI
+//    riassunto, categorie e tag (se GEMINI_API_KEY è presente).
 //
 // Le regole sono le stesse dell'app: solo dati pubblici, niente login o
 // trucchi; le inferenze dell'AI restano nel campo `ai`, marcate come tali.
@@ -14,9 +15,9 @@ import { createClient } from "@supabase/supabase-js";
 import { detectType, extractUrl } from "../src/lib/detect.js";
 import { extractionPatch, hasContent, aiPayload } from "../src/lib/enrich.js";
 import { cleanList } from "../src/lib/item.js";
-import { extractUrlInfo } from "./extract.js";
 import { aiConfigured, classifyWithAi } from "./ai.js";
-import { checkMedia, transcribeFiles, transcribeYoutube, youtubeUrl } from "./media.js";
+import { checkMedia, transcribeFiles } from "./media.js";
+import { readLink, socialTarget } from "./social.js";
 
 const MAX_TEXT = 5000;
 
@@ -94,27 +95,19 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl }) {
 }
 
 // Lettura del link + AI. Scrive il risultato con un solo aggiornamento.
-export async function enrichShared({ item, known = [], env, fetchImpl }) {
+// Reel, TikTok, post Facebook e video YouTube vengono anche trascritti, i
+// caroselli letti slide per slide (server/social.js). Il tempo è limitato
+// dalla durata massima della funzione: resta margine per l'AI e il salvataggio.
+export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000 }) {
   let patch = {};
   if (item.url) {
     try {
-      const r = await extractUrlInfo(item.url, { allowPrivate: env.EXTRACT_ALLOW_PRIVATE === "1" });
+      const r = await readLink(item.url, { env, fetchImpl, deadline });
       patch = r.error
         ? { status: "saved", status_detail: r.error, processed_at: new Date().toISOString() }
         : extractionPatch(item, r);
     } catch {
       patch = { status: "saved", status_detail: "Analisi non eseguita: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
-    }
-    // YouTube (anche Shorts): Gemini guarda il video pubblico e lo trascrive.
-    const yt = youtubeUrl(item.url);
-    if (yt && aiConfigured(env)) {
-      const t = await transcriptionPatch(() => transcribeYoutube({ env, url: yt, fetchImpl }), "Trascrizione del video");
-      if (t.extracted_text) {
-        const { title, ...rest } = t;
-        patch = { ...patch, ...rest, ...(item.title || patch.title ? {} : { title }) };
-      } else {
-        patch.status_detail = [patch.status_detail, t.status_detail].filter(Boolean).join(" ");
-      }
     }
   }
   return withAi({ item, patch, known, env, fetchImpl });
@@ -196,7 +189,9 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
       ? "Video ricevuto in Second Brain: lo trascrivo in background."
       : `Carosello ricevuto in Second Brain (${media.files.length} file): leggo le slide in background.`
     : item.url
-      ? "Link salvato in Second Brain: lo analizzo in background."
+      ? socialTarget(item.url)
+        ? "Link salvato in Second Brain: leggo e trascrivo il post in background."
+        : "Link salvato in Second Brain: lo analizzo in background."
       : "Nota salvata in Second Brain.";
   return { status: 200, json: { ok: true, id, message } };
 }

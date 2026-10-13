@@ -87,8 +87,9 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   if (editing) return <EditForm item={item} archive={archive} onDone={() => setEditing(false)} />;
 
   const status = STATUSES[item.status] || STATUSES.saved;
-  // "In elaborazione" da più di un minuto: l'app è stata chiusa a metà, si può riprovare.
-  const stale = item.status === "processing" && openedAt - new Date(item.updated_at).getTime() > 60_000;
+  // "In elaborazione" da più di cinque minuti e mezzo (la trascrizione di un
+  // video può durarne cinque): l'elaborazione si è interrotta, si può riprovare.
+  const stale = item.status === "processing" && openedAt - new Date(item.updated_at).getTime() > 330_000;
   const showImage = item.file_path && isImage(item.file_mime) && fileUrl;
 
   return (
@@ -226,7 +227,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
             <details className="card p-3.5" open={!item.extracted_text || item.text_source === TRANSCRIPT_SOURCE}>
               <summary className="cursor-pointer font-medium">Trascrizione del video</summary>
               <p className="mt-2 text-sm text-muted">
-                Dal link l'app legge solo la didascalia. Per la trascrizione automatica condividi il file del video (o gli screenshot delle slide) con il Comando Rapido: trovi come in Impostazioni. In alternativa incolla qui il testo.
+                Reel, TikTok, video di Facebook e YouTube vengono trascritti in automatico dal link, e i caroselli letti slide per slide (solo post pubblici). Se non è stato possibile, premi Rianalizza oppure incolla qui il testo.
               </p>
               <label htmlFor="transcript" className="sr-only">Testo della trascrizione</label>
               <textarea id="transcript" className="input mt-2 min-h-[110px]" placeholder="Incolla la trascrizione…" value={transcript} onChange={(e) => setTranscript(e.target.value)} />

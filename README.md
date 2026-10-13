@@ -65,10 +65,11 @@ Per provarlo sull'iPhone nella stessa rete: `npx vite --host` e apri l'indirizzo
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | nel bundle del client (pubbliche per design, protette da RLS) | sì, per la modalità sincronizzata |
 | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | solo funzioni `/api` (verificano il token di sessione) | sì |
 | `GEMINI_API_KEY` | solo funzioni `/api` | no: senza, niente AI |
+| `APIFY_TOKEN` | solo funzioni `/api` | no: senza, i Reel, i TikTok, i video di Facebook e i caroselli non vengono trascritti né letti dal link (vedi "Trascrizione dal link") |
 | `GEMINI_MODEL` | solo funzioni `/api` | no (default `gemini-3.5-flash-lite`; se non disponibile per la chiave si prova `gemini-3.8-flash`, poi `gemini-3.6-flash`) |
 | `ALLOWED_EMAILS` | solo funzioni `/api`, elenco separato da virgole | no, consigliata: limita `/api` alla tua email |
 
-Non impostare mai `EXTRACT_ALLOW_PRIVATE` né `GEMINI_API_BASE` in produzione: esistono solo per i test.
+Non impostare mai `EXTRACT_ALLOW_PRIVATE`, `GEMINI_API_BASE` né `APIFY_API_BASE` in produzione: esistono solo per i test.
 
 3. Apri l'indirizzo su iPhone in Safari → Condividi → **Aggiungi alla schermata Home**.
 
@@ -77,7 +78,18 @@ Non impostare mai `EXTRACT_ALLOW_PRIVATE` né `GEMINI_API_BASE` in produzione: e
 Crea una chiave su [Google AI Studio](https://aistudio.google.com/apikey) e mettila in `GEMINI_API_KEY` su Vercel (o in `.env.local` in sviluppo). Viene usata per:
 
 - proporre riassunto, categorie e tag dopo il salvataggio (disattivabile in Impostazioni);
-- rispondere alle domande in "Chiedi".
+- rispondere alle domande in "Chiedi";
+- trascrivere i video e leggere le slide dei caroselli.
+
+### 4. Apify (facoltativo, per Reel, TikTok, Facebook e caroselli)
+
+Instagram, TikTok e Facebook mostrano video e immagini solo dentro le loro app. Per averli a partire dal link, il server usa [Apify](https://apify.com), un servizio esterno con piano gratuito (5 $ di crediti al mese, senza carta di credito, al momento della scrittura):
+
+1. Crea un account gratuito su apify.com.
+2. In **Settings → API & Integrations** copia il **Personal API token**.
+3. Su Vercel → progetto → **Settings → Environment Variables** aggiungi `APIFY_TOKEN` con quel valore, poi rifai il deploy (Deployments → ··· → Redeploy).
+
+Il token resta solo sul server. Quando i crediti del mese finiscono, la scheda lo dice e si ricaricano il mese dopo: nessun addebito. Apify legge solo post pubblici; il rispetto dei termini dei social nella lettura dipende da Apify e dall'uso personale che ne fai.
 
 **Costi e limiti:** l'API Gemini ha un piano gratuito con limiti di richieste e condizioni decise da Google, che possono cambiare; oltre i limiti, o con un account a pagamento, l'uso può costare. L'app non promette un servizio AI gratuito né illimitato. Sul piano gratuito Google può usare i dati inviati per migliorare i propri servizi: leggi i termini prima di salvare contenuti sensibili.
 
@@ -100,19 +112,24 @@ Schermata **Aggiungi** con tre modalità: **Link**, **Nota**, **File** (immagini
 ### Lettura dei link (`/api/extract`)
 
 - Pagine web: titolo, descrizione e immagine Open Graph, più il testo principale (Mozilla Readability). Il campo "fonte del testo" dice da dove arriva.
-- YouTube, Vimeo, TikTok: titolo e autore tramite oEmbed pubblico. **I video non vengono trascritti**: non esiste un modo pubblico e consentito per ottenere le trascrizioni dei video altrui senza accesso.
+- YouTube, Vimeo, TikTok: titolo e autore tramite oEmbed pubblico.
+- Reel e post Instagram, TikTok, video di Facebook, YouTube e Shorts: trascrizione e lettura delle slide, vedi sotto.
 - Google Maps e Apple Mappe: nome e coordinate letti dal link (anche dai link corti `maps.app.goo.gl`, seguendo i redirect). Orari e recensioni non vengono letti.
 - File di testo remoti letti; PDF e immagini remoti solo salvati (caricali come file per estrarne il testo).
 
-### Limiti dell'analisi dei Reel Instagram
+### Trascrizione dal link (Reel, TikTok, Facebook, YouTube, caroselli)
 
-Instagram mostra i contenuti solo a chi ha fatto l'accesso. L'app **non** usa il tuo account, non manda cookie, non si spaccia per un browser o per il crawler di altri e non aggira login o CAPTCHA. Di conseguenza:
+Basta il link, dall'app o dal Comando Rapido (`server/social.js`):
 
-- nella maggior parte dei casi il Reel risulta **"Non accessibile"**: resta il link, apribile con "Apri l'originale";
-- se Instagram espone pubblicamente la didascalia nei metadati, viene salvata come **"Analisi parziale"**;
-- dal link, audio e video non vengono analizzati.
+1. **Apify** (con `APIFY_TOKEN`) legge il post pubblico e restituisce didascalia, autore e indirizzi dei media: il video, oppure le immagini di ogni slide del carosello. Per TikTok, se ci sono, anche i sottotitoli.
+2. Il server scarica i media e **Gemini** trascrive il parlato del video (e il testo in sovrimpressione) oppure legge il testo di ogni slide, nell'ordine. Se un TikTok ha i sottotitoli, si usano quelli senza AI.
+3. YouTube e Shorts non passano da Apify: Gemini guarda il video pubblico dal link (funzione ufficiale dell'API).
 
-Per far capire il video condividi il **file** (scaricato da Instagram quando lo consente, o una registrazione schermo) con il Comando "video da trascrivere": vedi sotto. Per i caroselli si condividono gli screenshot delle slide. In alternativa, nella scheda di un link si può incollare una trascrizione.
+Il testo finisce in "Testo estratto" con la fonte ("trascrizione dell'AI", "testo delle slide letto dall'AI" o "sottotitoli del video"), poi l'AI assegna titolo, categorie e tag. I media non vengono conservati. Un video può richiedere fino a qualche minuto: le function hanno una durata massima di 300 secondi (`vercel.json`, con Fluid compute).
+
+Limiti: solo post pubblici; un post privato, rimosso o non disponibile risulta "Non accessibile" con il motivo. Senza `APIFY_TOKEN` si legge solo quello che la pagina espone pubblicamente (spesso nulla per Instagram) e la scheda dice cosa manca. L'app non usa il tuo account, non manda i tuoi cookie e non aggira login o CAPTCHA.
+
+Alternative quando il link non basta: condividere il file del video o gli screenshot delle slide con il Comando Rapido (vedi sotto), oppure incollare una trascrizione nella scheda.
 
 Per ritrovare un Reel, scrivi una nota al momento del salvataggio ("esercizi per la schiena", "ristorante a Lisbona"): la ricerca e le domande la usano.
 
@@ -143,7 +160,7 @@ Tabella `items` (vedi `supabase/schema.sql`; la modalità locale usa la stessa f
 ## Privacy e sicurezza
 
 - **Dove stanno i dati:** sul tuo progetto Supabase (database e file privati) oppure, in modalità locale, solo nel browser.
-- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; con l'AI attiva, titolo, note ed estratti degli elementi interessati vengono inviati a Google Gemini. Nient'altro.
+- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; i link dei social (solo l'indirizzo del post) vanno ad Apify, se configurato; con l'AI attiva, titolo, note, estratti e i media da trascrivere vengono inviati a Google Gemini. Nient'altro.
 - **Chiavi:** nessuna chiave segreta nel client o nel repository. Nel bundle ci sono solo URL e chiave anon di Supabase, che senza login non danno accesso a nulla (RLS).
 - **Endpoint protetti:** `/api/extract` e `/api/ai` richiedono il token di sessione Supabase valido (401 altrimenti); facoltativamente solo per le email in `ALLOWED_EMAILS`.
 - **Lettura dei link sicura:** solo http/https su porte standard, nessun indirizzo privato o locale (controllato a ogni redirect), timeout di 8 secondi, massimo 2 MB letti. Limite noto: un dominio potrebbe cambiare IP tra il controllo e la connessione (DNS rebinding); con endpoint dietro login è un rischio accettabile per un'app personale.
@@ -174,13 +191,12 @@ Il Comando invia il link a `POST /api/share` e **non apre l'app**: l'elemento vi
 3. Azione **Ottieni contenuti di URL**: URL `https://<tuo-dominio>/api/share`; in "Mostra di più" Metodo **POST**, Corpo richiesta **JSON** con due campi Testo: `token` = il codice, `text` = **Input comando rapido**.
 4. Azione **Mostra notifica** con **Contenuti dell'URL**: mostra "Link salvato in Second Brain…" oppure il motivo dell'errore.
 
-### Video e caroselli: trascrizione con l'AI (da verificare su dispositivo)
+### Video e caroselli inviati come file (alternativa, da verificare su dispositivo)
 
-`POST /api/share` accetta anche un corpo **Modulo** (`multipart/form-data`) con `token` e uno o più `file`:
+Di solito basta il link (vedi "Trascrizione dal link"). Per i post che dal link non si leggono, `POST /api/share` accetta anche un corpo **Modulo** (`multipart/form-data`) con `token` e uno o più `file`:
 
 - **video**: il Comando estrae solo l'audio (**Codifica contenuti multimediali → Solo audio**) e lo invia; Gemini lo trascrive parola per parola;
-- **carosello**: gli screenshot delle slide, ridimensionati, convertiti in JPEG e uniti con **Crea PDF**; Gemini legge il testo slide per slide;
-- **YouTube / Shorts**: basta il link; Gemini guarda il video pubblico direttamente (funzione ufficiale dell'API).
+- **carosello**: gli screenshot delle slide, ridimensionati, convertiti in JPEG e uniti con **Crea PDF**; Gemini legge il testo slide per slide.
 
 Il testo finisce in "Testo estratto" (fonte: trascrizione dell'AI), poi l'AI assegna titolo, categorie e tag. I file non vengono conservati. Limite: 4 MB per invio (limite delle function Vercel). Le istruzioni passo passo sono in Impostazioni → Salvataggio rapido.
 
@@ -210,11 +226,12 @@ I test end-to-end coprono: salvataggio di note, link e file; persistenza dopo il
 
 `supabase/schema.sql` è stato verificato su PostgreSQL 16 con funzioni Supabase simulate (`auth.uid()`, `storage.foldername`): due esecuzioni consecutive, isolamento tra due utenti su righe e file, rifiuto di link non http.
 
-**Non verificato:** l'app con un vero progetto Supabase e una vera chiave Gemini, la lettura di siti reali dal server Vercel (l'ambiente di sviluppo non aveva accesso diretto a Internet), l'installazione e l'uso su un iPhone reale, il Comando Rapido.
+**Non verificato:** l'app con un vero progetto Supabase e una vera chiave Gemini, la lettura di siti reali dal server Vercel (l'ambiente di sviluppo non aveva accesso diretto a Internet), l'installazione e l'uso su un iPhone reale, il Comando Rapido, la lettura dei post con Apify e la trascrizione dei loro video con Gemini (il formato dei dati di Apify è stato ricostruito dalla documentazione e coperto da test con dati finti).
 
 ## Limiti noti
 
-- Dai link di Instagram, TikTok e Facebook non si trascrive nulla: serve condividere il file (vedi sopra). Nessuna lettura di contenuti dietro login.
+- La trascrizione dal link funziona solo con post pubblici e con `APIFY_TOKEN` configurato; i crediti gratuiti di Apify bastano per un numero limitato di post al mese. Nessuna lettura di contenuti dietro login.
+- I video più lunghi di qualche minuto possono non finire entro i 300 secondi della function: la scheda lo dice e si può rianalizzare.
 - Il testo nelle immagini caricate dall'app (OCR) non viene letto (solo quelle inviate dal Comando dei caroselli); i PDF scansionati senza testo neppure. Dei PDF si leggono al massimo le prime 50 pagine.
 - Pagine molto dinamiche (contenuto caricato da JavaScript) danno solo titolo e descrizione.
 - La ricerca carica tutti gli elementi nel browser: va bene fino a qualche migliaia di elementi.

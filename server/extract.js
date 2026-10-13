@@ -6,6 +6,9 @@
 //  - niente login, cookie, CAPTCHA o trucchi per aggirare restrizioni;
 //  - ogni campo restituito viene dalla fonte (dati "verificati"): l'AI non
 //    interviene qui. `textSource` dice da dove arriva il testo.
+//
+// La trascrizione dei video social e la lettura dei caroselli sono in
+// social.js, che usa questo modulo per i metadati della pagina.
 
 import { detectType, extractUrl, isInstagram, parsePlaceFromUrl } from "../src/lib/detect.js";
 import { LIMITS } from "../src/lib/constants.js";
