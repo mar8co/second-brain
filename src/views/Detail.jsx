@@ -14,7 +14,7 @@ import { TRANSCRIPT_SOURCE } from "../lib/enrich.js";
 function mapsLink(place) {
   const p = new URLSearchParams();
   if (place.name) p.set("q", place.name);
-  if (place.lat !== null && place.lng !== null) p.set("ll", `${place.lat},${place.lng}`);
+  if (typeof place.lat === "number" && typeof place.lng === "number") p.set("ll", `${place.lat},${place.lng}`);
   return `https://maps.apple.com/?${p}`;
 }
 
@@ -79,6 +79,9 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
       setTranscript("");
     });
 
+  // Scheda di memoria dell'AI: i dati vengono dal database, si mostrano solo testi.
+  const points = (Array.isArray(item.ai?.points) ? item.ai.points : []).filter((p) => typeof p === "string" && p);
+  const entities = (Array.isArray(item.ai?.entities) ? item.ai.entities : []).filter((e) => typeof e?.name === "string" && e.name);
   const aiCats = (item.ai?.categories || []).filter((c) => !(item.categories || []).includes(c));
   const aiTags = (item.ai?.tags || []).filter((t) => !(item.tags || []).includes(t));
   const acceptAi = (cats, tags) =>
@@ -113,6 +116,12 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
               <time dateTime={item.created_at}>Salvato il {formatDate(item.created_at, true)}</time>
             </div>
             <h2 className="font-serif text-2xl font-semibold leading-tight">{displayTitle(item)}</h2>
+            {(item.author || item.published_at) && (
+              <p className="mt-1.5 text-sm text-muted">
+                {item.author && <>Pubblicato da <span className="font-medium text-ink">{item.author}</span></>}
+                {item.published_at && <>{item.author ? " il " : "Pubblicato il "}{formatDate(item.published_at)}</>}
+              </p>
+            )}
           </header>
 
           {/* Stato di elaborazione con spiegazione */}
@@ -143,7 +152,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
               <MapPin className="mt-0.5 h-5 w-5 text-accent" aria-hidden="true" />
               <div className="flex-1">
                 <p className="font-medium">{item.place.name || "Posto senza nome"}</p>
-                {item.place.lat !== null && <p className="text-sm text-muted">{item.place.lat.toFixed(5)}, {item.place.lng.toFixed(5)}</p>}
+                {typeof item.place.lat === "number" && typeof item.place.lng === "number" && <p className="text-sm text-muted">{item.place.lat.toFixed(5)}, {item.place.lng.toFixed(5)}</p>}
                 <a href={mapsLink(item.place)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sm font-medium text-accent">Apri in Mappe</a>
               </div>
             </section>
@@ -200,6 +209,24 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
                 )}
               </div>
               {item.ai.summary ? <p className="mt-2 text-sm">{item.ai.summary}</p> : <p className="mt-2 text-sm text-muted">Dati insufficienti per un riassunto.</p>}
+              {points.length > 0 && (
+                <div className="mt-3">
+                  <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Punti chiave</h3>
+                  <ul className="list-disc space-y-1 pl-5 text-sm">
+                    {points.map((p, i) => <li key={i}>{p}</li>)}
+                  </ul>
+                </div>
+              )}
+              {entities.length > 0 && (
+                <div className="mt-3">
+                  <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Persone, luoghi e altro</h3>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {entities.map((e, i) => (
+                      <li key={i} className="chip">{e.name}{typeof e.kind === "string" && e.kind && e.kind !== "altro" ? <span className="text-muted"> · {e.kind}</span> : null}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {(aiCats.length > 0 || aiTags.length > 0) && (
                 <div className="mt-3">
                   <p className="mb-1.5 text-xs text-muted">Proposte (tocca per aggiungere):</p>

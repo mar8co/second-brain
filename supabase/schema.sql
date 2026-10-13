@@ -16,6 +16,9 @@ create table if not exists public.items (
   description     text check (description is null or length(description) <= 4000),
   note            text check (note is null or length(note) <= 20000),
   site_name       text,
+  -- Chi ha pubblicato il post (profilo social o canale) e quando.
+  author          text check (author is null or length(author) <= 200),
+  published_at    timestamptz,
   image_url       text,
   -- Testo letto dalla fonte (pagina, file) e da dove arriva: dati "verificati".
   extracted_text  text check (extracted_text is null or length(extracted_text) <= 25000),
@@ -26,7 +29,8 @@ create table if not exists public.items (
   status          text not null default 'saved'
                   check (status in ('saved','processing','analyzed','partial','inaccessible')),
   status_detail   text,
-  -- Inferenze AI, separate dai dati letti: { summary, categories, tags, model, generated_at }.
+  -- Inferenze AI, separate dai dati letti (scheda di memoria): { v, summary,
+  -- points, entities, keywords, categories, tags, model, generated_at, applied }.
   ai              jsonb,
   file_path       text,              -- percorso nello Storage (bucket "files")
   file_name       text,
@@ -38,6 +42,10 @@ create table if not exists public.items (
 );
 
 create index if not exists items_user_created_idx on public.items (user_id, created_at desc);
+
+-- Colonne aggiunte dopo la prima versione (per i database già creati).
+alter table public.items add column if not exists author text check (author is null or length(author) <= 200);
+alter table public.items add column if not exists published_at timestamptz;
 
 -- updated_at automatico.
 create or replace function public.touch_updated_at() returns trigger
@@ -188,7 +196,7 @@ begin
   r := jsonb_populate_record(cur, p_patch);
   update public.items set
     final_url = r.final_url, title = r.title, description = r.description, site_name = r.site_name,
-    image_url = r.image_url, extracted_text = r.extracted_text, text_source = r.text_source, place = r.place,
+    author = r.author, published_at = r.published_at, image_url = r.image_url, extracted_text = r.extracted_text, text_source = r.text_source, place = r.place,
     categories = r.categories, tags = r.tags, status = r.status, status_detail = r.status_detail,
     ai = r.ai, processed_at = r.processed_at
   where id = p_id and user_id = uid;

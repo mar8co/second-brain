@@ -24,9 +24,14 @@ export function extractionPatch(item, r) {
   // Mai sovrascrivere titolo e descrizione inseriti a mano.
   if (!item.title && r.title) patch.title = r.title;
   if (!item.description && r.description) patch.description = r.description;
-  if (r.place) {
+  // Chi ha pubblicato il post e quando (Instagram, TikTok, Facebook, YouTube).
+  if (r.author) patch.author = r.author;
+  if (r.publishedAt) patch.published_at = r.publishedAt;
+  // Il posto scelto dall'utente resta; il nome del posto diventa il titolo
+  // solo se la fonte non ne ha uno (link delle mappe).
+  if (r.place && !item.place) {
     patch.place = r.place;
-    if (!item.title && r.place.name) patch.title = r.place.name;
+    if (!item.title && !r.title && r.place.name) patch.title = r.place.name;
   }
   return patch;
 }
@@ -63,19 +68,51 @@ export function hasContent(item) {
   return Boolean(item.title || item.description || item.note || item.extracted_text);
 }
 
-// Payload ridotto per l'AI: solo i campi utili, testo già troncato.
+// Payload per la rielaborazione dell'AI: tutto ciò che si sa dell'elemento,
+// testo già troncato.
 export function aiPayload(item) {
   return {
     id: item.id,
     type: item.type,
     url: item.url,
+    site_name: item.site_name || null,
+    author: item.author || null,
+    published_at: item.published_at || null,
     title: item.title,
     description: item.description,
     note: item.note,
-    extracted_text: (item.extracted_text || "").slice(0, 6000),
+    extracted_text: (item.extracted_text || "").slice(0, 12000),
+    text_source: item.text_source || null,
     place: item.place,
     categories: item.categories,
     tags: item.tags,
     created_at: item.created_at,
   };
+}
+
+// Versione della rielaborazione dell'AI: gli elementi con una versione
+// precedente (solo riassunto, categorie e tag) vengono rielaborati di nuovo.
+export const DIGEST_VERSION = 2;
+
+// Risposta della rielaborazione (server/ai.js) → campo `ai` dell'elemento.
+export function aiFromDigest(r, { applied = false, now = new Date() } = {}) {
+  return {
+    v: DIGEST_VERSION,
+    summary: r.summary || "",
+    points: r.points || [],
+    entities: r.entities || [],
+    keywords: r.keywords || [],
+    categories: r.categories || [],
+    tags: r.tags || [],
+    model: r.model || null,
+    generated_at: now.toISOString(),
+    ...(applied ? { applied: true } : {}),
+  };
+}
+
+// Toglie dal dettaglio dello stato l'avviso di un'AI non riuscita in passato.
+export function withoutAiFailure(detail) {
+  if (!detail) return detail ?? null;
+  const out = detail.replace(/\s*AI non disponibile:.*$/s, "").trim();
+  return out || null;
 }

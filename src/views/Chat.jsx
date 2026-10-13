@@ -228,7 +228,8 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 // Contenuto salvato: "messaggio inviato" (a destra), con anteprima.
 function ItemBubble({ item, onOpen }) {
   const title = displayTitle(item);
-  const source = item.site_name || (item.url ? displayHost(item.url) : item.file_name ? "File" : typeLabel(item.type));
+  const site = item.site_name || (item.url ? displayHost(item.url) : item.file_name ? "File" : typeLabel(item.type));
+  const source = item.author ? `${site} · ${item.author}` : site;
   const summary = item.ai?.summary || item.description || item.note || "";
   return (
     <div className="flex justify-end">
@@ -298,6 +299,9 @@ function QaBubbles({ msg, byId, onOpen }) {
             <p>Risposta AI non disponibile ({r.error}). Ecco i contenuti più vicini:</p>
           ) : (
             <p>Ecco i contenuti più vicini alla tua domanda:</p>
+          )}
+          {r && !msg.pending && r.total > r.consulted && (
+            <p className="mt-1.5 text-xs text-muted">Ho consultato i {r.consulted} contenuti più pertinenti su {r.total}.</p>
           )}
           {r && !msg.pending && (
             <SourceList

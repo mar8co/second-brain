@@ -134,10 +134,31 @@ export function apifyError(status, type = "", platform = "") {
 const str = (v) => (typeof v === "string" && v.trim() ? v.trim() : null);
 const isUrl = (v) => typeof v === "string" && /^https?:\/\//i.test(v);
 
+// Chi ha pubblicato il post: "Nome (@utente)", "@utente" o solo il nome.
+export function formatAuthor(name, handle) {
+  const n = str(name);
+  const h = str(handle)?.replace(/^@/, "") || null;
+  if (n && h && n.toLowerCase() !== h.toLowerCase()) return `${n} (@${h})`.slice(0, 200);
+  if (h) return `@${h}`.slice(0, 200);
+  return n ? n.slice(0, 200) : null;
+}
+
+// Data di pubblicazione (ISO, secondi o millisecondi) → ISO, oppure null.
+export function postDate(v) {
+  const raw = typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v.trim()) : v;
+  let t = NaN;
+  if (typeof raw === "number" && raw > 0) t = raw < 1e12 ? raw * 1000 : raw;
+  else if (typeof raw === "string" && raw.trim()) t = Date.parse(raw);
+  if (!Number.isFinite(t) || t < Date.UTC(2004, 0, 1) || t > Date.now() + 86_400_000) return null;
+  return new Date(t).toISOString();
+}
+
 // { caption, author, kind: "video" | "slides", videoUrl, imageUrls, cover, subtitles: [{language, url}] }
 export function normalizeInstagram(it) {
   const caption = str(it.caption);
-  const author = str(it.ownerUsername) || str(it.ownerFullName);
+  const author = formatAuthor(it.ownerFullName, it.ownerUsername);
+  // Luogo indicato nel post (solo il nome: Instagram non dà le coordinate).
+  const extra = { publishedAt: postDate(it.timestamp), location: str(it.locationName) };
   const cover = isUrl(it.displayUrl) ? it.displayUrl : null;
   const children = Array.isArray(it.childPosts) ? it.childPosts : [];
   if (it.type === "Sidecar" || children.length > 1) {
@@ -146,19 +167,20 @@ export function normalizeInstagram(it) {
     const urls = (fromChildren.some(Boolean) ? fromChildren : fallback).filter(isUrl);
     // Le slide video vengono lette come immagine (la copertina): il parlato no.
     const videoSlides = children.filter((c) => isUrl(c?.videoUrl)).length;
-    if (urls.length) return { caption, author, kind: "slides", imageUrls: urls.slice(0, MAX_SLIDES), total: urls.length, videoSlides, cover };
+    if (urls.length) return { caption, author, ...extra, kind: "slides", imageUrls: urls.slice(0, MAX_SLIDES), total: urls.length, videoSlides, cover };
   }
   // Reel: il video (con il testo a schermo); se manca, la sola traccia audio.
   const video = [it.videoUrl, it.audioUrl].find(isUrl);
-  if (video) return { caption, author, kind: "video", videoUrl: video, cover, duration: Number(it.videoDuration) || null };
+  if (video) return { caption, author, ...extra, kind: "video", videoUrl: video, cover, duration: Number(it.videoDuration) || null };
   const images = [it.displayUrl, ...(Array.isArray(it.images) ? it.images : [])].filter(isUrl);
-  if (images.length) return { caption, author, kind: "slides", imageUrls: [...new Set(images)].slice(0, MAX_SLIDES), cover };
-  return { caption, author, kind: null, cover };
+  if (images.length) return { caption, author, ...extra, kind: "slides", imageUrls: [...new Set(images)].slice(0, MAX_SLIDES), cover };
+  return { caption, author, ...extra, kind: null, cover };
 }
 
 export function normalizeTiktok(it) {
   const caption = str(it.text) || str(it.desc);
-  const author = str(it.authorMeta?.name) || str(it.authorMeta?.nickName);
+  const author = formatAuthor(it.authorMeta?.nickName, it.authorMeta?.name);
+  const extra = { publishedAt: postDate(it.createTimeISO || it.createTime), location: null };
   const meta = it.videoMeta || {};
   const cover = [meta.coverUrl, meta.originalCoverUrl, it.covers?.default].find(isUrl) || null;
   // Prima i sottotitoli nella lingua originale, poi quelli tradotti in automatico ("MT").
@@ -170,11 +192,11 @@ export function normalizeTiktok(it) {
     .map((s) => (isUrl(s) ? s : [s?.downloadLink, s?.tiktokLink].find(isUrl)))
     .filter(Boolean);
   if (it.isSlideshow || slides.length) {
-    if (slides.length) return { caption, author, kind: "slides", imageUrls: slides.slice(0, MAX_SLIDES), total: slides.length, cover };
+    if (slides.length) return { caption, author, ...extra, kind: "slides", imageUrls: slides.slice(0, MAX_SLIDES), total: slides.length, cover };
   }
   const video = [...(Array.isArray(it.mediaUrls) ? it.mediaUrls : []), meta.downloadAddr, it.videoUrl].find(isUrl);
-  if (video || subtitles.length) return { caption, author, kind: "video", videoUrl: video || null, subtitles, cover, duration: Number(meta.duration) || null };
-  return { caption, author, kind: null, cover };
+  if (video || subtitles.length) return { caption, author, ...extra, kind: "video", videoUrl: video || null, subtitles, cover, duration: Number(meta.duration) || null };
+  return { caption, author, ...extra, kind: null, cover };
 }
 
 // apify/facebook-posts-scraper restituisce forme diverse: il nodo del Reel
@@ -190,11 +212,12 @@ export function normalizeFacebook(it) {
     pv.browser_native_sd_url,
   ].find(isUrl);
   const caption = str(it.message?.text) || str(it.text) || str(it.previewDescription) || str(it.previewTitle) || str(it.message);
-  const author = str(it.pageName) || str(reel.video_owner?.name) || str(it.user?.name) || str(it.owner?.name);
+  const author = formatAuthor(str(it.pageName) || str(reel.video_owner?.name) || str(it.user?.name) || str(it.owner?.name), null);
+  const extra = { publishedAt: postDate(it.time || it.timestamp), location: null };
   const cover = [pv.thumbnailImage?.uri, pv.preferred_thumbnail?.image?.uri, it.preferred_thumbnail?.image?.uri, reel.video?.first_frame_thumbnail, media.thumbnail].find(isUrl) || null;
   const captionsUrl = [pv.captions_url, it.captions_url, media.captions_url].find(isUrl);
   const subtitles = captionsUrl ? [{ language: "", url: captionsUrl, translated: false }] : [];
-  if (video) return { caption, author, kind: "video", videoUrl: video, subtitles, cover };
+  if (video) return { caption, author, ...extra, kind: "video", videoUrl: video, subtitles, cover };
   // Il post è un video, ma Facebook non ne ha dato il file.
   const hadVideo = Boolean(it.short_form_video_context || it.playback_video || media.__typename || it.__typename === "Video" || delivery.length);
   // Post con foto: lette come slide.
@@ -202,8 +225,8 @@ export function normalizeFacebook(it) {
     .filter((m) => m?.__typename === "Photo")
     .map((m) => [m.photo_image?.uri, m.image?.uri, m.thumbnail].find(isUrl))
     .filter(Boolean);
-  if (photos.length) return { caption, author, kind: "slides", imageUrls: [...new Set(photos)].slice(0, MAX_SLIDES), total: photos.length, cover: cover || photos[0] };
-  return { caption, author, kind: null, cover, hadVideo };
+  if (photos.length) return { caption, author, ...extra, kind: "slides", imageUrls: [...new Set(photos)].slice(0, MAX_SLIDES), total: photos.length, cover: cover || photos[0] };
+  return { caption, author, ...extra, kind: null, cover, hadVideo };
 }
 
 // Link di condivisione (share/r, share/v, fb.watch) → link diretto del video,
@@ -321,12 +344,14 @@ async function readPost({ env, platform, url, fetchImpl, deadline }) {
   if (fbId && remaining(deadline) > 120_000) {
     try {
       const again = normalizeFacebook(await runActor({ env, platform, url: `https://www.facebook.com/watch/?v=${fbId}`, fetchImpl, timeoutSec: timeoutSec() }));
-      if (again.kind === "video") post = { ...again, caption: post.caption || again.caption, author: post.author || again.author, cover: post.cover || again.cover };
+      if (again.kind === "video") {
+        post = { ...again, caption: post.caption || again.caption, author: post.author || again.author, publishedAt: post.publishedAt || again.publishedAt, cover: post.cover || again.cover };
+      }
     } catch {
       /* resta il primo risultato */
     }
   }
-  const out = { siteName: SITE[platform], description: post.caption, image: post.cover, author: post.author, text: null, textSource: null, missing: [] };
+  const out = { siteName: SITE[platform], description: post.caption, image: post.cover, author: post.author, publishedAt: post.publishedAt, location: post.location, text: null, textSource: null, missing: [] };
   const media = mediaFetch(env, fetchImpl);
   const ai = { timeoutMs: 120_000, deadline: deadline - 5_000 };
 
@@ -430,6 +455,10 @@ export async function readLink(rawUrl, { env, fetchImpl = fetch, deadline = Date
     siteName: post.siteName,
     title,
     description,
+    author: post.author || base.author || null,
+    publishedAt: post.publishedAt || null,
+    // Luogo taggato nel post: solo il nome, senza coordinate.
+    place: post.location ? { name: post.location.slice(0, 200), lat: null, lng: null } : base.place || null,
     image: post.image || base.image,
     text: post.text,
     textSource: post.textSource,

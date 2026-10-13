@@ -1,6 +1,7 @@
 // Stato dell'archivio: elenco, operazioni e elaborazione in background.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classifyItem, processItem } from "../lib/process.js";
+import { runUpkeep } from "../lib/memory.js";
 import { DEFAULT_CATEGORIES } from "../lib/constants.js";
 
 const byDate = (a, b) => new Date(b.created_at) - new Date(a.created_at);
@@ -122,6 +123,47 @@ export function useArchive(store, { ai }) {
     },
     [store, upsert],
   );
+
+  // Manutenzione della memoria (src/lib/memory.js): rielabora con l'AI gli
+  // elementi senza scheda e rilegge quelli rimasti a metà. Parte quando
+  // l'archivio è caricato e a ogni cambiamento, se non è già in corso; dopo
+  // errori ripetuti aspetta qualche minuto.
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+  const upkeep = useRef({ running: false, tried: new Set(), pausedUntil: 0, store: null });
+  useEffect(() => {
+    const u = upkeep.current;
+    u.store = store;
+    return () => {
+      u.store = null;
+    };
+  }, [store]);
+  useEffect(() => {
+    const u = upkeep.current;
+    if (!ai || loading || !store || u.running || Date.now() < u.pausedUntil) return;
+    u.running = true;
+    runUpkeep({
+      getItems: () => itemsRef.current,
+      isActive: () => u.store === store && Boolean(aiRef.current) && document.visibilityState === "visible",
+      tried: u.tried,
+      digest: async (item) => {
+        // Senza scheda: categorie e tag assegnati come per un nuovo salvataggio.
+        const current = () => itemsRef.current.find((x) => x.id === item.id) || null;
+        const it = await classifyItem(item, { store, categories: catRef.current, apply: !item.ai, keepApplied: true, current });
+        if (it) upsert(it);
+      },
+      reread: (item) => runProcess(item),
+    })
+      .then((how) => {
+        if (how === "failed") u.pausedUntil = Date.now() + 5 * 60_000;
+      })
+      .catch((e) => console.warn("Manutenzione della memoria interrotta", e))
+      .finally(() => {
+        u.running = false;
+      });
+  }, [ai, loading, store, items, upsert, runProcess]);
 
   return { items, loading, error, reload, add, update, remove, reprocess, classify, categories };
 }

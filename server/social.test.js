@@ -74,8 +74,15 @@ describe("link dei social riconosciuti", () => {
 describe("risultati di Apify → forma comune", () => {
   it("Instagram: Reel, carosello e foto singola", () => {
     expect(normalizeInstagram({ type: "Video", caption: "Carbonara", ownerUsername: "chef", videoUrl: "https://cdn.test/v.mp4", displayUrl: "https://cdn.test/c.jpg" })).toMatchObject({
-      kind: "video", caption: "Carbonara", author: "chef", videoUrl: "https://cdn.test/v.mp4", cover: "https://cdn.test/c.jpg",
+      kind: "video", caption: "Carbonara", author: "@chef", videoUrl: "https://cdn.test/v.mp4", cover: "https://cdn.test/c.jpg", publishedAt: null, location: null,
     });
+    // Chi pubblica (nome e profilo), quando e dove.
+    expect(
+      normalizeInstagram({
+        type: "Video", caption: "Workshop", ownerUsername: "mario.ai", ownerFullName: "Mario Rossi", timestamp: "2026-09-10T08:00:00.000Z",
+        locationName: "Talent Garden Milano", videoUrl: "https://cdn.test/v.mp4",
+      }),
+    ).toMatchObject({ author: "Mario Rossi (@mario.ai)", publishedAt: "2026-09-10T08:00:00.000Z", location: "Talent Garden Milano" });
     const sidecar = normalizeInstagram({
       type: "Sidecar", caption: "5 errori", displayUrl: "https://cdn.test/1.jpg",
       childPosts: [{ displayUrl: "https://cdn.test/1.jpg" }, { displayUrl: "https://cdn.test/2.jpg" }],
@@ -103,7 +110,10 @@ describe("risultati di Apify → forma comune", () => {
       },
       mediaUrls: ["https://api.apify.com/v2/key-value-stores/s/records/video-1"],
     });
-    expect(v).toMatchObject({ kind: "video", caption: "Ricetta veloce", author: "chef", videoUrl: "https://api.apify.com/v2/key-value-stores/s/records/video-1" });
+    expect(v).toMatchObject({ kind: "video", caption: "Ricetta veloce", author: "@chef", videoUrl: "https://api.apify.com/v2/key-value-stores/s/records/video-1" });
+    expect(normalizeTiktok({ text: "x", authorMeta: { name: "chef", nickName: "Chef Anna" }, createTimeISO: "2026-08-01T10:00:00.000Z" })).toMatchObject({
+      author: "Chef Anna (@chef)", publishedAt: "2026-08-01T10:00:00.000Z",
+    });
     // Prima la lingua originale, poi la traduzione automatica.
     expect(v.subtitles.map((x) => x.language)).toEqual(["ita-IT", "eng-US"]);
     expect(normalizeTiktok({ isSlideshow: true, mediaUrls: [], videoMeta: { duration: 0, subtitleLinks: null }, slideshowImageLinks: [{ tiktokLink: "https://cdn.test/t1.jpg", downloadLink: "https://cdn.test/1.jpg" }, "https://cdn.test/2.jpg"] })).toMatchObject({
@@ -215,6 +225,37 @@ describe("lettura completa dal link", () => {
     expect(call.body.directUrls).toEqual(["https://www.instagram.com/reel/C9abc/"]);
     const part = net.gemini()[0].body.contents[0].parts.find((p) => p.inline_data);
     expect(part.inline_data).toEqual({ mime_type: "video/mp4", data: Buffer.alloc(1000, 1).toString("base64") });
+  });
+
+  it("Reel: chi l'ha pubblicato, quando e dove vengono salvati con la trascrizione", async () => {
+    pageInfo.value = { title: "Instagram", siteName: "Instagram" };
+    const net = fakeNet({
+      apify: [{
+        type: "Video", caption: "Workshop gratuito sull'AI il 28 settembre", ownerUsername: "mario.ai", ownerFullName: "Mario Rossi",
+        timestamp: "2026-09-10T08:00:00.000Z", locationName: "Talent Garden Milano", videoUrl: "https://cdn.test/v.mp4",
+      }],
+      media: { "https://cdn.test/v.mp4": bytes(1000, "video/mp4") },
+      gemini: { title: "Workshop sull'intelligenza artificiale", transcript: "Ho preparato un workshop completamente gratuito il 28 settembre.", slides: [] },
+    });
+    const r = await readLink(reel, { env, fetchImpl: net.fetchImpl });
+    expect(r).toMatchObject({
+      author: "Mario Rossi (@mario.ai)",
+      publishedAt: "2026-09-10T08:00:00.000Z",
+      place: { name: "Talent Garden Milano", lat: null, lng: null },
+      title: "Workshop sull'intelligenza artificiale",
+      text: "Ho preparato un workshop completamente gratuito il 28 settembre.",
+    });
+  });
+
+  it("Reel con trascrizione non riuscita: autore e data restano", async () => {
+    pageInfo.value = null;
+    const net = fakeNet({
+      apify: [{ type: "Video", caption: "Iscriviti", ownerUsername: "mario.ai", timestamp: 1757491200, videoUrl: "https://cdn.test/v.mp4" }],
+      media: { "https://cdn.test/v.mp4": bytes(10, "video/mp4") },
+      gemini: () => new Response(JSON.stringify({ error: { message: "quota" } }), { status: 429 }),
+    });
+    const r = await readLink(reel, { env, fetchImpl: net.fetchImpl });
+    expect(r).toMatchObject({ author: "@mario.ai", publishedAt: new Date(1757491200 * 1000).toISOString(), description: "Iscriviti" });
   });
 
   it("carosello: ogni slide letta nell'ordine, quelle non scaricabili segnalate", async () => {
@@ -594,6 +635,32 @@ describe("Comando Rapido con il link di un Reel", () => {
       status: "analyzed",
       categories: ["Ricette"],
     });
+    // Scheda di memoria dell'AI, versione attuale.
+    expect(calls.update[0].ai).toMatchObject({ v: 2, summary: "Ricetta.", points: [], entities: [], keywords: [], applied: true });
+  });
+
+  it("autore del Reel scritto nel database e passato all'AI", async () => {
+    const calls = { update: [] };
+    const db = { save: async () => ({ id: "id-1", categories: [] }), update: async (_t, _id, patch) => calls.update.push(patch) };
+    const prompts = [];
+    const net = fakeNet({
+      apify: [{ type: "Video", caption: "Workshop", ownerUsername: "mario.ai", ownerFullName: "Mario Rossi", timestamp: "2026-09-10T08:00:00.000Z", videoUrl: "https://cdn.test/v.mp4" }],
+      media: { "https://cdn.test/v.mp4": bytes(10, "video/mp4") },
+      gemini: (body) => {
+        const media = body.contents[0].parts.some((p) => p.inline_data);
+        if (!media) prompts.push(body.contents[0].parts.at(-1).text);
+        return geminiReply(
+          media
+            ? { title: "Workshop IA", transcript: "Ho preparato un workshop gratuito.", slides: [] }
+            : { summary: "Mario Rossi organizza un workshop.", points: ["Mario Rossi (@mario.ai) organizza un workshop gratuito."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["intelligenza artificiale"], categories: ["Tecnologia"], tags: ["ia"] },
+        );
+      },
+    });
+    await handleShare({ body: { token: TOKEN, text: "https://www.instagram.com/reel/C9abc/" }, env: { ...env, SUPABASE_URL: "https://x.supabase.co", SUPABASE_ANON_KEY: "anon" }, db, fetchImpl: net.fetchImpl });
+    expect(calls.update[0]).toMatchObject({ author: "Mario Rossi (@mario.ai)", published_at: "2026-09-10T08:00:00.000Z" });
+    expect(calls.update[0].ai).toMatchObject({ v: 2, points: ["Mario Rossi (@mario.ai) organizza un workshop gratuito."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["intelligenza artificiale"] });
+    expect(prompts[0]).toContain('"autore":"Mario Rossi (@mario.ai)"');
+    expect(prompts[0]).toContain("Ho preparato un workshop gratuito.");
   });
 
   it("didascalia lunghissima: tagliata ai limiti del database prima di scrivere", async () => {

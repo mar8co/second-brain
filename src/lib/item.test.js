@@ -14,6 +14,13 @@ describe("sanitizeItem", () => {
     expect(out.url).toBeNull();
   });
   it("cleanList deduplica senza distinguere maiuscole", () => expect(cleanList(["A", "a", "B"])).toEqual(["A", "B"]));
+  it("autore e data del post: limiti e date valide", () => {
+    expect(sanitizeItem({ author: "x".repeat(300) }).author).toHaveLength(200);
+    expect(sanitizeItem({ author: "" }).author).toBeNull();
+    expect(sanitizeItem({ published_at: "2026-09-10T08:00:00.000Z" }).published_at).toBe("2026-09-10T08:00:00.000Z");
+    expect(sanitizeItem({ published_at: "ieri" }).published_at).toBeNull();
+    expect(sanitizeItem({ published_at: 5 }).published_at).toBeNull();
+  });
 });
 
 describe("displayTitle", () => {

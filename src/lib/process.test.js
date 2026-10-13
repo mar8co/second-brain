@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 const extract = vi.hoisted(() => vi.fn());
-vi.mock("./api.js", () => ({ api: { extract, classify: vi.fn(async () => ({ summary: "", categories: [], tags: [] })) } }));
-const { processItem, waitForServer } = await import("./process.js");
+const classify = vi.hoisted(() => vi.fn(async () => ({ summary: "", categories: [], tags: [] })));
+vi.mock("./api.js", () => ({ api: { extract, classify } }));
+const { classifyItem, processItem, waitForServer } = await import("./process.js");
+const { extractionPatch, withoutAiFailure } = await import("./enrich.js");
 
 const item = { id: "0b8a3c5e-1f2d-4c3b-9a8e-7d6c5b4a3f21", url: "https://www.instagram.com/reel/C9abc/", categories: [], tags: [] };
 
@@ -102,5 +104,59 @@ describe("lettura del link dall'app", () => {
     await processItem(item, { store, onUpdate: () => {}, ai: false });
     expect(extract).toHaveBeenLastCalledWith(item.url, {});
     expect(store.updates[1]).toMatchObject({ status: "analyzed", extracted_text: "Testo" });
+  });
+});
+
+describe("scheda di memoria dell'AI", () => {
+  const digest = { summary: "Workshop gratuito.", points: ["Mario Rossi organizza un workshop."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["corso"], categories: ["Tecnologia"], tags: ["ia"], model: "m" };
+  const store = { updates: [], async update(id, patch) { this.updates.push(patch); return { id, ...patch }; } };
+
+  it("nuovo salvataggio: scheda completa, categorie e tag assegnati, avviso di AI fallita tolto", async () => {
+    classify.mockResolvedValueOnce(digest);
+    const it = { id: "w", categories: ["Lavoro"], tags: [], status_detail: "Letto in parte: video lungo. AI non disponibile: Impossibile contattare il servizio AI." };
+    const out = await classifyItem(it, { store, categories: [], apply: true });
+    expect(out.ai).toMatchObject({ v: 2, summary: "Workshop gratuito.", points: ["Mario Rossi organizza un workshop."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["corso"], applied: true });
+    expect(out.categories).toEqual(["Lavoro", "Tecnologia"]);
+    expect(out.status_detail).toBe("Letto in parte: video lungo.");
+  });
+
+  it("aggiornamento di una scheda vecchia: categorie e tag non cambiano, resta il segno dell'AI", async () => {
+    classify.mockResolvedValueOnce(digest);
+    const it = { id: "w", categories: ["Lavoro"], tags: ["x"], ai: { summary: "vecchio", applied: true } };
+    store.updates = [];
+    const out = await classifyItem(it, { store, categories: [], keepApplied: true });
+    expect(store.updates[0]).not.toHaveProperty("categories");
+    expect(store.updates[0]).not.toHaveProperty("status_detail");
+    expect(out.ai).toMatchObject({ v: 2, applied: true });
+  });
+
+  it("elemento eliminato durante la rielaborazione: nessuna scrittura", async () => {
+    classify.mockResolvedValueOnce(digest);
+    store.updates = [];
+    expect(await classifyItem({ id: "w" }, { store, categories: [], current: () => null })).toBeNull();
+    expect(store.updates).toEqual([]);
+  });
+
+  it("le categorie scelte dall'utente durante la rielaborazione restano", async () => {
+    classify.mockResolvedValueOnce(digest);
+    const out = await classifyItem({ id: "w", categories: [] }, { store, categories: [], apply: true, current: () => ({ id: "w", categories: ["Mie"], tags: [] }) });
+    expect(out.categories).toEqual(["Mie", "Tecnologia"]);
+  });
+
+  it("toglie solo l'avviso dell'AI dal dettaglio", () => {
+    expect(withoutAiFailure("AI non disponibile: limite raggiunto.")).toBeNull();
+    expect(withoutAiFailure("Letto in parte. AI non disponibile: x")).toBe("Letto in parte.");
+    expect(withoutAiFailure("Letto in parte.")).toBe("Letto in parte.");
+    expect(withoutAiFailure(null)).toBeNull();
+  });
+});
+
+describe("dati del post letti dalla fonte", () => {
+  it("autore, data e luogo del post; il luogo non sostituisce titolo né posto scelti", () => {
+    const r = { title: "Workshop IA", author: "Mario Rossi (@mario.ai)", publishedAt: "2026-09-10T08:00:00.000Z", place: { name: "Talent Garden", lat: null, lng: null }, status: "analyzed" };
+    expect(extractionPatch({}, r)).toMatchObject({ title: "Workshop IA", author: "Mario Rossi (@mario.ai)", published_at: "2026-09-10T08:00:00.000Z", place: { name: "Talent Garden" } });
+    expect(extractionPatch({ place: { name: "Mio posto" } }, r)).not.toHaveProperty("place");
+    // Link delle mappe: il nome del posto resta il titolo.
+    expect(extractionPatch({}, { place: { name: "Trattoria", lat: 1, lng: 2 }, status: "analyzed" }).title).toBe("Trattoria");
   });
 });

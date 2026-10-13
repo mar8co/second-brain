@@ -6,18 +6,32 @@
 // categorie e tag dell'AI vengono assegnati (con traccia in `ai.applied`).
 
 import { api } from "./api.js";
-import { aiPayload, extractionPatch, hasContent } from "./enrich.js";
+import { aiFromDigest, aiPayload, extractionPatch, hasContent, withoutAiFailure } from "./enrich.js";
 
 export { aiPayload, extractionPatch };
 
+// Rielaborazione dell'AI: scheda di memoria (riassunto, punti chiave,
+// persone, parole chiave) più categorie e tag.
 // apply=true (dopo un nuovo salvataggio): categorie e tag dell'AI vengono
 // assegnati subito, marcati come tali; altrimenti restano proposte.
-export async function classifyItem(item, { store, categories, apply = false }) {
+// keepApplied=true (aggiornamento di una scheda vecchia): resta il segno
+// "assegnati dall'AI" se c'era, senza toccare categorie e tag.
+// current(): l'elemento com'è ora (può essere cambiato durante la chiamata
+// all'AI); null se è stato eliminato, e allora non si scrive nulla.
+export async function classifyItem(item, { store, categories, apply = false, keepApplied = false, current }) {
   const r = await api.classify(aiPayload(item), categories);
-  const ai = { summary: r.summary, categories: r.categories, tags: r.tags, model: r.model, generated_at: new Date().toISOString() };
-  if (!apply) return store.update(item.id, { ai });
+  if (current) {
+    item = current();
+    if (!item) return null;
+  }
+  const patch = {};
+  // L'avviso di un tentativo precedente non riuscito non serve più.
+  const detail = withoutAiFailure(item.status_detail);
+  if (detail !== (item.status_detail ?? null)) patch.status_detail = detail;
+  if (!apply) return store.update(item.id, { ...patch, ai: aiFromDigest(r, { applied: keepApplied && Boolean(item.ai?.applied) }) });
   return store.update(item.id, {
-    ai: { ...ai, applied: true },
+    ...patch,
+    ai: aiFromDigest(r, { applied: true }),
     categories: [...(item.categories || []), ...r.categories.filter((c) => !(item.categories || []).includes(c))],
     tags: [...(item.tags || []), ...r.tags.filter((t) => !(item.tags || []).includes(t))],
   });

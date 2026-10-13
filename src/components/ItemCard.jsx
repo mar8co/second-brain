@@ -6,7 +6,8 @@ import { formatDate, typeLabel } from "../lib/format.js";
 
 export function ItemCard({ item, onOpen }) {
   const title = displayTitle(item);
-  const source = item.site_name || (item.url ? displayHost(item.url) : item.file_name ? "File caricato" : typeLabel(item.type));
+  const site = item.site_name || (item.url ? displayHost(item.url) : item.file_name ? "File caricato" : typeLabel(item.type));
+  const source = item.author ? `${site} · ${item.author}` : site;
   // Niente ripetizioni: se il titolo è ricavato dalla nota, non la ripetiamo sotto.
   const snippet = [item.description, item.note, item.ai?.summary].find((t) => t && !t.startsWith(title)) || "";
   return (

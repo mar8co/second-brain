@@ -13,7 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { detectType, extractUrl } from "../src/lib/detect.js";
-import { extractionPatch, hasContent, aiPayload, rebasePatch } from "../src/lib/enrich.js";
+import { extractionPatch, hasContent, aiPayload, aiFromDigest, rebasePatch } from "../src/lib/enrich.js";
 import { cleanList, sanitizeItem } from "../src/lib/item.js";
 import { aiConfigured, classifyWithAi } from "./ai.js";
 import { checkMedia, transcribeFiles } from "./media.js";
@@ -122,9 +122,10 @@ async function withAi({ item, patch, known, env, fetchImpl, deadline }) {
   if (aiConfigured(env) && hasContent(cur)) {
     try {
       const r = await classifyWithAi({ env, item: aiPayload(cur), known, fetchImpl, deadline: Math.min(deadline ?? Infinity, Date.now() + 60_000) });
-      // Salvataggio senza app: le categorie e i tag dell'AI vengono assegnati
-      // subito (resta traccia in `ai.applied`, la scheda lo dice).
-      patch.ai = { summary: r.summary, categories: r.categories, tags: r.tags, model: r.model, generated_at: new Date().toISOString(), applied: true };
+      // Scheda di memoria dell'AI (riassunto, punti chiave, persone, parole
+      // chiave). Salvataggio senza app: le categorie e i tag dell'AI vengono
+      // assegnati subito (resta traccia in `ai.applied`, la scheda lo dice).
+      patch.ai = aiFromDigest(r, { applied: true });
       patch.categories = cleanList([...(cur.categories || []), ...r.categories], 10);
       patch.tags = cleanList([...(cur.tags || []), ...r.tags]).map((t) => t.toLowerCase());
     } catch (e) {

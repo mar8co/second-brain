@@ -19,19 +19,41 @@ function send(res, status, type, body, headers = {}) {
   res.end(body);
 }
 
+// Ultimo blocco <tag>…</tag> del prompt (il primo può essere citato nelle istruzioni).
+function lastBlock(prompt, tag) {
+  const start = prompt.lastIndexOf(`<${tag}>`);
+  if (start < 0) return [];
+  return JSON.parse(prompt.slice(start + tag.length + 2, prompt.lastIndexOf(`</${tag}>`)));
+}
+
 function fakeGemini(prompt) {
   if (prompt.includes("<domanda>")) {
-    // L'ultimo blocco <archivio>…</archivio> (il primo è citato nelle istruzioni).
-    const start = prompt.lastIndexOf("<archivio>") + "<archivio>".length;
-    const docs = JSON.parse(prompt.slice(start, prompt.lastIndexOf("</archivio>")));
-    const hit = docs.find((d) => /limone/i.test(JSON.stringify(d)));
-    return hit
-      ? { answer: `Hai salvato "${hit.titolo}": pasta condita con scorza di limone, burro e parmigiano.`, sufficient: true, sources: [hit.id] }
-      : { answer: "Gli elementi forniti non parlano di questo.", sufficient: false, sources: [] };
+    // Contenuto completo dei più pertinenti e schede di tutto l'archivio.
+    const docs = [...lastBlock(prompt, "dettagli"), ...lastBlock(prompt, "memoria")];
+    const q = prompt.slice(prompt.lastIndexOf("<domanda>"));
+    if (/limone/i.test(q)) {
+      const hit = docs.find((d) => /limone/i.test(JSON.stringify(d)));
+      if (hit) return { answer: `Hai salvato "${hit.titolo}": pasta condita con scorza di limone, burro e parmigiano.`, sufficient: true, sources: [hit.id] };
+    }
+    // Domanda senza parole in comune: la risposta arriva dalle schede (parole chiave).
+    if (/primo piatto/i.test(q)) {
+      const hit = docs.find((d) => (d.parole_chiave || []).includes("primo piatto"));
+      if (hit) return { answer: `Nella scheda "${hit.titolo}" c'è un primo piatto veloce.`, sufficient: true, sources: [hit.id] };
+    }
+    return { answer: "Gli elementi forniti non parlano di questo.", sufficient: false, sources: [] };
   }
   const el = prompt.slice(prompt.lastIndexOf("<elemento>"));
-  if (/limone/i.test(el)) return { summary: "Ricetta veloce di pasta al limone.", categories: ["Ricette"], tags: ["pasta", "limone"] };
-  return { summary: "", categories: [], tags: [] };
+  if (/limone/i.test(el)) {
+    return {
+      summary: "Ricetta veloce di pasta al limone.",
+      points: ["La pasta al limone si condisce con scorza di limone, burro e parmigiano."],
+      entities: [{ name: "Parmigiano", kind: "prodotto" }],
+      keywords: ["ricetta", "primo piatto", "pasta"],
+      categories: ["Ricette"],
+      tags: ["pasta", "limone"],
+    };
+  }
+  return { summary: "", points: [], entities: [], keywords: [], categories: [], tags: [] };
 }
 
 http

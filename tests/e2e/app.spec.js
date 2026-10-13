@@ -90,8 +90,27 @@ test("link leggibile: Analizzato, testo estratto, categorie assegnate dall'AI", 
   // Categorie e tag assegnati dall'AI, etichettati come tali
   await expect(page.getByText("Categorie e tag assegnati dall'AI · da verificare")).toBeVisible();
   await expect(page.getByText("Ricetta veloce di pasta al limone.")).toBeVisible();
+  // Scheda di memoria: punti chiave e persone, luoghi e prodotti citati
+  await expect(page.getByText("Punti chiave")).toBeVisible();
+  await expect(page.getByText("La pasta al limone si condisce con scorza di limone, burro e parmigiano.")).toBeVisible();
+  await expect(page.locator("li.chip", { hasText: "Parmigiano" })).toBeVisible();
   await expect(page.locator("li.chip", { hasText: "Ricette" })).toBeVisible();
   await expect(page.locator("li.chip", { hasText: "#pasta" })).toBeVisible();
+});
+
+test("contenuti salvati senza AI: rielaborati da soli all'apertura dell'app", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => localStorage.setItem("second-brain-settings", JSON.stringify({ autoAi: false })));
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await expect(page.getByText("Punti chiave")).toHaveCount(0);
+  const url = page.url();
+  // L'AI torna attiva: la scheda di memoria viene creata senza fare nulla.
+  await page.evaluate(() => localStorage.setItem("second-brain-settings", JSON.stringify({ autoAi: true })));
+  await page.goto(url);
+  await expect(page.getByText("Punti chiave")).toBeVisible();
+  await expect(page.getByText("Ricetta veloce di pasta al limone.")).toBeVisible();
+  await expect(page.locator("li.chip", { hasText: "Ricette" })).toBeVisible();
 });
 
 test("contenuto dietro login: Non accessibile con spiegazione, link conservato", async ({ page }) => {
@@ -143,10 +162,15 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText(/scorza di limone, burro/)).toBeVisible();
   await expect(page.getByText("Fonti", { exact: true })).toBeVisible();
 
+  // Domanda con parole diverse da quelle del contenuto: risponde dalle schede di memoria
+  await box.fill("mi serve un primo piatto veloce, cosa avevo salvato?");
+  await box.press("Enter");
+  await expect(page.getByText(/c'è un primo piatto veloce/)).toBeVisible();
+
   // Domanda senza riscontri nell'archivio
   await box.fill("orari della palestra?");
   await page.getByRole("button", { name: "Invia" }).click();
-  await expect(page.getByText("Nei tuoi contenuti non trovo nulla su questo.")).toBeVisible();
+  await expect(page.getByText(/I tuoi contenuti non bastano per rispondere/)).toBeVisible();
 
   // La cronologia resta dopo il ricaricamento; il filtro per categoria nasconde le domande
   await page.reload();
