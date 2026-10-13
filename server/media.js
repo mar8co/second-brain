@@ -154,16 +154,16 @@ async function readWithGemini({ env, kind, parts, fetchImpl, timeoutMs = 40_000,
 }
 
 // File condivisi → { title, text, textSource, model }.
-export async function transcribeFiles({ env, kind, files, fetchImpl }) {
+export async function transcribeFiles({ env, kind, files, fetchImpl, deadline }) {
   const parts = files.map((f) => ({ inline_data: { mime_type: f.mime, data: f.data.toString("base64") } }));
   try {
-    const r = await readWithGemini({ env, kind, parts, fetchImpl });
+    const r = await readWithGemini({ env, kind, parts, fetchImpl, deadline });
     return { ...r, textSource: kind === "video" ? "trascrizione dell'AI (video condiviso)" : "testo delle slide letto dall'AI" };
   } catch (e) {
     // Alcuni modelli non accettano audio/mp4: lo stesso file dichiarato come video.
     if (kind === "video" && files[0].mime === "audio/mp4" && /\(400\)|mime/i.test(e.message || "")) {
       const retry = [{ inline_data: { mime_type: "video/mp4", data: files[0].data.toString("base64") } }];
-      const r = await readWithGemini({ env, kind, parts: retry, fetchImpl });
+      const r = await readWithGemini({ env, kind, parts: retry, fetchImpl, deadline });
       return { ...r, textSource: "trascrizione dell'AI (video condiviso)" };
     }
     throw e;

@@ -60,7 +60,8 @@ async function geminiRequest({ env, model, prompt, parts, schema, maxTokens, tem
     const data = await res.json().catch(() => null);
     return { res, data };
   } catch {
-    throw new AiError(502, "Impossibile contattare il servizio AI.");
+    // Rete o tempo scaduto: chi chiama prova il modello successivo.
+    return { res: null, data: null };
   } finally {
     clearTimeout(timer);
   }
@@ -95,6 +96,10 @@ async function callModels({ env, prompt, parts, schema, maxTokens = 1024, temper
     for (let attempt = 0; attempt < 3; attempt++) {
       if (timeLeft() < 8_000) throw lastError || new AiError(502, "Tempo esaurito per il servizio AI.");
       const { res, data } = await geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, withThinking, timeoutMs: Math.min(timeoutMs, timeLeft()) });
+      if (!res) {
+        lastError = new AiError(502, "Impossibile contattare il servizio AI: riprova tra poco.");
+        break;
+      }
       if (res.ok) {
         const candidate = data?.candidates?.[0];
         const text = (candidate?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
@@ -127,18 +132,30 @@ async function callModels({ env, prompt, parts, schema, maxTokens = 1024, temper
       if (res.status === 401 || res.status === 403 || (res.status === 400 && /api key/i.test(msg))) {
         throw new AiError(502, `Google ha rifiutato la chiave Gemini (${res.status}). Controlla GEMINI_API_KEY su Vercel.${msg ? ` Dettaglio: ${msg}` : ""}`);
       }
+      // Limite raggiunto: i limiti cambiano da modello a modello, si prova il successivo.
       if (res.status === 429) {
-        throw new AiError(429, `Limite del servizio AI raggiunto: riprova più tardi.${msg ? ` Dettaglio: ${msg}` : ""}`);
+        lastError = new AiError(429, "Limite gratuito del servizio AI raggiunto: riprova più tardi.");
+        break;
       }
       // Modello inesistente o non disponibile per questa chiave: prova il successivo.
       if (res.status === 404 || (res.status === 400 && /model/i.test(msg))) {
-        lastError = new AiError(502, `Modello ${model} non disponibile (${res.status}).${msg ? ` Dettaglio: ${msg}` : ""}`);
+        // Non nasconde un errore più utile di un modello precedente (es. sovraccarico).
+        lastError ||= new AiError(502, `Modello ${model} non disponibile (${res.status}).${msg ? ` Dettaglio: ${msg}` : ""}`);
         break;
       }
-      // Google sovraccarico o errore temporaneo: breve attesa e nuovo tentativo.
-      if (res.status >= 500 && attempt < 2 && timeLeft() - retryDelayMs * (attempt + 1) > 8_000) {
-        await sleep(retryDelayMs * (attempt + 1));
-        continue;
+      // Google sovraccarico ("high demand") o errore temporaneo: un nuovo
+      // tentativo dopo una breve attesa, poi il modello successivo.
+      if (res.status >= 500) {
+        lastError =
+          res.status === 503
+            ? new AiError(503, "Il servizio AI di Google è sovraccarico in questo momento: riprova tra qualche minuto.")
+            : new AiError(502, `Errore temporaneo del servizio AI (${res.status}): riprova tra poco.`);
+        if (attempt === 0 && timeLeft() - retryDelayMs * 1.5 > 8_000) {
+          // Attesa con una parte casuale, come consiglia Google.
+          await sleep(retryDelayMs * (1 + Math.random() / 2));
+          continue;
+        }
+        break;
       }
       throw new AiError(502, `Errore dal servizio AI (${res.status}).${msg ? ` Dettaglio: ${msg}` : ""}`);
     }
@@ -217,8 +234,8 @@ export function sanitizeClassify(out) {
 }
 
 // Usata anche dai salvataggi in background (server/share.js).
-export async function classifyWithAi({ env, item, known = [], fetchImpl }) {
-  const { out, model } = await callGemini({ env, prompt: buildClassifyPrompt(item, known), schema: CLASSIFY_SCHEMA, maxTokens: 2048, fetchImpl });
+export async function classifyWithAi({ env, item, known = [], fetchImpl, deadline }) {
+  const { out, model } = await callGemini({ env, prompt: buildClassifyPrompt(item, known), schema: CLASSIFY_SCHEMA, maxTokens: 2048, fetchImpl, deadline });
   return { ...sanitizeClassify(out), model };
 }
 
@@ -269,6 +286,12 @@ export function sanitizeAsk(out, allowedIds) {
 
 // ---------- handler ----------
 
+// Tempo massimo per risposta, entro i limiti dell'app (30 s per classify,
+// 45 s per le domande) e della funzione su Vercel (vercel.json): così resta
+// il tempo di provare un altro modello se il primo è sovraccarico.
+const CLASSIFY_MS = 27_000;
+const ASK_MS = 42_000;
+
 export async function handleAi({ authHeader, body, env, fetchImpl }) {
   const auth = await verifyRequest({ authHeader, env });
   if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
@@ -287,7 +310,7 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
       const item = body?.item;
       if (!item || typeof item !== "object") return { status: 400, json: { error: "Elemento mancante." } };
       const known = strArr(body?.categories, 60, 40);
-      return { status: 200, json: await classifyWithAi({ env, item, known, fetchImpl }) };
+      return { status: 200, json: await classifyWithAi({ env, item, known, fetchImpl, deadline: Date.now() + CLASSIFY_MS }) };
     }
     if (action === "ask") {
       const question = str(body?.question, 500).trim();
@@ -296,7 +319,7 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
       if (!items.length) {
         return { status: 200, json: { answer: "", sufficient: false, sources: [] } };
       }
-      const { out, model } = await callGemini({ env, prompt: buildAskPrompt(question, items), schema: ASK_SCHEMA, maxTokens: 4096, fetchImpl });
+      const { out, model } = await callGemini({ env, prompt: buildAskPrompt(question, items), schema: ASK_SCHEMA, maxTokens: 4096, fetchImpl, deadline: Date.now() + ASK_MS });
       return { status: 200, json: { ...sanitizeAsk(out, items.map((i) => i.id)), model } };
     }
     return { status: 400, json: { error: "Azione non valida." } };
