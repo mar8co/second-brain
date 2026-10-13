@@ -11,7 +11,7 @@ async function addLink(page, url, note) {
   await page.getByRole("button", { name: "Salva", exact: true }).click();
 }
 
-test("chat vuota; barra con solo Chat e Archivio; ingranaggio → Impostazioni", async ({ page }) => {
+test("chat vuota; barra con solo Chat e Archivio; ingranaggio → Impostazioni; Aggiungi manualmente in Archivio", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Second Brain" })).toBeVisible();
   await expect(page.getByText("La chat è vuota")).toBeVisible();
@@ -20,6 +20,8 @@ test("chat vuota; barra con solo Chat e Archivio; ingranaggio → Impostazioni",
   await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
   await page.getByRole("button", { name: "Impostazioni" }).click();
   await expect(page).toHaveURL(/\/impostazioni$/);
+  await expect(page.getByRole("button", { name: "Aggiungi manualmente" })).toHaveCount(0);
+  await page.goto("/archivio");
   await page.getByRole("button", { name: "Aggiungi manualmente" }).click();
   await expect(page).toHaveURL(/\/aggiungi$/);
 });

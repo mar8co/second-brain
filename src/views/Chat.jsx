@@ -127,17 +127,17 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     <>
       <TopBar
         title="Second Brain"
-        left={
-          <button type="button" className="btn -ml-2 px-2 text-ink" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
+        right={
+          <>
+            {log.length > 0 && (
+              <button type="button" className="text-sm font-medium text-muted" onClick={clearLog}>
+                Pulisci
+              </button>
+            )}
+            <button type="button" className="btn -mr-2 px-2 text-ink" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
             <Settings className="h-6 w-6" aria-hidden="true" />
           </button>
-        }
-        right={
-          log.length > 0 && (
-            <button type="button" className="text-sm font-medium text-muted" onClick={clearLog}>
-              Pulisci
-            </button>
-          )
+          </>
         }
       />
 

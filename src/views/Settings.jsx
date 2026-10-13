@@ -1,5 +1,5 @@
 // Impostazioni: modalità dati, AI, esportazione, aggiunta da iPhone.
-import { Download, LogOut, Plus } from "lucide-react";
+import { Download, LogOut } from "lucide-react";
 import { Page, TopBar } from "../components/Layout.jsx";
 import QuickShare from "../components/QuickShare.jsx";
 
@@ -12,7 +12,7 @@ function Section({ title, children }) {
   );
 }
 
-export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, navigate, back }) {
+export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back }) {
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), items: archive.items }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -81,13 +81,6 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
               <QuickShare toast={toast} />
             </Section>
           )}
-
-          <Section title="Aggiungere a mano">
-            <p>Se il Comando Rapido non funziona, puoi salvare un link, una nota o un file da qui (oppure incollare un link nella chat).</p>
-            <button type="button" className="btn-ghost" onClick={() => navigate("/aggiungi")}>
-              <Plus className="h-4 w-4" aria-hidden="true" /> Aggiungi manualmente
-            </button>
-          </Section>
 
           <Section title="Backup">
             <p>Scarica tutto l'archivio (senza i file caricati) in formato JSON.</p>

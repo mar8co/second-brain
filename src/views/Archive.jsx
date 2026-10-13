@@ -1,7 +1,7 @@
 // Archivio: ricerca testuale istantanea + filtri per tipo, categoria, tag, data.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
-import { Search, Settings, SlidersHorizontal, X } from "lucide-react";
+import { Plus, Search, Settings, SlidersHorizontal, X } from "lucide-react";
 import { Page, TopBar } from "../components/Layout.jsx";
 import { ItemList } from "../components/ItemCard.jsx";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
@@ -32,8 +32,8 @@ export default function Archive({ archive, query, navigate, openItem }) {
     <>
       <TopBar
         title="Archivio"
-        left={
-          <button type="button" className="btn -ml-2 px-2 text-ink" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
+        right={
+          <button type="button" className="btn -mr-2 px-2 text-ink" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
             <Settings className="h-6 w-6" aria-hidden="true" />
           </button>
         }
@@ -72,6 +72,10 @@ export default function Archive({ archive, query, navigate, openItem }) {
             </button>
           )}
         </div>
+
+        <button type="button" className="btn-ghost mt-2 w-full" onClick={() => navigate("/aggiungi")}>
+          <Plus className="h-4 w-4" aria-hidden="true" /> Aggiungi manualmente
+        </button>
 
         {open && (
           <div id="filters" className="card mt-2 grid grid-cols-2 gap-3 p-3.5">
