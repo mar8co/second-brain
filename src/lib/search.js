@@ -139,6 +139,8 @@ export function matchesFilters(item, f = {}) {
   if (f.category && !(item.categories || []).includes(f.category)) return false;
   if (f.tag && !(item.tags || []).includes(f.tag)) return false;
   if (f.status && item.status !== f.status) return false;
+  if (f.author && item.author !== f.author) return false;
+  if (f.site && item.site_name !== f.site) return false;
   const t = new Date(item.created_at).getTime();
   if (f.from && t < new Date(`${f.from}T00:00:00`).getTime()) return false;
   if (f.to && t > new Date(`${f.to}T23:59:59.999`).getTime()) return false;
@@ -177,4 +179,19 @@ export function countBy(items, field) {
   const m = new Map();
   for (const it of items) for (const v of it[field] || []) m.set(v, (m.get(v) || 0) + 1);
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "it"));
+}
+
+// Conteggi di un campo a valore singolo (autore, sito), dal più frequente.
+export function countValues(items, field) {
+  const m = new Map();
+  for (const it of items) if (it[field]) m.set(it[field], (m.get(it[field]) || 0) + 1);
+  return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "it"));
+}
+
+// Data locale di n giorni fa (AAAA-MM-GG), per i filtri "ultimi 7 giorni".
+export function daysAgo(n, now = new Date()) {
+  const d = new Date(now);
+  d.setDate(d.getDate() - n);
+  const p = (x) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
