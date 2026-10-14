@@ -51,7 +51,11 @@ export const api = {
   extract: (url, opts = {}) => post("/api/extract", { url, ...opts }, { timeoutMs: 295000, minTokenMs: opts.id ? 360_000 : 0 }),
   aiStatus: () => post("/api/ai", { action: "status" }, { timeoutMs: 10000 }),
   classify: (item, categories) => post("/api/ai", { action: "classify", item, categories }),
-  // items: contenuto completo dei più pertinenti; memory: schede di tutto l'archivio.
-  // total: elementi nell'archivio (le schede inviate possono essere meno).
-  ask: (question, items, memory = [], total = memory.length) => post("/api/ai", { action: "ask", question, items, memory, total }, { timeoutMs: 45000 }),
+  // items: contenuto completo (di tutto l'archivio o dei più pertinenti);
+  // memory: schede brevi degli altri; total: elementi nell'archivio;
+  // history: turni precedenti [{ q, a }] per le domande di seguito.
+  ask: (question, items, memory = [], total = items.length + memory.length, history = []) =>
+    post("/api/ai", { action: "ask", question, items, memory, total, history }, { timeoutMs: 45000 }),
+  // Archivi grandi: quali elementi leggere per intero → { ids }.
+  select: (question, memory, history = []) => post("/api/ai", { action: "select", question, memory, history }, { timeoutMs: 25000 }),
 };

@@ -14,7 +14,7 @@ async function addLink(page, url, note) {
 test("chat vuota; barra con solo Chat e Archivio; ingranaggio → Impostazioni; Aggiungi manualmente in Archivio", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Second Brain" })).toBeVisible();
-  await expect(page.getByText("La chat è vuota")).toBeVisible();
+  await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
   await expect(page.getByText("Modalità locale")).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
   await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
@@ -26,21 +26,23 @@ test("chat vuota; barra con solo Chat e Archivio; ingranaggio → Impostazioni; 
   await expect(page).toHaveURL(/\/aggiungi$/);
 });
 
-test("link incollato nella chat: salvato e mostrato come messaggio", async ({ page }) => {
+test("link incollato nella chat: salvato nell'archivio, la chat resta per le domande", async ({ page }) => {
   await page.goto("/");
-  await page.getByLabel("Chiedi o cerca nei tuoi contenuti").fill(`${FIX}/ricetta`);
+  await page.getByLabel("Chiedi alla tua memoria").fill(`${FIX}/ricetta`);
   await page.getByRole("button", { name: "Invia" }).click();
-  await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
-  await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toBeVisible();
-  await expect(page.getByText("Oggi")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ricette 1" })).toBeVisible();
+  await expect(page.getByText(/Salvato nell'archivio/)).toBeVisible();
+  await expect(page.getByText("Memoria: 1 contenuto")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toHaveCount(0);
+  await page.goto("/archivio");
+  await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
+  // Domande suggerite per cominciare, dalle categorie.
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Cosa ho salvato su ricette?" })).toBeVisible();
 });
 
 test("trascrizione incollata a mano su un link: salvata e mostrata come testo estratto", async ({ page }) => {
-  await page.goto("/");
-  await page.getByLabel("Chiedi o cerca nei tuoi contenuti").fill(`${FIX}/ricetta`);
-  await page.getByRole("button", { name: "Invia" }).click();
-  await page.getByRole("link", { name: /Pasta al limone in 10 minuti/ }).click();
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.getByText("Trascrizione del video").click();
   await page.getByLabel("Testo della trascrizione").fill("Mettete il pecorino nella ciotola e mantecate fuori dal fuoco.");
   await page.getByRole("button", { name: "Salva trascrizione" }).click();
@@ -65,10 +67,11 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Idea regalo per Giulia" })).toBeVisible();
+  // La chat è solo per le domande: il contenuto è in Archivio.
   await page.goto("/");
-  await expect(page.getByText("Idea regalo per Giulia")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Acquisti 1" })).toBeVisible();
-
+  await expect(page.getByText("Memoria: 1 contenuto")).toBeVisible();
+  await expect(page.getByText("Idea regalo per Giulia")).toHaveCount(0);
+  await page.goto("/archivio");
   await page.getByText("Idea regalo per Giulia").click();
   page.once("dialog", (d) => d.accept());
   await page.getByRole("button", { name: "Elimina" }).click();
@@ -152,17 +155,26 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Trattoria Da Enzo")).toBeVisible();
 
-  // Domanda nella chat: risposta basata sulle fonti, che si possono aprire
+  // Domanda nella chat: risposta con citazioni, fonti numerate e passaggio citato
   await page.goto("/");
-  const box = page.getByLabel("Chiedi o cerca nei tuoi contenuti");
+  const box = page.getByLabel("Chiedi alla tua memoria");
   await box.fill("come si fa la pasta al limone?");
   await box.press("Enter");
   await expect(page.getByText("come si fa la pasta al limone?")).toBeVisible();
   await expect(page.getByText("Risposta dai tuoi contenuti")).toBeVisible();
-  await expect(page.getByText(/scorza di limone, burro/)).toBeVisible();
+  await expect(page.getByText(/scorza di limone, burro e parmigiano/).first()).toBeVisible();
+  await expect(page.locator("strong", { hasText: "Pasta al limone in 10 minuti" })).toBeVisible();
   await expect(page.getByText("Fonti", { exact: true })).toBeVisible();
+  await expect(page.getByText("«si condisce con scorza di limone, burro e parmigiano»")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Apri l'originale" })).toHaveAttribute("href", `${FIX}/ricetta`);
 
-  // Domanda con parole diverse da quelle del contenuto: risponde dalle schede di memoria
+  // Domanda di seguito: si capisce dalla conversazione. L'estratto inventato non compare.
+  await box.fill("e quanto ci vuole?");
+  await box.press("Enter");
+  await expect(page.getByText("Ci vogliono 10 minuti")).toBeVisible();
+  await expect(page.getByText(/frase inventata/)).toHaveCount(0);
+
+  // Domanda con parole diverse da quelle del contenuto: risponde dalle parole chiave della scheda
   await box.fill("mi serve un primo piatto veloce, cosa avevo salvato?");
   await box.press("Enter");
   await expect(page.getByText(/c'è un primo piatto veloce/)).toBeVisible();
@@ -172,11 +184,10 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await page.getByRole("button", { name: "Invia" }).click();
   await expect(page.getByText(/I tuoi contenuti non bastano per rispondere/)).toBeVisible();
 
-  // La cronologia resta dopo il ricaricamento; il filtro per categoria nasconde le domande
+  // La cronologia resta dopo il ricaricamento; la citazione apre la fonte
   await page.reload();
   await expect(page.getByText("orari della palestra?")).toBeVisible();
-  await page.getByRole("button", { name: "Tutto" }).waitFor();
-  await page.locator("main a", { hasText: "Pasta al limone in 10 minuti" }).last().click();
+  await page.getByRole("button", { name: "Fonte 1" }).first().click();
   await expect(page).toHaveURL(/\/elemento\//);
 });
 

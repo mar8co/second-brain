@@ -27,18 +27,31 @@ function lastBlock(prompt, tag) {
 }
 
 function fakeGemini(prompt) {
+  if (prompt.includes("<domanda>") && prompt.includes("Scegli gli elementi")) {
+    // Archivio grande: sceglie le schede con le parole della domanda.
+    const q = prompt.slice(prompt.lastIndexOf("<domanda>")).toLowerCase();
+    return { refs: lastBlock(prompt, "memoria").filter((d) => q.split(/\W+/).some((w) => w.length > 4 && JSON.stringify(d).toLowerCase().includes(w))).map((d) => d.n) };
+  }
   if (prompt.includes("<domanda>")) {
-    // Contenuto completo dei più pertinenti e schede di tutto l'archivio.
+    // Contenuto completo di tutto l'archivio (o dei più pertinenti) e schede degli altri.
     const docs = [...lastBlock(prompt, "dettagli"), ...lastBlock(prompt, "memoria")];
     const q = prompt.slice(prompt.lastIndexOf("<domanda>"));
-    if (/limone/i.test(q)) {
-      const hit = docs.find((d) => /limone/i.test(JSON.stringify(d)));
-      if (hit) return { answer: `Hai salvato "${hit.titolo}": pasta condita con scorza di limone, burro e parmigiano.`, sufficient: true, sources: [hit.id] };
+    const recipe = docs.find((d) => /limone/i.test(JSON.stringify(d)));
+    if (/limone/i.test(q) && recipe) {
+      return {
+        answer: `Hai salvato **${recipe.titolo}**: pasta condita con scorza di limone, burro e parmigiano [${recipe.n}].\n- Pronta in 10 minuti [${recipe.n}]`,
+        sufficient: true,
+        sources: [{ n: recipe.n, quote: "si condisce con scorza di limone, burro e parmigiano" }],
+      };
     }
-    // Domanda senza parole in comune: la risposta arriva dalle schede (parole chiave).
+    // Domanda di seguito: capisce dalla conversazione che si parla della pasta al limone.
+    if (/quanto ci vuole/i.test(q) && /limone/i.test(lastBlock(prompt, "conversazione").map((t) => t.domanda).join(" ")) && recipe) {
+      return { answer: `Ci vogliono 10 minuti [${recipe.n}].`, sufficient: true, sources: [{ n: recipe.n, quote: "frase inventata che non c'è nel testo" }] };
+    }
+    // Domanda senza parole in comune: la risposta arriva dalle parole chiave della scheda.
     if (/primo piatto/i.test(q)) {
       const hit = docs.find((d) => (d.parole_chiave || []).includes("primo piatto"));
-      if (hit) return { answer: `Nella scheda "${hit.titolo}" c'è un primo piatto veloce.`, sufficient: true, sources: [hit.id] };
+      if (hit) return { answer: `In "${hit.titolo}" c'è un primo piatto veloce [${hit.n}].`, sufficient: true, sources: [{ n: hit.n, quote: "" }] };
     }
     return { answer: "Gli elementi forniti non parlano di questo.", sufficient: false, sources: [] };
   }
