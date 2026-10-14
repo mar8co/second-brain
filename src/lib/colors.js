@@ -22,8 +22,9 @@ export function itemColor(item) {
 }
 
 // Ogni categoria ha il suo colore, sempre lo stesso; mai il bianco, così le
-// scatole si staccano dalla pagina.
-const BOX_COLORS = ITEM_COLORS.filter((c) => c !== "#ffffff");
+// scatole si staccano dalla pagina, né arancio e verde, che sono dei box fissi
+// Ristoranti ed Eventi.
+const BOX_COLORS = ITEM_COLORS.filter((c) => !["#ffffff", "var(--arancio)", "var(--verde)"].includes(c));
 export function categoryColor(name) {
   return pick(name, BOX_COLORS);
 }

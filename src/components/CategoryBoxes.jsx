@@ -7,9 +7,9 @@ import { categoryColor } from "../lib/colors.js";
 export default function CategoryBoxes({ boxes, onOpen, special = [], onSpecial }) {
   return (
     <ul className="grid grid-cols-2 gap-3 pt-3.5">
-      {special.map(({ key, name, sub, Icon }) => (
+      {special.map(({ key, name, sub, Icon, color }) => (
         <li key={key} className="min-w-0">
-          <button type="button" className="scatola nera" aria-label={`${name}, ${sub}`} onClick={() => onSpecial(key)}>
+          <button type="button" className="scatola fissa" style={{ background: color }} aria-label={`${name}, ${sub}`} onClick={() => onSpecial(key)}>
             <Icon className="h-9 w-9" strokeWidth={2.2} aria-hidden="true" />
             <span className="mt-auto block pt-6">
               <b className="block break-words text-[1.3rem] font-extrabold leading-[1.02] tracking-[-0.04em]">{name}</b>

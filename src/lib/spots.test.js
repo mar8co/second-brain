@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventsOf, formatEventDate, restaurantsOf, todayISO } from "./spots.js";
+import { eventsOf, formatEventDate, mapsUrl, restaurantsOf, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -73,5 +73,16 @@ describe("Eventi", () => {
 
   it("oggi nel fuso del telefono", () => {
     expect(todayISO(new Date(2026, 9, 4, 23, 30))).toBe("2026-10-04");
+  });
+});
+
+describe("mapsUrl", () => {
+  it("cerca nome e indirizzo su Google Maps, senza chiavi", () => {
+    expect(mapsUrl("Da Enzo", "Via dei Vascellari 29, Roma")).toBe(
+      "https://www.google.com/maps/search/?api=1&query=Da%20Enzo%2C%20Via%20dei%20Vascellari%2029%2C%20Roma",
+    );
+  });
+  it("senza indirizzo cerca solo il nome", () => {
+    expect(mapsUrl("Bar San Calisto", "")).toBe("https://www.google.com/maps/search/?api=1&query=Bar%20San%20Calisto");
   });
 });

@@ -7,6 +7,13 @@ import { normalize } from "./search.js";
 const text = (v) => (typeof v === "string" ? v.trim() : "");
 const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(text(v));
 
+// Link a Google Maps con la ricerca del posto (nome e indirizzo letto dall'AI):
+// funziona senza chiavi e si apre nell'app Mappe o nel browser.
+export function mapsUrl(...parts) {
+  const q = parts.map(text).filter(Boolean).join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
 // Oggi nel fuso del telefono, come AAAA-MM-GG.
 export function todayISO(now = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
