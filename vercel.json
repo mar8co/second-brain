@@ -5,7 +5,8 @@
   "functions": {
     "api/ai.js": { "maxDuration": 60 },
     "api/extract.js": { "maxDuration": 300 },
-    "api/share.js": { "maxDuration": 300 }
+    "api/share.js": { "maxDuration": 300 },
+    "api/geo.js": { "maxDuration": 15 }
   },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "headers": [
@@ -15,7 +16,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=()" }
+        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self)" }
       ]
     }
   ]

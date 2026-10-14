@@ -31,6 +31,7 @@ export default defineConfig({
         EXTRACT_ALLOW_PRIVATE: "1",
         GEMINI_API_KEY: "fake-key",
         GEMINI_API_BASE: `http://127.0.0.1:${FIX}`,
+        GEOCODE_API_BASE: `http://127.0.0.1:${FIX}`,
       },
     },
   ],

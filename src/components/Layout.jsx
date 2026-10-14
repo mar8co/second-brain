@@ -20,6 +20,7 @@ export function Testata({ onBack, left, right }) {
 const TABS = [
   ["/", "Chat"],
   ["/archivio", "Archivio"],
+  ["/mappa", "Mappa"],
 ];
 
 // Pillola nera flottante con la scheda attiva accesa in chiaro. Solo parole.
