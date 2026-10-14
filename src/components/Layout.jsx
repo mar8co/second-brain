@@ -26,7 +26,7 @@ const TABS = [
 
 export function BottomNav({ path, navigate }) {
   return (
-    <nav aria-label="Navigazione principale" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-safe backdrop-blur">
+    <nav aria-label="Navigazione principale" className="bottom-nav fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-safe backdrop-blur">
       <ul className="mx-auto grid max-w-2xl grid-cols-2">
         {TABS.map(([to, label, Icon]) => {
           const active = to === "/" ? path === "/" : path.startsWith(to);

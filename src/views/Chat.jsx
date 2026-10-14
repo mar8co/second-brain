@@ -3,7 +3,7 @@
 // salvati, con le fonti citate [1] [2] e il passaggio da cui viene. I
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, ExternalLink, Loader2, Settings } from "lucide-react";
 import { TopBar } from "../components/Layout.jsx";
 import { AiBadge, ErrorBox, TypeIcon } from "../components/ui.jsx";
@@ -34,7 +34,16 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   const log = useChatLog();
   const [text, setText] = useState("");
   const endRef = useRef(null);
+  const boxRef = useRef(null);
   const autoAsked = useRef(false);
+
+  // Il campo cresce con il testo (fino a circa 6 righe, poi scorre).
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`;
+  }, [text]);
 
   const byId = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
   // Domande suggerite per cominciare: dalle categorie più usate (le date le
@@ -77,6 +86,8 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     const t = text.trim();
     if (!t) return;
     setText("");
+    // Sul telefono la tastiera si chiude: si legge la risposta a schermo intero.
+    if (window.matchMedia?.("(pointer: coarse)").matches) boxRef.current?.blur();
     const url = extractUrl(t);
     // Un link incollato da solo (con eventuale nota) va nell'archivio.
     if (url && t.replace(url, "").trim().length < 200 && !/\?\s*$/.test(t)) {
@@ -167,16 +178,19 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
         <div ref={endRef} />
       </main>
 
+      {/* Mentre si scrive, sul telefono la barra Chat / Archivio si nasconde e il
+          campo resta subito sopra la tastiera (vedi .chat-composer in index.css). */}
       <form
         onSubmit={send}
-        className="fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-20 border-t border-line/60 bg-bg/95 backdrop-blur"
+        className="chat-composer fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-20 border-t border-line/60 bg-bg/95 backdrop-blur"
       >
         <div className="mx-auto flex max-w-2xl items-end gap-2 px-3 py-2">
           <label htmlFor="chat-q" className="sr-only">Chiedi alla tua memoria</label>
           <textarea
+            ref={boxRef}
             id="chat-q"
             rows={1}
-            className="input max-h-32 min-h-[44px] resize-none py-2.5"
+            className="input max-h-40 min-h-[44px] resize-none overflow-y-auto py-2.5"
             placeholder="Chiedi alla tua memoria…"
             value={text}
             maxLength={1000}
@@ -186,7 +200,9 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
             }}
             enterKeyHint="send"
           />
-          <button type="submit" className="btn-primary h-11 w-11 shrink-0 rounded-full px-0" disabled={!text.trim()} aria-label="Invia">
+          {/* Il tocco sul tasto non toglie il cursore dal campo: niente salto della
+              barra prima dell'invio. */}
+          <button type="submit" className="btn-primary h-11 w-11 shrink-0 rounded-full px-0" disabled={!text.trim()} aria-label="Invia" onMouseDown={(e) => e.preventDefault()}>
             <ArrowUp className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
