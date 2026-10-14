@@ -114,26 +114,29 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 
   return (
     <>
-      <div className="comandi-chat">
-        {log.length > 0 && (
-          <button type="button" className="pillola" onClick={clearLog}>
-            Nuova chat
-          </button>
-        )}
-        <button type="button" className="tondo" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
-          <Settings className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
-        </button>
-      </div>
-
       <main className="pagina !pb-[calc(160px+env(safe-area-inset-bottom))]" aria-label="Chat">
-        <div className="testata" aria-hidden="true" />
+        {/* Intestazione sempre visibile, a tinta unita: la conversazione le scorre sotto. */}
+        <header className="testata sticky top-0 z-20 -mx-4 bg-sfondo px-4 !pb-2.5">
+          {!loading && items.length > 0 ? (
+            <p className="micro font-semibold" role="status">
+              Memoria: <span className="num">{items.length}</span> {items.length === 1 ? "contenuto" : "contenuti"}
+              {pending > 0 && <> · <span className="num">{pending}</span> ancora da elaborare</>}
+            </p>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
+            {log.length > 0 && (
+              <button type="button" className="pillola" onClick={clearLog}>
+                Nuova chat
+              </button>
+            )}
+            <button type="button" className="tondo" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
+              <Settings className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
+            </button>
+          </div>
+        </header>
         <h1 className="gigante">Second Brain</h1>
-        {!loading && items.length > 0 && (
-          <p className="micro -mt-2 mb-4 font-semibold" role="status">
-            Memoria: <span className="num">{items.length}</span> {items.length === 1 ? "contenuto" : "contenuti"}
-            {pending > 0 && <> · <span className="num">{pending}</span> ancora da elaborare</>}
-          </p>
-        )}
         {!syncMode && (
           <p className="riquadro mb-4 text-[0.92rem] font-semibold">
             <strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser, senza sincronizzazione né backup.
