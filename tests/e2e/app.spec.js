@@ -88,13 +88,14 @@ test("campo della chat sempre sopra la tastiera, anche scorrendo (iPhone)", asyn
   await expect.poll(async () => Math.round((await form.boundingBox()).y + (await form.boundingBox()).height)).toBe(H);
 });
 
-test("nuova chat subito, con Annulla per ripensarci", async ({ page }) => {
+test("pulisci chat subito, con Annulla per ripensarci", async ({ page }) => {
   await page.goto("/");
   const box = page.getByLabel("Chiedi alla tua memoria");
   await box.fill("dove ho salvato le ricette?");
   await box.press("Enter");
   await expect(page.getByText("dove ho salvato le ricette?")).toBeVisible();
-  await page.getByRole("button", { name: "Nuova chat" }).click();
+  await page.getByRole("button", { name: "Pulisci chat" }).click();
+  await expect(page.getByText("Chat pulita")).toBeVisible();
   await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
   await page.getByRole("button", { name: "Annulla" }).click();
   await expect(page.getByText("dove ho salvato le ricette?")).toBeVisible();
@@ -216,6 +217,14 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await page.getByLabel("Cerca nell'archivio").fill("parmigiano");
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
+  // Stato in basso, a destra delle categorie: pieno verde se analizzato.
+  const riga = page.locator("ul.righe li").first();
+  const tag = await riga.locator(".cartellino").last().boundingBox();
+  const stato = riga.locator('[title="Analizzato"]');
+  const pallino = await stato.boundingBox();
+  expect(pallino.x).toBeGreaterThan(tag.x + tag.width - 1);
+  expect(Math.abs(pallino.y + pallino.height / 2 - (tag.y + tag.height / 2))).toBeLessThan(6);
+  await expect(stato.locator("i")).toHaveCSS("background-color", "rgb(34, 179, 94)");
 
   // Filtri rapidi: categorie sempre visibili
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toBeVisible();
@@ -278,7 +287,11 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText("Risposta dai tuoi contenuti")).toBeVisible();
   await expect(page.getByText(/scorza di limone, burro e parmigiano/).first()).toBeVisible();
   await expect(page.locator("strong", { hasText: "Pasta al limone in 10 minuti" })).toBeVisible();
-  await expect(page.getByText("Fonti", { exact: true })).toBeVisible();
+  // Fonti in un riquadro chiuso, con le miniature; si apre toccandolo.
+  const fonti = page.getByRole("button", { name: /^Fonti/ }).first();
+  await expect(fonti).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByText("«si condisce con scorza di limone, burro e parmigiano»")).toHaveCount(0);
+  await fonti.click();
   await expect(page.getByText("«si condisce con scorza di limone, burro e parmigiano»")).toBeVisible();
   await expect(page.getByRole("link", { name: "Apri l'originale" })).toHaveAttribute("href", `${FIX}/ricetta`);
 

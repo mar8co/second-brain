@@ -20,23 +20,27 @@ export function TypeIcon({ type, className = "h-5 w-5" }) {
   return <Icon className={className} strokeWidth={2.5} aria-hidden="true" />;
 }
 
-// Pallino dello stato, con il filo dell'inchiostro: si legge su ogni colore
-// (vuoto = solo salvato, pieno = analizzato, metà = parziale, rosso = non
-// accessibile, pulsa = in elaborazione).
+// Pallino dello stato: pieno verde = analizzato, mezzo giallo = analizzato in
+// parte, vuoto col contorno rosso = non analizzato (solo salvato o non
+// accessibile); mentre l'AI lo legge è vuoto, col contorno nero, e pulsa.
 const STATUS_DOT = {
-  saved: "transparent",
-  processing: "transparent",
-  analyzed: "var(--inchiostro)",
-  partial: "linear-gradient(90deg, var(--inchiostro) 50%, transparent 50%)",
-  inaccessible: "#e02a0d",
+  saved: { background: "transparent", ring: "#e02a0d" },
+  inaccessible: { background: "transparent", ring: "#e02a0d" },
+  processing: { background: "transparent", ring: "var(--inchiostro)" },
+  analyzed: { background: "var(--verde)", ring: "var(--verde)" },
+  partial: { background: "linear-gradient(90deg, var(--giallo) 50%, transparent 50%)", ring: "#e8b900" },
 };
 
-function Dot({ status }) {
+// "bordo": filo d'inchiostro attorno, per leggerlo anche su una pagina dello
+// stesso colore (la scheda di un elemento ha il colore dell'elemento).
+function Dot({ status, bordo = false }) {
+  const d = STATUS_DOT[status] || STATUS_DOT.saved;
+  const ring = `0 0 0 ${status === "processing" ? 2.5 : 2}px ${d.ring}`;
   return (
     <i
       aria-hidden="true"
-      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${status === "processing" ? "pulsa" : ""}`}
-      style={{ background: STATUS_DOT[status] || STATUS_DOT.saved, boxShadow: `0 0 0 ${status === "processing" ? 2.5 : 1.5}px var(--inchiostro)` }}
+      className={`inline-block h-3 w-3 shrink-0 rounded-full ${status === "processing" ? "pulsa" : ""}`}
+      style={{ background: d.background, boxShadow: bordo ? `${ring}, 0 0 0 3.5px var(--inchiostro)` : ring }}
     />
   );
 }
@@ -52,8 +56,8 @@ export function StatusBadge({ status, compact = false }) {
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5" title={STATUSES[status]?.hint}>
-      <Dot status={status} />
+    <span className="inline-flex items-center gap-2" title={STATUSES[status]?.hint}>
+      <Dot status={status} bordo />
       {label}
     </span>
   );
