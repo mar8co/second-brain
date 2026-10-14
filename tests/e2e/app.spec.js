@@ -33,6 +33,15 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   const titolo = await page.getByRole("heading", { name: "Impostazioni" }).boundingBox();
   expect(rian.x).toBeLessThan(agg.x);
   expect(rian.y).toBeLessThan(titolo.y + 300);
+  // Ordine chiaro: Archivio, AI, Dati e account; il resto è in "Informazioni e privacy", chiuso.
+  const ys = [];
+  for (const n of ["Archivio", "AI", "Dati e account", "Informazioni e privacy"]) ys.push((await page.getByText(n, { exact: true }).last().boundingBox()).y);
+  expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+  await expect(page.getByRole("switch", { name: /Rielabora con l'AI/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Esporta archivio/ })).toBeVisible();
+  await expect(page.getByText(/IndexedDB/)).toBeHidden();
+  await page.getByText("Informazioni e privacy").click();
+  await expect(page.getByText(/IndexedDB/)).toBeVisible();
   // In Archivio non ci sono più; Filtri è una sola icona (senza la parola) sotto la ricerca.
   await page.goto("/archivio");
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
@@ -47,6 +56,8 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   const filtri = page.getByRole("button", { name: /^Filtri/ });
   const fb = await filtri.boundingBox();
   expect(fb.y).toBeGreaterThan(campo.y + campo.height - 1);
+  // Sotto la riga Filtri / Box-Lista non c'è nessuna linea.
+  await expect(page.locator("h2.sezione").filter({ has: filtri })).toHaveCSS("border-bottom-width", "0px");
   expect((await filtri.innerText()).trim()).toBe("");
   await expect(page.getByText("Filtri", { exact: true })).toHaveCount(0);
   // Aggiungi dalle Impostazioni.
