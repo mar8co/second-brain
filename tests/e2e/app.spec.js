@@ -107,6 +107,29 @@ test("pulisci chat subito, con Annulla per ripensarci", async ({ page }) => {
   await expect(page.getByText("dove ho salvato le ricette?")).toBeVisible();
 });
 
+test("chat: si apre dall'inizio dell'ultima risposta, anche se è lunga, non dalla tua domanda", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("Cosa ho salvato sul limone?");
+  await box.press("Enter");
+  await expect(page.getByText("Risposta dai tuoi contenuti").first()).toBeVisible();
+  await box.fill("Raccontami la ricetta lunga con il limone");
+  await box.press("Enter");
+  await expect(page.getByText("Passaggio 30 della ricetta")).toHaveCount(1);
+
+  // Dopo averla ricevuta e riaprendo la chat: l'inizio dell'ultima risposta
+  // è sotto l'intestazione, non tagliato in alto.
+  for (const apri of [async () => {}, async () => page.reload()]) {
+    await apri();
+    const risposta = page.locator("[data-risposta]").last();
+    await expect(risposta).toBeVisible();
+    await expect.poll(async () => (await risposta.boundingBox()).y).toBeGreaterThan(60);
+    await expect.poll(async () => (await risposta.boundingBox()).y).toBeLessThan(200);
+  }
+});
+
 test("trascrizione incollata a mano su un link: salvata e mostrata come testo estratto", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();

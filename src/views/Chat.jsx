@@ -62,9 +62,16 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 
   const conversation = useMemo(() => log.map((m, i) => ({ msg: m, newDay: i === 0 || dayKey(m.at) !== dayKey(log[i - 1].at) })), [log]);
 
-  // Si parte dal fondo, come in una chat, e si scende a ogni nuovo messaggio.
+  // Si va in fondo, come in una chat, a ogni nuovo messaggio: se l'ultima
+  // risposta c'è già, si parte dal suo inizio (così una risposta lunga non
+  // resta tagliata in alto); finché si aspetta, in fondo.
+  const listRef = useRef(null);
   useEffect(() => {
-    if (log.length) endRef.current?.scrollIntoView({ block: "end" });
+    if (!log.length) return;
+    const last = log[log.length - 1];
+    const answer = last.result && !last.pending ? listRef.current?.querySelector("li:last-child [data-risposta]") : null;
+    if (answer) answer.scrollIntoView({ block: "start" });
+    else endRef.current?.scrollIntoView({ block: "end" });
   }, [log, loading]);
 
   const ask = async (question) => {
@@ -164,7 +171,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
             )}
           </div>
         ) : (
-          <ol className="space-y-4">
+          <ol ref={listRef} className="space-y-4">
             {conversation.map(({ msg, newDay }) => (
               <li key={msg.id}>
                 {newDay && (
@@ -258,7 +265,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen }) {
           <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
         </p>
       </div>
-      <div className="flex justify-start">
+      <div className="flex scroll-mt-24 justify-start" data-risposta>
         <div className="card-bianca w-full max-w-[94%] rounded-bl-md px-4 py-3.5">
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">

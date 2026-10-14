@@ -41,6 +41,14 @@ function fakeGemini(prompt) {
     const docs = [...lastBlock(prompt, "dettagli"), ...lastBlock(prompt, "memoria")];
     const q = prompt.slice(prompt.lastIndexOf("<domanda>"));
     const recipe = docs.find((d) => /limone/i.test(JSON.stringify(d)));
+    // Risposta lunga: più alta dello schermo.
+    if (/ricetta lunga/i.test(q) && recipe) {
+      return {
+        answer: Array.from({ length: 30 }, (_, i) => `- Passaggio ${i + 1} della ricetta [${recipe.n}]`).join("\n"),
+        sufficient: true,
+        sources: [{ n: recipe.n, quote: "si condisce con scorza di limone, burro e parmigiano" }],
+      };
+    }
     if (/limone/i.test(q) && recipe) {
       return {
         answer: `Hai salvato **${recipe.titolo}**: pasta condita con scorza di limone, burro e parmigiano [${recipe.n}].\n- Pronta in 10 minuti [${recipe.n}]`,
