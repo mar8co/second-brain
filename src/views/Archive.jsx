@@ -64,8 +64,8 @@ export default function Archive({ archive, query, navigate, openItem }) {
   const events = useMemo(() => eventsOf(matches), [matches]);
   const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
   const special = [
-    { key: "ristoranti", name: "Ristoranti", Icon: Utensils, sub: restaurants.length ? `${restaurants.length} ${restaurants.length === 1 ? "locale" : "locali"}` : "Ancora nessuno" },
-    { key: "eventi", name: "Eventi", Icon: CalendarDays, sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : `${eventsTotal} ${eventsTotal === 1 ? "evento" : "eventi"}` },
+    { key: "ristoranti", name: "Ristoranti", Icon: Utensils, color: "var(--arancio)", sub: restaurants.length ? `${restaurants.length} ${restaurants.length === 1 ? "locale" : "locali"}` : "Ancora nessuno" },
+    { key: "eventi", name: "Eventi", Icon: CalendarDays, color: "var(--verde)", sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : `${eventsTotal} ${eventsTotal === 1 ? "evento" : "eventi"}` },
   ];
   const cats = useMemo(() => countBy(items, "categories"), [items]);
   const authors = useMemo(() => countValues(items, "author"), [items]);
@@ -76,6 +76,17 @@ export default function Archive({ archive, query, navigate, openItem }) {
     ...shown.filter((k) => k !== "from" && k !== "to").map((k) => ({ key: k, label: k === "type" ? TYPES[filters[k]]?.label || filters[k] : filters[k], clear: { [k]: "" } })),
     ...(filters.from || filters.to ? [{ key: "periodo", label: formatRange(filters.from, filters.to), clear: { from: "", to: "" } }] : []),
   ];
+  // Dentro un box il titolo della pagina è il nome del box.
+  const dentro = vista === "box" && filters.category;
+  const titolo = sezione ? (sezione === "ristoranti" ? "Ristoranti" : "Eventi") : dentro ? filters.category : "Archivio";
+  const indietro = sezione ? () => setParam({ sezione: "" }) : dentro ? () => setParam({ category: "" }) : null;
+  const conteggio = sezione
+    ? sezione === "ristoranti"
+      ? restaurants.length === 1 ? "1 locale" : `${restaurants.length} locali`
+      : eventsTotal === 1 ? "1 evento" : `${eventsTotal} eventi`
+    : vista === "box" && !filters.category
+      ? boxes.length === 1 ? "1 categoria" : `${boxes.length} categorie`
+      : results.length === 1 ? "1 elemento" : `${results.length} elementi`;
   return (
     <>
       <Page>
@@ -86,10 +97,10 @@ export default function Archive({ archive, query, navigate, openItem }) {
             </button>
           }
         />
-        <h1 className="gigante">Archivio</h1>
+        <h1 className={`gigante${titolo.length > 9 ? " lungo" : ""}`}>{titolo}</h1>
 
-        <div role="search" className="flex items-end gap-3">
-          <div className="min-w-0 flex-1">
+        <div role="search">
+          <div className="min-w-0">
             <label htmlFor="arch-q" className="sr-only">Cerca nell'archivio</label>
             <input
               id="arch-q"
@@ -102,11 +113,6 @@ export default function Archive({ archive, query, navigate, openItem }) {
               autoComplete="off"
             />
           </div>
-          <button type="button" className={`pillola relative mb-1.5${open ? " attiva" : ""}`} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
-            <SlidersHorizontal className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
-            Filtri
-            {chips.length > 0 && <span className="conta num">{chips.length}</span>}
-          </button>
         </div>
 
         {cats.length > 0 && vista === "lista" && (
@@ -124,6 +130,36 @@ export default function Archive({ archive, query, navigate, openItem }) {
               </li>
             ))}
           </ul>
+        )}
+
+        {!loading && (
+          <h2 className="sezione !mt-3.5">
+            <span className="flex min-w-0 items-center gap-2">
+              {indietro && (
+                <button type="button" className="pillola" onClick={indietro}>
+                  <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2.8} aria-hidden="true" />
+                  Categorie
+                </button>
+              )}
+              <button type="button" className={`pillola relative${open ? " attiva" : ""}`} aria-label={chips.length ? `Filtri, ${chips.length} attivi` : "Filtri"} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
+                <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                {chips.length > 0 && <span className="conta num" aria-hidden="true">{chips.length}</span>}
+              </button>
+              <span aria-live="polite" className="sr-only">{conteggio}</span>
+            </span>
+            {!sezione && items.length > 0 && (
+              <span className="flex shrink-0 gap-1.5" role="group" aria-label="Vista">
+                <button type="button" className={`pillola${vista === "box" ? " attiva" : ""}`} aria-pressed={vista === "box"} onClick={() => setVista("box")}>
+                  <LayoutGrid className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                  Box
+                </button>
+                <button type="button" className={`pillola${vista === "lista" ? " attiva" : ""}`} aria-pressed={vista === "lista"} onClick={() => setVista("lista")}>
+                  <List className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                  Lista
+                </button>
+              </span>
+            )}
+          </h2>
         )}
 
         {open && (
@@ -164,20 +200,6 @@ export default function Archive({ archive, query, navigate, openItem }) {
           <Spinner />
         ) : sezione ? (
           <>
-            <p className="grande mt-5">{sezione === "ristoranti" ? "Ristoranti" : "Eventi"}</p>
-            <h2 className="sezione !mt-3">
-              <span className="flex min-w-0 items-center gap-2">
-                <button type="button" className="pillola" onClick={() => setParam({ sezione: "" })}>
-                  <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2.8} aria-hidden="true" />
-                  Categorie
-                </button>
-                <span aria-live="polite" className="num truncate">
-                  {sezione === "ristoranti"
-                    ? restaurants.length === 1 ? "1 locale" : `${restaurants.length} locali`
-                    : eventsTotal === 1 ? "1 evento" : `${eventsTotal} eventi`}
-                </span>
-              </span>
-            </h2>
             {sezione === "ristoranti" ? <RestaurantList restaurants={restaurants} onOpen={openItem} /> : <EventList events={events} onOpen={openItem} />}
           </>
         ) : results.length === 0 ? (
@@ -201,32 +223,6 @@ export default function Archive({ archive, query, navigate, openItem }) {
           )
         ) : (
           <>
-            {vista === "box" && filters.category && <p className="grande mt-5 break-words">{filters.category}</p>}
-            <h2 className={`sezione${vista === "box" && filters.category ? " !mt-3" : ""}`}>
-              <span className="flex min-w-0 items-center gap-2">
-                {vista === "box" && filters.category && (
-                  <button type="button" className="pillola" onClick={() => setParam({ category: "" })}>
-                    <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2.8} aria-hidden="true" />
-                    Categorie
-                  </button>
-                )}
-                <span aria-live="polite" className="num truncate">
-                  {vista === "box" && !filters.category
-                    ? boxes.length === 1 ? "1 categoria" : `${boxes.length} categorie`
-                    : results.length === 1 ? "1 elemento" : `${results.length} elementi`}
-                </span>
-              </span>
-              <span className="flex shrink-0 gap-1.5" role="group" aria-label="Vista">
-                <button type="button" className={`pillola${vista === "box" ? " attiva" : ""}`} aria-pressed={vista === "box"} onClick={() => setVista("box")}>
-                  <LayoutGrid className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
-                  Box
-                </button>
-                <button type="button" className={`pillola${vista === "lista" ? " attiva" : ""}`} aria-pressed={vista === "lista"} onClick={() => setVista("lista")}>
-                  <List className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
-                  Lista
-                </button>
-              </span>
-            </h2>
             {vista === "lista" ? (
               <ItemList items={results} onOpen={openItem} />
             ) : filters.category ? (

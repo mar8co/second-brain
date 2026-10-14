@@ -18,7 +18,7 @@ async function addLink(page, url, note) {
   await page.getByRole("button", { name: "Salva", exact: true }).click();
 }
 
-test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianalizza e Aggiungi in Impostazioni; Filtri accanto alla ricerca", async ({ page }) => {
+test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianalizza e Aggiungi in Impostazioni; Filtri solo icona sotto la ricerca", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "second-brain" })).toBeVisible();
   await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
@@ -33,14 +33,16 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   const titolo = await page.getByRole("heading", { name: "Impostazioni" }).boundingBox();
   expect(rian.x).toBeLessThan(agg.x);
   expect(rian.y).toBeLessThan(titolo.y + 300);
-  // In Archivio non ci sono più; Filtri è sulla stessa riga della ricerca.
+  // In Archivio non ci sono più; Filtri è una sola icona (senza la parola) sotto la ricerca.
   await page.goto("/archivio");
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Aggiungi", exact: true })).toHaveCount(0);
   const campo = await page.getByLabel("Cerca nell'archivio").boundingBox();
-  const filtri = await page.getByRole("button", { name: /^Filtri/ }).boundingBox();
-  expect(filtri.x).toBeGreaterThan(campo.x + campo.width - 1);
-  expect(Math.abs(filtri.y + filtri.height / 2 - (campo.y + campo.height / 2))).toBeLessThan(30);
+  const filtri = page.getByRole("button", { name: /^Filtri/ });
+  const fb = await filtri.boundingBox();
+  expect(fb.y).toBeGreaterThan(campo.y + campo.height - 1);
+  expect((await filtri.innerText()).trim()).toBe("");
+  await expect(page.getByText("Filtri", { exact: true })).toHaveCount(0);
   // Aggiungi dalle Impostazioni.
   await page.goto("/impostazioni");
   await page.getByRole("button", { name: "Aggiungi", exact: true }).click();
@@ -419,6 +421,8 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
   // Dentro un box: i contenuti della categoria, e "Categorie" per tornare indietro.
   await page.getByRole("button", { name: "Ricette, 1 contenuto" }).click();
   await expect(page).toHaveURL(/category=Ricette/);
+  // Il titolo grande non è più "Archivio" ma il nome del box.
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ricette");
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toBeVisible();
   await expect(page.getByText("Idea regalo per Giulia")).toHaveCount(0);
@@ -433,6 +437,7 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
   // Di nuovo a box: "Categorie" riporta a tutte le scatole.
   await vista.getByRole("button", { name: "Box" }).click();
   await page.getByRole("button", { name: "Categorie", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Archivio");
   await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
 
   // Ricerca: i box mostrano solo ciò che corrisponde.
@@ -450,6 +455,9 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const ristoranti = page.getByRole("button", { name: "Ristoranti, 2 locali" });
   await expect(ristoranti).toBeVisible();
   await expect(page.getByRole("button", { name: "Eventi, 1 in arrivo" })).toBeVisible();
+  // Colorati come le altre scatole, non neri.
+  await expect(ristoranti).toHaveCSS("background-color", "rgb(255, 122, 26)");
+  await expect(page.getByRole("button", { name: /^Eventi,/ })).toHaveCSS("background-color", "rgb(34, 179, 94)");
   expect((await ristoranti.boundingBox()).y).toBeLessThan((await page.getByRole("button", { name: /^Cibo,/ }).boundingBox()).y);
 
   // Ristoranti: nome, via e sotto il link al contenuto; i posti che non sono locali no.
@@ -457,9 +465,14 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page).toHaveURL(/sezione=ristoranti/);
   const righe = page.locator("ul.righe > li");
   await expect(righe).toHaveCount(2);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ristoranti");
   await expect(righe.first()).toContainText("Bar San Calisto");
   const enzo = righe.filter({ hasText: "Da Enzo al 29" });
   await expect(enzo).toContainText("Via dei Vascellari 29, Roma");
+  // L'indirizzo è un link a Maps con nome e via (senza via ci sarebbe "Cerca su Maps").
+  const mappa = enzo.getByRole("link", { name: /Via dei Vascellari 29, Roma/ });
+  await expect(mappa).toHaveAttribute("href", "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Da Enzo al 29, Via dei Vascellari 29, Roma"));
+  await expect(righe.first().getByRole("link", { name: /Piazza di San Calisto, Roma/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Piazza%20di%20San%20Calisto%2C%20Roma$/);
   await expect(enzo.getByRole("link", { name: /Apri su Guida di prova/ })).toHaveAttribute("href", `${FIX}/trastevere`);
   await expect(enzo.getByRole("link", { name: "Scheda" })).toBeVisible();
   await expect(page.getByText("Museo di Trastevere")).toHaveCount(0);
