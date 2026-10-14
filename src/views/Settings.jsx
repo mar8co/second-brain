@@ -1,4 +1,5 @@
-// Impostazioni: modalità dati, AI, esportazione, aggiunta da iPhone.
+// Impostazioni: archivio (rianalizza, aggiungi), modalità dati, AI, esportazione, aggiunta da iPhone.
+import { Plus, RotateCw } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import QuickShare from "../components/QuickShare.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -13,8 +14,16 @@ function Section({ title, children }) {
   );
 }
 
-export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back }) {
+export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back, navigate }) {
   usePageColor(PAGE.settings);
+  const { reanalysis, reanalyzable, reanalyzeAll } = archive;
+  const reanalyze = async () => {
+    const r = await reanalyzeAll();
+    if (!r) return;
+    if (r.stopped === "limit") toast(`Fermo: limite gratuito dell'AI raggiunto (${r.done} su ${r.total})`);
+    else if (r.failed) toast(`Rianalizzati ${r.done - r.failed} su ${r.total}, ${r.failed} da riprovare`);
+    else toast(r.done === 1 ? "1 elemento rianalizzato" : `${r.done} elementi rianalizzati`);
+  };
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), items: archive.items }, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -29,6 +38,21 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
       <Testata onBack={() => back("/")} />
       <h1 className="titolo-home">Impostazioni</h1>
 
+      <Section title="Archivio">
+        <div className="flex flex-wrap gap-2.5">
+          <button type="button" className="pillola relative" disabled={!aiStatus.ai || Boolean(reanalysis) || reanalyzable.length === 0} onClick={reanalyze}>
+            <RotateCw className={`h-4 w-4${reanalysis ? " gira" : ""}`} strokeWidth={2.6} aria-hidden="true" />
+            {reanalysis ? <span className="num">{reanalysis.done}/{reanalysis.total}</span> : "Rianalizza"}
+            {!reanalysis && aiStatus.ai && reanalyzable.length > 0 && <span className="conta num">{reanalyzable.length}</span>}
+          </button>
+          <button type="button" className="pillola" onClick={() => navigate("/aggiungi")}>
+            <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" />
+            Aggiungi
+          </button>
+        </div>
+        <p className="micro text-[0.8rem]">Aggiungi salva un nuovo contenuto. Rianalizza rilegge e rielabora con l'AI i contenuti non ancora analizzati bene.</p>
+      </Section>
+
       <Section title="Dove sono i tuoi dati">
         {syncMode ? (
           <>
@@ -42,7 +66,6 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
           <p><strong className="font-extrabold">Modalità locale:</strong> tutto resta in questo browser (IndexedDB). Niente sincronizzazione tra dispositivi e niente backup: se cancelli i dati del sito li perdi. Esporta spesso.</p>
         )}
         <p className="text-tenue">Per leggere i link, l'indirizzo viene aperto dal server dell'app (Vercel), che legge solo dati pubblici.</p>
-        <p className="text-tenue">Per la Mappa, il nome e l'indirizzo dei posti citati nei contenuti vengono cercati su OpenStreetMap (gratuito) dal server dell'app; la cartina viene caricata dal sito di OpenStreetMap.</p>
       </Section>
 
       <Section title="AI (Google Gemini)">

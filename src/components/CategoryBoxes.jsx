@@ -3,9 +3,21 @@
 import { Thumb } from "./ItemCard.jsx";
 import { categoryColor } from "../lib/colors.js";
 
-export default function CategoryBoxes({ boxes, onOpen }) {
+// `special`: i box fissi in testa (Ristoranti, Eventi): { key, name, sub, Icon }.
+export default function CategoryBoxes({ boxes, onOpen, special = [], onSpecial }) {
   return (
     <ul className="grid grid-cols-2 gap-3 pt-3.5">
+      {special.map(({ key, name, sub, Icon }) => (
+        <li key={key} className="min-w-0">
+          <button type="button" className="scatola nera" aria-label={`${name}, ${sub}`} onClick={() => onSpecial(key)}>
+            <Icon className="h-9 w-9" strokeWidth={2.2} aria-hidden="true" />
+            <span className="mt-auto block pt-6">
+              <b className="block break-words text-[1.3rem] font-extrabold leading-[1.02] tracking-[-0.04em]">{name}</b>
+              <span className="micro mt-0.5 block font-semibold">{sub}</span>
+            </span>
+          </button>
+        </li>
+      ))}
       {boxes.map(([name, items]) => {
         // Prima quelli con la copertina.
         const covers = [...items].sort((a, b) => Number(Boolean(b.image_url)) - Number(Boolean(a.image_url))).slice(0, 4);

@@ -1,6 +1,6 @@
 // Radice dell'app: sceglie l'archivio (locale o Supabase), gestisce accesso,
 // navigazione e notifiche brevi.
-import { Suspense, lazy, useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { BottomNav } from "./components/Layout.jsx";
 import { Spinner } from "./components/ui.jsx";
 import { useRoute } from "./hooks/useRoute.js";
@@ -17,9 +17,6 @@ import Add from "./views/Add.jsx";
 import Detail from "./views/Detail.jsx";
 import Settings from "./views/Settings.jsx";
 import Login from "./views/Login.jsx";
-
-// La cartina (Leaflet) si carica solo quando si apre la Mappa.
-const Mappa = lazy(() => import("./views/Mappa.jsx"));
 
 export default function App() {
   const auth = useAuth();
@@ -54,12 +51,6 @@ function Shell({ auth }) {
   if (m) view = <Detail key={m[1]} id={m[1]} store={store} {...common} />;
   else if (path === "/aggiungi") view = <Add {...common} />;
   else if (path === "/archivio") view = <Archive {...common} />;
-  else if (path === "/mappa")
-    view = (
-      <Suspense fallback={<Spinner label="Apro la mappa…" />}>
-        <Mappa {...common} />
-      </Suspense>
-    );
   else if (path === "/impostazioni")
     view = (
       <Settings {...common} syncMode={isSyncMode} session={auth.session} signOut={auth.signOut} aiStatus={aiStatus} settings={settings} setSettings={setSettings} />
@@ -69,7 +60,7 @@ function Shell({ auth }) {
 
   // Barra in basso solo sulle schermate principali.
   const chat = path === "/" || path === "/chiedi";
-  const main = chat || path === "/archivio" || path === "/mappa";
+  const main = chat || path === "/archivio";
   // L'avviso sta appena sopra la barra (e sopra il campo della chat).
   const toastBottom = chat ? "calc(150px + env(safe-area-inset-bottom))" : main ? "calc(84px + env(safe-area-inset-bottom))" : "calc(24px + env(safe-area-inset-bottom))";
   return (

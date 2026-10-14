@@ -18,22 +18,31 @@ async function addLink(page, url, note) {
   await page.getByRole("button", { name: "Salva", exact: true }).click();
 }
 
-test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; ingranaggio → Impostazioni; Aggiungi in Archivio", async ({ page }) => {
+test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianalizza e Aggiungi in Impostazioni; Filtri accanto alla ricerca", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "second-brain" })).toBeVisible();
   await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
   await expect(page.getByText("Modalità locale")).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
-  await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio", "Mappa"]);
+  await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
   await page.getByRole("button", { name: "Impostazioni" }).click();
   await expect(page).toHaveURL(/\/impostazioni$/);
-  await expect(page.getByRole("button", { name: "Aggiungi", exact: true })).toHaveCount(0);
+  // Rianalizza e Aggiungi stanno in cima alle Impostazioni.
+  const rian = await page.getByRole("button", { name: /^Rianalizza/ }).boundingBox();
+  const agg = await page.getByRole("button", { name: "Aggiungi", exact: true }).boundingBox();
+  const titolo = await page.getByRole("heading", { name: "Impostazioni" }).boundingBox();
+  expect(rian.x).toBeLessThan(agg.x);
+  expect(rian.y).toBeLessThan(titolo.y + 300);
+  // In Archivio non ci sono più; Filtri è sulla stessa riga della ricerca.
   await page.goto("/archivio");
-  // Rianalizza a sinistra, Aggiungi al centro, Filtri a destra.
-  const xs = [];
-  for (const name of [/^Rianalizza/, /^Aggiungi$/, /^Filtri/]) xs.push((await page.getByRole("button", { name }).boundingBox()).x);
-  expect(xs[0]).toBeLessThan(xs[1]);
-  expect(xs[1]).toBeLessThan(xs[2]);
+  await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Aggiungi", exact: true })).toHaveCount(0);
+  const campo = await page.getByLabel("Cerca nell'archivio").boundingBox();
+  const filtri = await page.getByRole("button", { name: /^Filtri/ }).boundingBox();
+  expect(filtri.x).toBeGreaterThan(campo.x + campo.width - 1);
+  expect(Math.abs(filtri.y + filtri.height / 2 - (campo.y + campo.height / 2))).toBeLessThan(30);
+  // Aggiungi dalle Impostazioni.
+  await page.goto("/impostazioni");
   await page.getByRole("button", { name: "Aggiungi", exact: true }).click();
   await expect(page).toHaveURL(/\/aggiungi$/);
 });
@@ -256,7 +265,7 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(stato.locator("i")).toHaveCSS("background-color", "rgb(34, 179, 94)");
 
   // Filtri rapidi: categorie sempre visibili
-  await expect(page.getByRole("button", { name: /^Rianalizza/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Tutte", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Ultimi 7 giorni" })).toHaveCount(0);
 
@@ -353,48 +362,6 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page).toHaveURL(/\/elemento\//);
 });
 
-test("mappa: posti citati in un contenuto, cercati una volta su OpenStreetMap, vicino a me e indicazioni", async ({ page, context, request }) => {
-  await page.route(/tile\.openstreetmap\.org/, (r) => r.abort());
-  await context.grantPermissions(["geolocation"]);
-  await context.setGeolocation({ latitude: 41.8895, longitude: 12.4700 });
-  await addLink(page, `${FIX}/trastevere`);
-  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
-  const before = (await (await request.get(`${FIX}/geo-count`)).json()).calls;
-
-  await page.goto("/");
-  await page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("link", { name: "Mappa" }).click();
-  await expect(page).toHaveURL(/\/mappa$/);
-  await expect(page.getByRole("heading", { name: "Mappa" })).toBeVisible();
-  // Due posti trovati; quello che non esiste non compare.
-  await expect(page.getByText("2 posti")).toBeVisible({ timeout: 15000 });
-  await expect(page.locator(".pin")).toHaveCount(2);
-  await expect(page.getByText(/possono essere approssimative/)).toBeVisible();
-  await expect(page.getByText(/Cerco la posizione/)).toHaveCount(0);
-  expect((await (await request.get(`${FIX}/geo-count`)).json()).calls - before).toBe(3);
-
-  // Vicino a me: dal più vicino, con la distanza.
-  await page.getByRole("button", { name: "Vicino a me" }).click();
-  await expect(page.getByText("dal più vicino")).toBeVisible();
-  const righe = page.locator("ul.righe li");
-  await expect(righe.first()).toContainText("Bar San Calisto");
-  await expect(righe.first()).toContainText(/\d+ m/);
-
-  // Il posto toccato: da dove viene, indicazioni, apri il contenuto.
-  await righe.filter({ hasText: "Da Enzo al 29" }).getByRole("button").click();
-  const scelto = page.getByRole("region", { name: "Posto: Da Enzo al 29" });
-  await expect(scelto).toContainText("Da: Dove mangiare a Trastevere");
-  await expect(scelto.getByRole("link", { name: "Indicazioni" })).toHaveAttribute("href", /41\.8892/);
-  await expect(page.locator(".pin.scelto")).toHaveCount(1);
-
-  // Le posizioni restano salvate: nessuna nuova ricerca.
-  await page.reload();
-  await expect(page.getByText("2 posti")).toBeVisible();
-  expect((await (await request.get(`${FIX}/geo-count`)).json()).calls - before).toBe(3);
-  await righe.filter({ hasText: "Da Enzo al 29" }).getByRole("button").click();
-  await page.getByRole("button", { name: "Apri" }).click();
-  await expect(page).toHaveURL(/\/elemento\//);
-});
-
 test("carica un file di testo: testo estratto e cercabile", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "File" }).click();
@@ -472,4 +439,46 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
   await page.getByLabel("Cerca nell'archivio").fill("lampada");
   await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Ricette, 1 contenuto" })).toHaveCount(0);
+});
+
+test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in grigio in fondo", async ({ page }) => {
+  await addLink(page, `${FIX}/trastevere`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+
+  // Due box fissi in testa, prima delle categorie.
+  await page.goto("/archivio");
+  const ristoranti = page.getByRole("button", { name: "Ristoranti, 2 locali" });
+  await expect(ristoranti).toBeVisible();
+  await expect(page.getByRole("button", { name: "Eventi, 1 in arrivo" })).toBeVisible();
+  expect((await ristoranti.boundingBox()).y).toBeLessThan((await page.getByRole("button", { name: /^Cibo,/ }).boundingBox()).y);
+
+  // Ristoranti: nome, via e sotto il link al contenuto; i posti che non sono locali no.
+  await ristoranti.click();
+  await expect(page).toHaveURL(/sezione=ristoranti/);
+  const righe = page.locator("ul.righe > li");
+  await expect(righe).toHaveCount(2);
+  await expect(righe.first()).toContainText("Bar San Calisto");
+  const enzo = righe.filter({ hasText: "Da Enzo al 29" });
+  await expect(enzo).toContainText("Via dei Vascellari 29, Roma");
+  await expect(enzo.getByRole("link", { name: /Apri su Guida di prova/ })).toHaveAttribute("href", `${FIX}/trastevere`);
+  await expect(enzo.getByRole("link", { name: "Scheda" })).toBeVisible();
+  await expect(page.getByText("Museo di Trastevere")).toHaveCount(0);
+
+  // Eventi: prossimi per data, poi senza data, in fondo i passati in grigio.
+  await page.getByRole("button", { name: "Categorie", exact: true }).click();
+  await page.getByRole("button", { name: /^Eventi,/ }).click();
+  const prossimo = await page.getByText("Serata carbonara da Enzo").boundingBox();
+  const senzaData = await page.getByText("Festa del quartiere").boundingBox();
+  const passato = await page.getByText("Degustazione di primavera").boundingBox();
+  expect(prossimo.y).toBeLessThan(senzaData.y);
+  expect(senzaData.y).toBeLessThan(passato.y);
+  await expect(page.getByRole("heading", { name: "Passati" })).toBeVisible();
+  await expect(page.locator("[data-passati]")).toHaveCSS("opacity", "0.5");
+  await expect(page.getByText("Serata carbonara da Enzo").locator("xpath=ancestor::li[1]").getByRole("link", { name: /Apri su Guida di prova/ })).toBeVisible();
+
+  // Passando a lista le due sezioni non ci sono: resta la lista di sempre.
+  await page.getByRole("button", { name: "Categorie", exact: true }).click();
+  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Lista" }).click();
+  await expect(page.getByRole("button", { name: /^Ristoranti,/ })).toHaveCount(0);
+  await expect(page.locator("ul.righe li")).toHaveCount(1);
 });
