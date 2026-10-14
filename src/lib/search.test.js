@@ -55,3 +55,20 @@ describe("matchesFilters / countBy", () => {
   it("filtra per tag", () => expect(matchesFilters(items[0], { tag: "pasta" })).toBe(true));
   it("conta le categorie", () => expect(countBy(items, "categories")[0]).toEqual(["Acquisti", 1]));
 });
+
+describe("ricerca nella scheda di memoria", () => {
+  const reel = {
+    id: "w", type: "social", title: "Reel", author: "Mario Rossi (@mario.ai)", created_at: "2026-10-13T10:00:00Z",
+    ai: { v: 2, summary: "", points: ["Workshop gratuito il 28 settembre."], entities: [{ name: "Talent Garden", kind: "luogo" }], keywords: ["intelligenza artificiale", "corso"] },
+  };
+  it("trova per autore, parole chiave, persone e punti chiave", () => {
+    expect(searchItems([reel], "mario.ai").map((i) => i.id)).toEqual(["w"]);
+    expect(searchItems([reel], "corso").map((i) => i.id)).toEqual(["w"]);
+    expect(searchItems([reel], "talent garden").map((i) => i.id)).toEqual(["w"]);
+    expect(retrieveForQuestion([reel], "chi fa corsi di intelligenza artificiale?").map((i) => i.id)).toEqual(["w"]);
+  });
+  it("dati non validi nella scheda non bloccano la ricerca", () => {
+    const bad = { ...reel, id: "b", ai: { keywords: [null, 3], entities: [null, { name: 5 }], points: "testo" } };
+    expect(() => searchItems([bad], "corso")).not.toThrow();
+  });
+});

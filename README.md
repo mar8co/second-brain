@@ -77,7 +77,7 @@ Non impostare mai `EXTRACT_ALLOW_PRIVATE`, `GEMINI_API_BASE` né `APIFY_API_BASE
 
 Crea una chiave su [Google AI Studio](https://aistudio.google.com/apikey) e mettila in `GEMINI_API_KEY` su Vercel (o in `.env.local` in sviluppo). Viene usata per:
 
-- proporre riassunto, categorie e tag dopo il salvataggio (disattivabile in Impostazioni);
+- rielaborare ogni elemento in una **scheda di memoria** dopo il salvataggio (riassunto, punti chiave, persone e luoghi citati, parole chiave anche sinonime, categorie e tag; disattivabile in Impostazioni). Con l'app aperta, gli elementi senza scheda (AI non riuscita al salvataggio) o con una scheda di versione precedente vengono rielaborati da soli, uno alla volta (`src/lib/memory.js`). Allo stesso modo vengono riletti i post rimasti "in elaborazione" da più di 10 minuti, quelli salvati prima della trascrizione dal link (solo didascalia) e quelli la cui lettura non è riuscita per un motivo momentaneo: al massimo 3 volte per elemento su ogni dispositivo, perché ogni lettura usa i crediti gratuiti di Apify. Nelle riletture di elementi che hanno già una scheda, categorie e tag dell'AI restano proposte;
 - rispondere alle domande in "Chiedi";
 - trascrivere i video e leggere le slide dei caroselli.
 
@@ -131,12 +131,12 @@ Limiti: solo post pubblici; un post privato, rimosso o non disponibile risulta "
 
 Alternative quando il link non basta: condividere il file del video o gli screenshot delle slide con il Comando Rapido (vedi sotto), oppure incollare una trascrizione nella scheda.
 
-Per ritrovare un Reel, scrivi una nota al momento del salvataggio ("esercizi per la schiena", "ristorante a Lisbona"): la ricerca e le domande la usano.
+Insieme al testo si salvano **chi ha pubblicato il post** (`author`, es. "Mario Rossi (@mario.ai)"), **quando** (`published_at`) e il **luogo** indicato nel post (Instagram, solo il nome). L'AI ne fa una scheda di memoria: chi propone cosa, date, prezzi, consigli, profili citati. Una nota scritta al salvataggio ("esercizi per la schiena") resta comunque utile.
 
 ### Ricerca e domande
 
-- **Ricerca** nel browser su titolo, tag, categorie, descrizione, nota, nome del posto, URL, riassunto AI e testo estratto, ignorando accenti e con riconoscimento semplice di singolare/plurale. **Filtri** per tipo, stato, categoria, tag e intervallo di date.
-- **Chiedi**: l'app cerca gli elementi pertinenti (massimo 12) e solo quelli vengono inviati a Gemini, con l'istruzione di rispondere esclusivamente da quegli elementi, trattarne il contenuto come dato e citare gli id usati. Il server scarta le fonti che non erano tra quelle inviate. Se nulla corrisponde, l'app lo dice senza chiamare l'AI; se Gemini dice che le informazioni non bastano, compare "L'archivio non contiene informazioni sufficienti". Senza AI vengono mostrati gli elementi più pertinenti.
+- **Ricerca** nel browser su titolo, autore, tag, categorie, descrizione, nota, nome del posto, URL, scheda dell'AI (riassunto, punti chiave, persone, parole chiave) e testo estratto, ignorando accenti e con riconoscimento semplice di singolare/plurale. **Filtri** per tipo, stato, categoria, tag e intervallo di date.
+- **Chiedi**: Gemini riceve la **scheda breve di ogni elemento salvato** (riassunto, punti chiave, autore, parole chiave; per gli elementi ancora senza scheda, l'inizio di didascalia e testo) e il **contenuto completo** degli 8 elementi più pertinenti per parole. Così trova anche ciò che è scritto con parole diverse dalla domanda. Deve rispondere esclusivamente da questi dati, trattarli come dati e citare gli id usati; il server scarta le fonti che non erano tra quelle inviate. Se le informazioni non bastano lo dice. Senza AI vengono mostrati gli elementi più pertinenti per parole.
 
 ## Modello dei dati
 
@@ -153,14 +153,15 @@ Tabella `items` (vedi `supabase/schema.sql`; la modalità locale usa la stessa f
 | `place` | `{ name, lat, lng }` per i posti |
 | `categories`, `tags` | scelti o confermati da te |
 | `status`, `status_detail` | stato di elaborazione e spiegazione |
-| `ai` | inferenze AI: `{ summary, categories, tags, model, generated_at }` |
+| `author`, `published_at` | chi ha pubblicato il post e quando (dalla fonte) |
+| `ai` | scheda di memoria dell'AI: `{ v, summary, points, entities, keywords, categories, tags, model, generated_at, applied }` |
 | `file_path`, `file_name`, `file_mime`, `file_size` | file nel bucket privato `files/<user_id>/<id>/…` |
 | `created_at`, `updated_at`, `processed_at` | date di acquisizione, modifica, analisi |
 
 ## Privacy e sicurezza
 
 - **Dove stanno i dati:** sul tuo progetto Supabase (database e file privati) oppure, in modalità locale, solo nel browser.
-- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; i link dei social (solo l'indirizzo del post) vanno ad Apify, se configurato; con l'AI attiva, titolo, note, estratti e i media da trascrivere vengono inviati a Google Gemini. Nient'altro.
+- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; i link dei social (solo l'indirizzo del post) vanno ad Apify, se configurato; con l'AI attiva, titolo, note, estratti e i media da trascrivere vengono inviati a Google Gemini, e ogni domanda nella chat invia la scheda breve di tutti gli elementi salvati (compreso l'inizio delle note). Nient'altro.
 - **Chiavi:** nessuna chiave segreta nel client o nel repository. Nel bundle ci sono solo URL e chiave anon di Supabase, che senza login non danno accesso a nulla (RLS).
 - **Endpoint protetti:** `/api/extract` e `/api/ai` richiedono il token di sessione Supabase valido (401 altrimenti); facoltativamente solo per le email in `ALLOWED_EMAILS`.
 - **Lettura dei link sicura:** solo http/https su porte standard, nessun indirizzo privato o locale (controllato a ogni redirect), timeout di 8 secondi, massimo 2 MB letti. Limite noto: un dominio potrebbe cambiare IP tra il controllo e la connessione (DNS rebinding); con endpoint dietro login è un rischio accettabile per un'app personale.
@@ -235,6 +236,6 @@ I test end-to-end coprono: salvataggio di note, link e file; persistenza dopo il
 - Il testo nelle immagini caricate dall'app (OCR) non viene letto (solo quelle inviate dal Comando dei caroselli); i PDF scansionati senza testo neppure. Dei PDF si leggono al massimo le prime 50 pagine.
 - Pagine molto dinamiche (contenuto caricato da JavaScript) danno solo titolo e descrizione.
 - La ricerca carica tutti gli elementi nel browser: va bene fino a qualche migliaia di elementi.
-- Le domande considerano al massimo i 12 elementi più pertinenti trovati per parole chiave: una domanda con parole diverse da quelle salvate può non trovarli (non c'è ricerca semantica).
+- Le domande inviano a Gemini le schede di tutto l'archivio fino a circa 220.000 caratteri (alcune centinaia di elementi): oltre, prima le più pertinenti per parole e poi le più recenti, e la chat dice quante ne ha consultate.
 - Per i link normali (non social) letti dall'app, se chiudi l'app durante "In elaborazione" l'elemento può restare in quello stato: usa "Rianalizza".
 - L'esportazione JSON non include i file caricati.

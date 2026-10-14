@@ -5,7 +5,7 @@
 import { LIMITS, TYPE_KEYS, STATUS_KEYS } from "./constants.js";
 
 export const COLUMNS = [
-  "id", "type", "url", "final_url", "title", "description", "note", "site_name", "image_url",
+  "id", "type", "url", "final_url", "title", "description", "note", "site_name", "author", "published_at", "image_url",
   "extracted_text", "text_source", "place", "categories", "tags", "status", "status_detail",
   "ai", "file_path", "file_name", "file_mime", "file_size", "created_at", "updated_at", "processed_at",
 ];
@@ -35,6 +35,8 @@ export function sanitizeItem(patch) {
   if ("status" in out && !STATUS_KEYS.includes(out.status)) out.status = "saved";
   if ("title" in out) out.title = clip(out.title, LIMITS.titleChars);
   if ("description" in out) out.description = clip(out.description, 4000);
+  if ("author" in out) out.author = clip(out.author, 200) || null;
+  if ("published_at" in out && (typeof out.published_at !== "string" || Number.isNaN(Date.parse(out.published_at)))) out.published_at = null;
   if ("note" in out) out.note = clip(out.note, LIMITS.noteChars);
   if ("extracted_text" in out) out.extracted_text = clip(out.extracted_text, LIMITS.textChars);
   if ("categories" in out) out.categories = cleanList(out.categories, 10);

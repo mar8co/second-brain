@@ -13,7 +13,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { detectType, extractUrl } from "../src/lib/detect.js";
-import { extractionPatch, hasContent, aiPayload, rebasePatch } from "../src/lib/enrich.js";
+import { extractionPatch, hasContent, aiPayload, aiFromDigest, rebasePatch } from "../src/lib/enrich.js";
 import { cleanList, sanitizeItem } from "../src/lib/item.js";
 import { aiConfigured, classifyWithAi } from "./ai.js";
 import { checkMedia, transcribeFiles } from "./media.js";
@@ -101,32 +101,38 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl, dea
 // caroselli letti slide per slide (server/social.js). Il tempo è limitato
 // dalla durata massima della funzione: resta margine per l'AI e il salvataggio.
 // `classify: false` quando l'utente ha disattivato l'AI automatica nell'app.
-export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000, classify = true }) {
+export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000, classify = true, apply = true, prevStatus = item.status }) {
   let patch = {};
   if (item.url) {
     try {
       const r = await readLink(item.url, { env, fetchImpl, deadline });
       patch = r.error
         ? { status: "saved", status_detail: r.error, processed_at: new Date().toISOString() }
-        : extractionPatch(item, r);
+        : extractionPatch(item, r, { prevStatus });
     } catch {
       patch = { status: "saved", status_detail: "Analisi non eseguita: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
     }
   }
   // L'AI ha il tempo che resta prima della durata massima della funzione (300 s).
-  return classify ? withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000 }) : patch;
+  return classify ? withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000, apply }) : patch;
 }
 
-async function withAi({ item, patch, known, env, fetchImpl, deadline }) {
+// apply=false: la scheda dell'AI si aggiorna, categorie e tag restano proposte.
+async function withAi({ item, patch, known, env, fetchImpl, deadline, apply = true }) {
   const cur = { ...item, ...patch };
   if (aiConfigured(env) && hasContent(cur)) {
     try {
       const r = await classifyWithAi({ env, item: aiPayload(cur), known, fetchImpl, deadline: Math.min(deadline ?? Infinity, Date.now() + 60_000) });
-      // Salvataggio senza app: le categorie e i tag dell'AI vengono assegnati
-      // subito (resta traccia in `ai.applied`, la scheda lo dice).
-      patch.ai = { summary: r.summary, categories: r.categories, tags: r.tags, model: r.model, generated_at: new Date().toISOString(), applied: true };
-      patch.categories = cleanList([...(cur.categories || []), ...r.categories], 10);
-      patch.tags = cleanList([...(cur.tags || []), ...r.tags]).map((t) => t.toLowerCase());
+      // Scheda di memoria dell'AI (riassunto, punti chiave, persone, parole
+      // chiave). Salvataggio senza app: le categorie e i tag dell'AI vengono
+      // assegnati subito (resta traccia in `ai.applied`, la scheda lo dice).
+      // Riletture automatiche (apply=false): resta il segno "assegnati dall'AI"
+      // se le categorie e i tag attuali li aveva già scelti lei.
+      patch.ai = aiFromDigest(r, { applied: apply || Boolean(item.ai?.applied) });
+      if (apply) {
+        patch.categories = cleanList([...(cur.categories || []), ...r.categories], 10);
+        patch.tags = cleanList([...(cur.tags || []), ...r.tags]).map((t) => t.toLowerCase());
+      }
     } catch (e) {
       patch.status_detail = [cur.status_detail, `AI non disponibile: ${e.message}`].filter(Boolean).join(" ");
     }

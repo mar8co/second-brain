@@ -228,7 +228,8 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 // Contenuto salvato: "messaggio inviato" (a destra), con anteprima.
 function ItemBubble({ item, onOpen }) {
   const title = displayTitle(item);
-  const source = item.site_name || (item.url ? displayHost(item.url) : item.file_name ? "File" : typeLabel(item.type));
+  const site = item.site_name || (item.url ? displayHost(item.url) : item.file_name ? "File" : typeLabel(item.type));
+  const source = item.author ? `${site} · ${item.author}` : site;
   const summary = item.ai?.summary || item.description || item.note || "";
   return (
     <div className="flex justify-end">
@@ -295,9 +296,12 @@ function QaBubbles({ msg, byId, onOpen }) {
           ) : r.kind === "insufficient" ? (
             <p>I tuoi contenuti non bastano per rispondere.{r.answer ? ` ${r.answer}` : ""}</p>
           ) : r.kind === "error" ? (
-            <p>Risposta AI non disponibile ({r.error}). Ecco i contenuti più vicini:</p>
+            <p>Risposta AI non disponibile ({r.error}).{maybe.length ? " Ecco i contenuti più vicini:" : " Riprova tra poco."}</p>
           ) : (
             <p>Ecco i contenuti più vicini alla tua domanda:</p>
+          )}
+          {r && !msg.pending && (r.kind === "answer" || r.kind === "insufficient") && r.total > r.consulted && (
+            <p className="mt-1.5 text-xs text-muted">Ho consultato {r.consulted} contenuti su {r.total}: prima quelli con le parole della domanda, poi i più recenti.</p>
           )}
           {r && !msg.pending && (
             <SourceList

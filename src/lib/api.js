@@ -51,5 +51,7 @@ export const api = {
   extract: (url, opts = {}) => post("/api/extract", { url, ...opts }, { timeoutMs: 295000, minTokenMs: opts.id ? 360_000 : 0 }),
   aiStatus: () => post("/api/ai", { action: "status" }, { timeoutMs: 10000 }),
   classify: (item, categories) => post("/api/ai", { action: "classify", item, categories }),
-  ask: (question, items) => post("/api/ai", { action: "ask", question, items }, { timeoutMs: 45000 }),
+  // items: contenuto completo dei più pertinenti; memory: schede di tutto l'archivio.
+  // total: elementi nell'archivio (le schede inviate possono essere meno).
+  ask: (question, items, memory = [], total = memory.length) => post("/api/ai", { action: "ask", question, items, memory, total }, { timeoutMs: 45000 }),
 };

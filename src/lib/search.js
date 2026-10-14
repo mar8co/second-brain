@@ -45,14 +45,22 @@ const FIELDS = [
   ["title", 6],
   ["tags", 5],
   ["categories", 5],
+  ["author", 5],
+  ["ai_keywords", 4],
+  ["ai_entities", 4],
   ["description", 3],
   ["note", 3],
   ["place", 4],
   ["url", 2],
   ["ai_summary", 2],
+  ["ai_points", 2],
   ["extracted_text", 1],
   ["file_name", 2],
 ];
+
+// Il campo `ai` è JSON libero nel database: si usano solo liste di testi.
+const asList = (v) => (Array.isArray(v) ? v : []);
+const texts = (v) => asList(v).filter((x) => typeof x === "string");
 
 function fieldText(item, field) {
   switch (field) {
@@ -63,6 +71,14 @@ function fieldText(item, field) {
       return item.place?.name || "";
     case "ai_summary":
       return item.ai?.summary || "";
+    // Scheda di memoria dell'AI: parole chiave (anche sinonimi), persone e
+    // organizzazioni, punti chiave.
+    case "ai_keywords":
+      return texts(item.ai?.keywords).join(" ");
+    case "ai_entities":
+      return texts(asList(item.ai?.entities).map((e) => e?.name)).join(" ");
+    case "ai_points":
+      return texts(item.ai?.points).join(" ");
     default:
       return item[field] || "";
   }

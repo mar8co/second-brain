@@ -5,19 +5,27 @@ import { MAX_UPLOAD_BYTES, parseMultipart } from "./media.js";
 
 const MAX_BODY = 256 * 1024;
 
-export function readJsonBody(req) {
+// `limit`: le domande (/api/ai) portano con sé le schede di tutto l'archivio.
+export function readJsonBody(req, limit = MAX_BODY) {
   // Vercel ha già fatto il parse del JSON.
   if (req.body && typeof req.body === "object") return Promise.resolve(req.body);
   return new Promise((resolve, reject) => {
-    let raw = "";
+    const chunks = [];
+    let size = 0;
+    let over = false;
     req.on("data", (c) => {
-      raw += c;
-      if (raw.length > MAX_BODY) {
-        reject(Object.assign(new Error("too_large"), { status: 413 }));
-        req.destroy();
+      if (over) return; // si legge il resto senza tenerlo: la risposta 413 deve arrivare
+      size += c.length;
+      if (size > limit) {
+        over = true;
+        chunks.length = 0;
+        return;
       }
+      chunks.push(c);
     });
     req.on("end", () => {
+      if (over) return reject(Object.assign(new Error("too_large"), { status: 413 }));
+      const raw = Buffer.concat(chunks).toString("utf8");
       try {
         resolve(raw ? JSON.parse(raw) : {});
       } catch {
@@ -47,26 +55,28 @@ function readRawBody(req, limit) {
   });
 }
 
-async function readBody(req, allowFiles) {
+async function readBody(req, allowFiles, maxBody) {
   const ct = String(req.headers["content-type"] || "");
   if (/^multipart\/form-data/i.test(ct)) {
     if (!allowFiles) throw Object.assign(new Error("bad_body"), { status: 400 });
     return parseMultipart(await readRawBody(req, MAX_UPLOAD_BYTES), ct);
   }
-  return readJsonBody(req);
+  return readJsonBody(req, maxBody);
 }
 
-export function nodeHandler(core, env = process.env, extra = {}) {
+// extra.maxBody: limite del corpo JSON per questo endpoint (predefinito 256 KB).
+export function nodeHandler(core, env = process.env, { maxBody, ...extra } = {}) {
   return async (req, res) => {
     let out;
     if (req.method !== "POST") {
       out = { status: 405, json: { error: "Metodo non consentito." } };
     } else {
       try {
-        const body = await readBody(req, Boolean(extra.allowFiles));
+        const body = await readBody(req, Boolean(extra.allowFiles), maxBody);
         out = await core({ authHeader: req.headers.authorization, body, env, ...extra });
       } catch (e) {
-        const error = e.status === 413 ? "File troppo grande (massimo 4 MB): per i video invia solo l'audio, per le slide riduci le immagini." : "Richiesta non valida.";
+        const tooLarge = extra.allowFiles ? "File troppo grande (massimo 4 MB): per i video invia solo l'audio, per le slide riduci le immagini." : "Richiesta troppo grande.";
+        const error = e.status === 413 ? tooLarge : "Richiesta non valida.";
         out = extra.allowFiles ? { status: e.status || 500, text: error } : { status: e.status || 500, json: { error } };
       }
     }
