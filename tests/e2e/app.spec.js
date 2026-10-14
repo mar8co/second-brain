@@ -37,6 +37,12 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   await page.goto("/archivio");
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Aggiungi", exact: true })).toHaveCount(0);
+  // Il titolo grande parte sulla stessa riga dell'icona Impostazioni.
+  const tit = await page.getByRole("heading", { level: 1 }).boundingBox();
+  const ing = await page.getByRole("button", { name: "Impostazioni" }).boundingBox();
+  expect(ing.y).toBeLessThan(tit.y + tit.height);
+  expect(ing.y + ing.height).toBeGreaterThan(tit.y);
+  expect(ing.x).toBeGreaterThan(tit.x + 100);
   const campo = await page.getByLabel("Cerca nell'archivio").boundingBox();
   const filtri = page.getByRole("button", { name: /^Filtri/ });
   const fb = await filtri.boundingBox();
@@ -475,15 +481,25 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const righe = page.locator("ul.righe > li");
   await expect(righe).toHaveCount(2);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ristoranti");
+  // Il titolo sta sulla riga dell'icona Impostazioni anche dentro un box.
+  const t2 = await page.getByRole("heading", { level: 1 }).boundingBox();
+  const g2 = await page.getByRole("button", { name: "Impostazioni" }).boundingBox();
+  expect(g2.y).toBeLessThan(t2.y + t2.height);
   await expect(righe.first()).toContainText("Bar San Calisto");
   const enzo = righe.filter({ hasText: "Da Enzo al 29" });
   await expect(enzo).toContainText("Via dei Vascellari 29, Roma");
-  // L'indirizzo è un link a Maps con nome e via (senza via ci sarebbe "Cerca su Maps").
+  // L'indirizzo con la via completa è il testo del link a Maps (nome e via nella ricerca).
   const mappa = enzo.getByRole("link", { name: /Via dei Vascellari 29, Roma/ });
   await expect(mappa).toHaveAttribute("href", "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Da Enzo al 29, Via dei Vascellari 29, Roma"));
-  await expect(righe.first().getByRole("link", { name: /Piazza di San Calisto, Roma/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Piazza%20di%20San%20Calisto%2C%20Roma$/);
+  // Con la sola città (senza via) il link dice "Cerca su Maps": mai "Roma" come testo del link.
+  await expect(righe.first().getByRole("link", { name: /Cerca su Maps/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Roma$/);
+  await expect(righe.first().getByRole("link", { name: /^Roma/ })).toHaveCount(0);
   await expect(enzo.getByRole("link", { name: /Apri su Guida di prova/ })).toHaveAttribute("href", `${FIX}/trastevere`);
   await expect(enzo.getByRole("link", { name: "Scheda" })).toBeVisible();
+  // Prima "Apri su …" e Scheda, sotto la via con il link a Maps.
+  const apri = await enzo.getByRole("link", { name: /Apri su Guida di prova/ }).boundingBox();
+  const via = await mappa.boundingBox();
+  expect(via.y).toBeGreaterThan(apri.y + apri.height - 1);
   await expect(page.getByText("Museo di Trastevere")).toHaveCount(0);
 
   // Eventi: prossimi per data, poi senza data, in fondo i passati in grigio.

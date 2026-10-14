@@ -272,7 +272,7 @@ describe("immagini e PDF salvati dall'app: letti dall'AI in background", () => {
       status_detail: null,
       categories: ["Ricette"],
     });
-    expect(db.writes[0].ai).toMatchObject({ v: 4, summary: "Ricetta della carbonara." });
+    expect(db.writes[0].ai).toMatchObject({ v: 5, summary: "Ricetta della carbonara." });
   });
 
   it("PDF scansionato: pagine lette; il titolo scelto dall'utente resta", async () => {

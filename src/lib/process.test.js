@@ -148,7 +148,7 @@ describe("scheda di memoria dell'AI", () => {
     classify.mockResolvedValueOnce(digest);
     const it = { id: "w", categories: ["Lavoro"], tags: [], status_detail: "Letto in parte: video lungo. AI non disponibile: Impossibile contattare il servizio AI." };
     const out = await classifyItem(it, { store, categories: [], apply: true });
-    expect(out.ai).toMatchObject({ v: 4, summary: "Workshop gratuito.", points: ["Mario Rossi organizza un workshop."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["corso"], applied: true });
+    expect(out.ai).toMatchObject({ v: 5, summary: "Workshop gratuito.", points: ["Mario Rossi organizza un workshop."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["corso"], applied: true });
     expect(out.categories).toEqual(["Lavoro", "Tecnologia"]);
     expect(out.status_detail).toBe("Letto in parte: video lungo.");
   });
@@ -160,7 +160,7 @@ describe("scheda di memoria dell'AI", () => {
     const out = await classifyItem(it, { store, categories: [], keepApplied: true });
     expect(store.updates[0]).not.toHaveProperty("categories");
     expect(store.updates[0]).not.toHaveProperty("status_detail");
-    expect(out.ai).toMatchObject({ v: 4, applied: true });
+    expect(out.ai).toMatchObject({ v: 5, applied: true });
   });
 
   it("elemento eliminato durante la rielaborazione: nessuna scrittura", async () => {

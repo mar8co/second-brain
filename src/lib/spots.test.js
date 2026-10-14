@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventsOf, formatEventDate, mapsUrl, restaurantsOf, todayISO } from "./spots.js";
+import { eventsOf, formatEventDate, hasStreet, mapsUrl, restaurantsOf, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -84,5 +84,16 @@ describe("mapsUrl", () => {
   });
   it("senza indirizzo cerca solo il nome", () => {
     expect(mapsUrl("Bar San Calisto", "")).toBe("https://www.google.com/maps/search/?api=1&query=Bar%20San%20Calisto");
+  });
+});
+
+describe("hasStreet", () => {
+  it("riconosce la via, il civico e non la sola città", () => {
+    expect(hasStreet("Via dei Vascellari 29, Roma")).toBe(true);
+    expect(hasStreet("Piazza di San Calisto, Roma")).toBe(true);
+    expect(hasStreet("Trastevere 12, Roma")).toBe(true);
+    expect(hasStreet("Roma")).toBe(false);
+    expect(hasStreet("Roma 00184")).toBe(false);
+    expect(hasStreet("")).toBe(false);
   });
 });

@@ -119,7 +119,7 @@ export function aiPayload(item) {
 // Versione della rielaborazione dell'AI: gli elementi con una versione
 // precedente vengono rielaborati di nuovo (v2: scheda di memoria; v3: posti;
 // v4: tipo dei posti e eventi, per i box Ristoranti ed Eventi).
-export const DIGEST_VERSION = 4;
+export const DIGEST_VERSION = 5;
 
 // Risposta della rielaborazione (server/ai.js) → campo `ai` dell'elemento.
 export function aiFromDigest(r, { applied = false, now = new Date() } = {}) {

@@ -640,7 +640,7 @@ describe("Comando Rapido con il link di un Reel", () => {
       categories: ["Ricette"],
     });
     // Scheda di memoria dell'AI, versione attuale.
-    expect(calls.update[0].ai).toMatchObject({ v: 4, summary: "Ricetta.", points: [], entities: [], keywords: [], applied: true });
+    expect(calls.update[0].ai).toMatchObject({ v: 5, summary: "Ricetta.", points: [], entities: [], keywords: [], applied: true });
   });
 
   it("autore del Reel scritto nel database e passato all'AI", async () => {
@@ -662,7 +662,7 @@ describe("Comando Rapido con il link di un Reel", () => {
     });
     await handleShare({ body: { token: TOKEN, text: "https://www.instagram.com/reel/C9abc/" }, env: { ...env, SUPABASE_URL: "https://x.supabase.co", SUPABASE_ANON_KEY: "anon" }, db, fetchImpl: net.fetchImpl });
     expect(calls.update[0]).toMatchObject({ author: "Mario Rossi (@mario.ai)", published_at: "2026-09-10T08:00:00.000Z" });
-    expect(calls.update[0].ai).toMatchObject({ v: 4, points: ["Mario Rossi (@mario.ai) organizza un workshop gratuito."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["intelligenza artificiale"] });
+    expect(calls.update[0].ai).toMatchObject({ v: 5, points: ["Mario Rossi (@mario.ai) organizza un workshop gratuito."], entities: [{ name: "Mario Rossi", kind: "persona" }], keywords: ["intelligenza artificiale"] });
     expect(prompts[0]).toContain('"autore":"Mario Rossi (@mario.ai)"');
     expect(prompts[0]).toContain("Ho preparato un workshop gratuito.");
   });
@@ -813,7 +813,7 @@ describe("lettura dall'app in background (modalità sincronizzata)", () => {
     const patch = db.writes[0].patch;
     expect(patch).not.toHaveProperty("categories");
     expect(patch).not.toHaveProperty("tags");
-    expect(patch.ai).toMatchObject({ v: 4, summary: "Ricetta.", categories: ["Ricette"] });
+    expect(patch.ai).toMatchObject({ v: 5, summary: "Ricetta.", categories: ["Ricette"] });
     expect(patch.ai.applied).toBeUndefined();
   });
 
@@ -826,7 +826,7 @@ describe("lettura dall'app in background (modalità sincronizzata)", () => {
     });
     await handleRead({ authHeader, body: { url: "https://www.instagram.com/reel/C9abc/", id: ID, ai: true, apply: false }, env: envAuth, fetchImpl: net.fetchImpl, db });
     const patch = db.writes[0].patch;
-    expect(patch.ai).toMatchObject({ v: 4, applied: true });
+    expect(patch.ai).toMatchObject({ v: 5, applied: true });
     expect(patch).not.toHaveProperty("categories");
     expect(patch).not.toHaveProperty("tags");
   });

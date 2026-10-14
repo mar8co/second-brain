@@ -86,7 +86,7 @@ function fakeGemini(prompt) {
       tags: ["roma"],
       places: [
         { name: "Da Enzo al 29", address: "Via dei Vascellari 29, Roma", kind: "ristorante" },
-        { name: "Bar San Calisto", address: "Piazza di San Calisto, Roma", kind: "ristorante" },
+        { name: "Bar San Calisto", address: "Roma", kind: "ristorante" },
         { name: "Museo di Trastevere", address: "", kind: "altro" },
       ],
       events: [
