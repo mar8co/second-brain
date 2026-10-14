@@ -217,12 +217,12 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await page.getByLabel("Cerca nell'archivio").fill("parmigiano");
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
-  // Stato in basso, a destra delle categorie: pieno verde se analizzato.
+  // Stato in basso, prima delle categorie: pieno verde se analizzato.
   const riga = page.locator("ul.righe li").first();
-  const tag = await riga.locator(".cartellino").last().boundingBox();
+  const tag = await riga.locator(".cartellino").first().boundingBox();
   const stato = riga.locator('[title="Analizzato"]');
   const pallino = await stato.boundingBox();
-  expect(pallino.x).toBeGreaterThan(tag.x + tag.width - 1);
+  expect(pallino.x + pallino.width).toBeLessThanOrEqual(tag.x + 1);
   expect(Math.abs(pallino.y + pallino.height / 2 - (tag.y + tag.height / 2))).toBeLessThan(6);
   await expect(stato.locator("i")).toHaveCSS("background-color", "rgb(34, 179, 94)");
 
