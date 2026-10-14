@@ -205,8 +205,23 @@ describe("AI", () => {
   it("sanitize: niente fonti → non sufficiente; tag minuscoli e unici", () => {
     expect(sanitizeAsk({ answer: "x", sufficient: true, sources: [] }, new Map()).sufficient).toBe(false);
     expect(sanitizeClassify({ summary: "s", categories: ["Ricette", "A", "B"], tags: ["Pasta", "pasta", "Roma"] })).toEqual({
-      summary: "s", points: [], entities: [], keywords: [], categories: ["Ricette", "A"], tags: ["pasta", "roma"],
+      summary: "s", points: [], entities: [], keywords: [], categories: ["Ricette", "A"], tags: ["pasta", "roma"], places: [],
     });
+  });
+
+  it("sanitize dei posti: nome obbligatorio, senza doppioni, al massimo 8", () => {
+    const places = [
+      { name: " Trattoria  Da Enzo ", address: "Via dei Vascellari 29, Roma" },
+      { name: "trattoria da enzo", address: "doppione" },
+      { name: "", address: "senza nome" },
+      { name: "Bar Senza Indirizzo" },
+      null,
+      ...Array.from({ length: 10 }, (_, i) => ({ name: `Posto ${i}`, address: "" })),
+    ];
+    const out = sanitizeClassify({ places }).places;
+    expect(out[0]).toEqual({ name: "Trattoria Da Enzo", address: "Via dei Vascellari 29, Roma" });
+    expect(out[1]).toEqual({ name: "Bar Senza Indirizzo", address: "" });
+    expect(out).toHaveLength(8);
   });
 
   it("sanitize della scheda di memoria: punti, entità e parole chiave puliti e limitati", () => {

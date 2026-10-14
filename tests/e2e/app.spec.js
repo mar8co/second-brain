@@ -18,7 +18,7 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; ingranag
   await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
   await expect(page.getByText("Modalità locale")).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
-  await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
+  await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio", "Mappa"]);
   await page.getByRole("button", { name: "Impostazioni" }).click();
   await expect(page).toHaveURL(/\/impostazioni$/);
   await expect(page.getByRole("button", { name: "Aggiungi", exact: true })).toHaveCount(0);
@@ -321,6 +321,48 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await page.reload();
   await expect(page.getByText("orari della palestra?")).toBeVisible();
   await page.getByRole("button", { name: "Fonte 1" }).first().click();
+  await expect(page).toHaveURL(/\/elemento\//);
+});
+
+test("mappa: posti citati in un contenuto, cercati una volta su OpenStreetMap, vicino a me e indicazioni", async ({ page, context, request }) => {
+  await page.route(/basemaps\.cartocdn\.com/, (r) => r.abort());
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: 41.8895, longitude: 12.4700 });
+  await addLink(page, `${FIX}/trastevere`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  const before = (await (await request.get(`${FIX}/geo-count`)).json()).calls;
+
+  await page.goto("/");
+  await page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("link", { name: "Mappa" }).click();
+  await expect(page).toHaveURL(/\/mappa$/);
+  await expect(page.getByRole("heading", { name: "Mappa" })).toBeVisible();
+  // Due posti trovati; quello che non esiste non compare.
+  await expect(page.getByText("2 posti")).toBeVisible({ timeout: 15000 });
+  await expect(page.locator(".pin")).toHaveCount(2);
+  await expect(page.getByText(/possono essere approssimative/)).toBeVisible();
+  await expect(page.getByText(/Cerco la posizione/)).toHaveCount(0);
+  expect((await (await request.get(`${FIX}/geo-count`)).json()).calls - before).toBe(3);
+
+  // Vicino a me: dal più vicino, con la distanza.
+  await page.getByRole("button", { name: "Vicino a me" }).click();
+  await expect(page.getByText("dal più vicino")).toBeVisible();
+  const righe = page.locator("ul.righe li");
+  await expect(righe.first()).toContainText("Bar San Calisto");
+  await expect(righe.first()).toContainText(/\d+ m/);
+
+  // Il posto toccato: da dove viene, indicazioni, apri il contenuto.
+  await righe.filter({ hasText: "Da Enzo al 29" }).getByRole("button").click();
+  const scelto = page.getByRole("region", { name: "Posto: Da Enzo al 29" });
+  await expect(scelto).toContainText("Da: Dove mangiare a Trastevere");
+  await expect(scelto.getByRole("link", { name: "Indicazioni" })).toHaveAttribute("href", /41\.8892/);
+  await expect(page.locator(".pin.scelto")).toHaveCount(1);
+
+  // Le posizioni restano salvate: nessuna nuova ricerca.
+  await page.reload();
+  await expect(page.getByText("2 posti")).toBeVisible();
+  expect((await (await request.get(`${FIX}/geo-count`)).json()).calls - before).toBe(3);
+  await righe.filter({ hasText: "Da Enzo al 29" }).getByRole("button").click();
+  await page.getByRole("button", { name: "Apri" }).click();
   await expect(page).toHaveURL(/\/elemento\//);
 });
 

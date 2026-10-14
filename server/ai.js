@@ -237,8 +237,12 @@ const CLASSIFY_SCHEMA = {
     keywords: { type: "ARRAY", items: { type: "STRING" } },
     categories: { type: "ARRAY", items: { type: "STRING" } },
     tags: { type: "ARRAY", items: { type: "STRING" } },
+    places: {
+      type: "ARRAY",
+      items: { type: "OBJECT", properties: { name: { type: "STRING" }, address: { type: "STRING" } }, required: ["name", "address"] },
+    },
   },
-  required: ["summary", "points", "entities", "keywords", "categories", "tags"],
+  required: ["summary", "points", "entities", "keywords", "categories", "tags", "places"],
 };
 
 export function buildClassifyPrompt(item, knownCategories) {
@@ -267,6 +271,7 @@ export function buildClassifyPrompt(item, knownCategories) {
     "- keywords: da 5 a 15 parole o brevi espressioni minuscole per ritrovare l'elemento, compresi sinonimi e termini generali che nel testo non compaiono (es. per un corso di intelligenza artificiale: \"intelligenza artificiale\", \"ia\", \"ai\", \"corso\", \"formazione\").",
     `- categories: 1 o 2 categorie, scelte in base all'ARGOMENTO di cui parla il contenuto (es. tassi dei conti deposito, investimenti, mutui, tasse → Finanza), non a chi potrebbe trovarlo utile. "Lavoro" solo per carriera, offerte di lavoro, colloqui o attività professionale dell'utente. Preferisci le categorie esistenti: ${JSON.stringify(knownCategories.slice(0, 40))}. Se nessuna descrive bene l'argomento, creane una nuova (breve, iniziale maiuscola).`,
     "- tags: da 2 a 6 tag brevi, minuscoli, in italiano (nomi propri invariati), utili a ritrovare l'elemento.",
+    "- places: i posti fisici che si possono visitare e di cui il contenuto parla (ristoranti, bar, negozi, musei, hotel, spiagge, parchi, sedi di eventi), per metterli su una mappa: { name, address } con address = via, quartiere e città quando si ricavano dai dati (anche dal post o dal profilo dell'autore), altrimenti stringa vuota. Non mettere città, regioni o nazioni da sole, né posti online. Al massimo 8; lista vuota se non ce ne sono.",
     "Il parlato in prima persona di un video è di norma dell'autore del post: in quel caso attribuisci a lui ciò che dice (es. \"Mario Rossi (@mario) organizza…\").",
     "Usa SOLO i dati forniti: niente fatti, date, prezzi o nomi che non ci sono.",
     `<elemento>${JSON.stringify(payload)}</elemento>`,
@@ -292,7 +297,17 @@ export function sanitizeClassify(out) {
     keywords: [...new Set(strArr(out?.keywords, 15, 60).map((s) => s.trim().toLowerCase()).filter(Boolean))],
     categories: strArr(out?.categories, 2, 40).map((s) => s.trim()).filter(Boolean),
     tags: [...new Set(strArr(out?.tags, 6, 40).map((s) => s.trim().toLowerCase()).filter(Boolean))],
+    places: sanitizePlaces(out?.places),
   };
+}
+
+function sanitizePlaces(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .filter((p) => p && typeof p.name === "string" && p.name.trim())
+    .map((p) => ({ name: p.name.replace(/\s+/g, " ").trim().slice(0, 120), address: str(p.address, 200).replace(/\s+/g, " ").trim() }))
+    .filter((p) => !seen.has(p.name.toLowerCase()) && seen.add(p.name.toLowerCase()))
+    .slice(0, 8);
 }
 
 // Usata anche dai salvataggi in background (server/share.js).

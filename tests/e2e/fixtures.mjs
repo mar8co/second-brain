@@ -11,6 +11,10 @@ const pages = {
     <meta property="og:description" content="Una ricetta estiva veloce.">
     <meta property="og:site_name" content="Cucina di prova"></head>
     <body><article><h1>Pasta al limone</h1><p>${LONG}</p><p>${LONG}</p></article></body></html>`,
+  "/trastevere": `<!doctype html><html lang="it"><head><title>Dove mangiare a Trastevere</title>
+    <meta property="og:title" content="Dove mangiare a Trastevere">
+    <meta property="og:site_name" content="Guida di prova"></head>
+    <body><article><h1>Dove mangiare a Trastevere</h1><p>${"Da Enzo al 29 in via dei Vascellari fa la carbonara migliore, poi un caffè al Bar San Calisto. ".repeat(12)}</p></article></body></html>`,
   "/accounts/login": `<html><head><title>Accedi</title></head><body>Accedi per vedere</body></html>`,
 };
 
@@ -56,6 +60,21 @@ function fakeGemini(prompt) {
     return { answer: "Gli elementi forniti non parlano di questo.", sufficient: false, sources: [] };
   }
   const el = prompt.slice(prompt.lastIndexOf("<elemento>"));
+  if (/Trastevere/i.test(el)) {
+    return {
+      summary: "Due posti dove mangiare a Trastevere.",
+      points: ["Da Enzo al 29 fa la carbonara.", "Il Bar San Calisto per il caffè."],
+      entities: [{ name: "Da Enzo al 29", kind: "luogo" }],
+      keywords: ["ristoranti", "roma", "trastevere"],
+      categories: ["Cibo"],
+      tags: ["roma"],
+      places: [
+        { name: "Da Enzo al 29", address: "Via dei Vascellari 29, Roma" },
+        { name: "Bar San Calisto", address: "Piazza di San Calisto, Roma" },
+        { name: "Posto che non esiste", address: "" },
+      ],
+    };
+  }
   if (/limone/i.test(el)) {
     return {
       summary: "Ricetta veloce di pasta al limone.",
@@ -68,6 +87,8 @@ function fakeGemini(prompt) {
   }
   return { summary: "", points: [], entities: [], keywords: [], categories: [], tags: [] };
 }
+
+let geoCalls = 0;
 
 http
   .createServer((req, res) => {
@@ -85,6 +106,14 @@ http
       });
       return;
     }
+    // Finto OpenStreetMap (Nominatim): conta le richieste.
+    if (req.url.startsWith("/search?")) {
+      geoCalls += 1;
+      const q = new URL(req.url, "http://x").searchParams.get("q") || "";
+      const hit = /Da Enzo/.test(q) ? { lat: "41.8892", lon: "12.4743", display_name: "Da Enzo al 29, Via dei Vascellari, Roma" } : /San Calisto/.test(q) ? { lat: "41.8888", lon: "12.4697", display_name: "Bar San Calisto, Roma" } : null;
+      return send(res, 200, "application/json", JSON.stringify(hit ? [hit] : []));
+    }
+    if (req.url === "/geo-count") return send(res, 200, "application/json", JSON.stringify({ calls: geoCalls }));
     if (req.url === "/reel-privato") return send(res, 302, "text/html", "", { location: "/accounts/login" });
     if (pages[req.url]) return send(res, 200, "text/html; charset=utf-8", pages[req.url]);
     send(res, 404, "text/html", "<title>404</title>");

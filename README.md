@@ -143,12 +143,21 @@ Insieme al testo si salvano **chi ha pubblicato il post** (`author`, es. "Mario 
 La grafica segue le linee guida comuni delle app di Marco (stile "manifesto svizzero"). In breve:
 
 - carattere Inter Tight, titoli enormi a peso 800, inchiostro nero sui colori pieni;
-- un colore per schermata, che colora anche la barra di stato: Chat rosa, Archivio bianco, Impostazioni giallo. Ogni elemento ha il suo colore fisso, nella riga dell'Archivio e nella sua scheda;
+- un colore per schermata, che colora anche la barra di stato: Chat rosa, Archivio bianco, Mappa verde, Impostazioni giallo. Ogni elemento ha il suo colore fisso, nella riga dell'Archivio e nella sua scheda;
 - barra in basso a pillola nera, righe sottili al posto delle scatole, pillole e cerchi;
 - niente sfumature né sfocature, niente finestre del sistema: le conferme sono schede dell'app e le eliminazioni si annullano dall'avviso "Annulla";
 - l'icona è un cervello nero su quadrato rosa (`public/icon.svg`; PNG con `npm run icons`).
 
 I token sono in `src/index.css` e `tailwind.config.js`, i colori delle pagine in `src/lib/colors.js`.
+
+### Mappa
+
+La terza scheda mostra su una cartina i posti salvati:
+
+- i link di Google Maps o Apple Maps, con le coordinate lette dal link;
+- i posti citati nei contenuti (ristoranti, bar, musei… di un Reel), che l'AI elenca nella scheda di memoria (`ai.places`).
+
+Per i posti senza coordinate la posizione si cerca dal nome e dall'indirizzo con OpenStreetMap (Nominatim, gratuito, senza chiave) tramite `/api/geo`, uno alla volta e al massimo uno al secondo, solo mentre la Mappa è aperta. Il risultato, anche "non trovato", si salva nell'elemento e non si cerca più. Queste posizioni sono approssimative e l'app lo dice. La cartina è di CARTO su dati OpenStreetMap, con l'attribuzione. "Vicino a me" usa la posizione del telefono solo nel browser, e "Indicazioni" apre Mappe di Apple su iPhone.
 
 ## Modello dei dati
 

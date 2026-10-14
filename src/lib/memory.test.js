@@ -8,7 +8,8 @@ describe("quali elementi rielaborare", () => {
   it("senza scheda o con la scheda della versione precedente", () => {
     expect(needsDigest({ ...reel, ai: null }, NOW)).toBe(true);
     expect(needsDigest({ ...reel, ai: { summary: "x", categories: [], tags: [] } }, NOW)).toBe(true);
-    expect(needsDigest({ ...reel, ai: { v: 2, summary: "x" } }, NOW)).toBe(false);
+    expect(needsDigest({ ...reel, ai: { v: 3, summary: "x" } }, NOW)).toBe(false);
+    expect(needsDigest({ ...reel, ai: { v: 2, summary: "x" } }, NOW)).toBe(true);
   });
   it("non durante la lettura, senza contenuto o prima che il link sia letto", () => {
     expect(needsDigest({ ...reel, status: "processing" }, NOW)).toBe(false);
@@ -84,7 +85,7 @@ describe("giro di manutenzione", () => {
     const items = [
       { ...reel, id: "a", ai: null },
       { ...reel, id: "b", extracted_text: null, description: "didascalia", processed_at: "2026-10-13T09:00:00Z" },
-      { ...reel, id: "c", ai: { v: 2 } },
+      { ...reel, id: "c", ai: { v: 3 } },
     ];
     const { how, log } = await run(items);
     expect(how).toBe("done");
@@ -238,7 +239,7 @@ describe("limite gratuito dell'AI durante le riletture", () => {
     const mem = new Map();
     return { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
   };
-  const unread = (id) => ({ ...reel, id, extracted_text: null, processed_at: "2026-10-13T09:00:00Z", ai: { v: 2, summary: "x" } });
+  const unread = (id) => ({ ...reel, id, extracted_text: null, processed_at: "2026-10-13T09:00:00Z", ai: { v: 3, summary: "x" } });
   const limited = (it) => ({ ...it, processed_at: "2026-10-14T09:59:00Z", status_detail: "Ho letto solo la didascalia, non il contenuto: trascrizione non riuscita (Limite gratuito del servizio AI raggiunto: riprova più tardi.)." });
 
   it("trascrizione fallita per il limite: niente altre letture di Apify per ore, il tentativo non conta", async () => {
@@ -286,7 +287,7 @@ describe("limite gratuito dell'AI durante le riletture", () => {
 
 describe("reanalysisReason: cosa tocca il tasto Rianalizza", () => {
   const now = Date.parse("2026-10-14T12:00:00Z");
-  const base = { id: "a", type: "link", status: "analyzed", created_at: "2026-10-14T10:00:00Z", processed_at: "2026-10-14T10:01:00Z", ai: { v: 2, summary: "x" } };
+  const base = { id: "a", type: "link", status: "analyzed", created_at: "2026-10-14T10:00:00Z", processed_at: "2026-10-14T10:01:00Z", ai: { v: 3, summary: "x" } };
   it("niente da fare per un elemento letto bene", () => {
     expect(reanalysisReason({ ...base, url: "https://esempio.it/x", extracted_text: "testo" }, now)).toBeNull();
     expect(reanalysisReason({ ...base, type: "note", note: "idea" }, now)).toBeNull();
