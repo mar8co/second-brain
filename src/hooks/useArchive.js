@@ -184,6 +184,8 @@ export function useArchive(store, { ai }) {
           upsert(fresh);
         }
         if (!needsReread(fresh)) return null;
+        // Immagini e PDF li legge solo il server (archivio sincronizzato).
+        if (fresh.file_path && store.mode !== "sync") return null;
         markAttempt();
         // Categorie e tag dell'AI assegnati solo se l'elemento non ne ha mai avuti.
         const out = await runProcess(fresh, { apply: !fresh.ai });

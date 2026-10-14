@@ -42,7 +42,7 @@ export const isImage = (mime) => /^image\//.test(mime || "");
 export async function extractFileText(file) {
   const mime = fileMime(file);
   if (isImage(mime)) {
-    return { text: null, source: null, status: "saved", detail: "Immagine conservata. Il testo nelle immagini non viene letto automaticamente: aggiungi una nota per ritrovarla." };
+    return { text: null, source: null, status: "saved", detail: "Immagine conservata. Con l'AI attiva viene letta e descritta in automatico; altrimenti aggiungi una nota per ritrovarla." };
   }
   if (/^text\/|json$/.test(mime)) {
     const text = (await file.text()).slice(0, LIMITS.textChars);
@@ -63,7 +63,7 @@ export async function extractFileText(file) {
       }
       text = text.replace(/[ \t]+/g, " ").trim().slice(0, LIMITS.textChars);
       if (!text) {
-        return { text: null, source: null, status: "partial", detail: "PDF senza testo selezionabile (probabilmente una scansione): non l'ho letto." };
+        return { text: null, source: null, status: "partial", detail: "PDF senza testo selezionabile (probabilmente una scansione): con l'AI attiva viene letto in automatico." };
       }
       const partial = doc.numPages > maxPages || text.length >= LIMITS.textChars;
       return {

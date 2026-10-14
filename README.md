@@ -136,7 +136,7 @@ Insieme al testo si salvano **chi ha pubblicato il post** (`author`, es. "Mario 
 ### Ricerca e domande
 
 - **Ricerca** nel browser su titolo, autore, tag, categorie, descrizione, nota, nome del posto, URL, scheda dell'AI (riassunto, punti chiave, persone, parole chiave) e testo estratto, ignorando accenti e con riconoscimento semplice di singolare/plurale. **Filtri** per tipo, stato, categoria, tag e intervallo di date.
-- **Chiedi**: Gemini riceve la **scheda breve di ogni elemento salvato** (riassunto, punti chiave, autore, parole chiave; per gli elementi ancora senza scheda, l'inizio di didascalia e testo) e il **contenuto completo** degli 8 elementi più pertinenti per parole. Così trova anche ciò che è scritto con parole diverse dalla domanda. Deve rispondere esclusivamente da questi dati, trattarli come dati e citare gli id usati; il server scarta le fonti che non erano tra quelle inviate. Se le informazioni non bastano lo dice. Senza AI vengono mostrati gli elementi più pertinenti per parole.
+- **Chat (come NotebookLM)**: la schermata principale è solo una conversazione con la propria memoria; i contenuti salvati stanno in Archivio (un link incollato nella chat viene salvato lì). Se tutto l'archivio ci sta (circa 240.000 caratteri), Gemini ne riceve il **contenuto completo** (didascalie, trascrizioni, testi, fino a 12.000 caratteri per elemento). Altrimenti prima sceglie dalle **schede brevi** di tutto l'archivio quali elementi leggere per intero (azione `select`), poi risponde con il contenuto completo di quelli (fino a 10, insieme alle fonti della risposta precedente e agli elementi con le parole della domanda) e le schede degli altri. La risposta usa esclusivamente questi dati, cita le fonti nel testo con [1], [2] e per ogni fonte riporta un breve passaggio copiato dal contenuto: il server rinumera le citazioni, scarta le fonti che non erano tra quelle inviate e tiene un passaggio solo se si trova davvero nel testo. Le domande di seguito ("e quanto costa?") portano con sé gli ultimi turni della conversazione (fino a 4, dell'ultima ora). Se le informazioni non bastano lo dice. Senza AI vengono mostrati gli elementi più pertinenti per parole.
 
 ## Modello dei dati
 
@@ -161,7 +161,7 @@ Tabella `items` (vedi `supabase/schema.sql`; la modalità locale usa la stessa f
 ## Privacy e sicurezza
 
 - **Dove stanno i dati:** sul tuo progetto Supabase (database e file privati) oppure, in modalità locale, solo nel browser.
-- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; i link dei social (solo l'indirizzo del post) vanno ad Apify, se configurato; con l'AI attiva, titolo, note, estratti e i media da trascrivere vengono inviati a Google Gemini, e ogni domanda nella chat invia la scheda breve di tutti gli elementi salvati (compreso l'inizio delle note). Nient'altro.
+- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; i link dei social (solo l'indirizzo del post) vanno ad Apify, se configurato; con l'AI attiva, titolo, note, estratti e i media da trascrivere vengono inviati a Google Gemini, le immagini e i PDF scansionati caricati dall'app vengono letti da Gemini, e ogni domanda nella chat invia il contenuto degli elementi salvati (tutto l'archivio se ci sta, altrimenti i più pertinenti per intero e una scheda breve degli altri, note comprese). Nient'altro.
 - **Chiavi:** nessuna chiave segreta nel client o nel repository. Nel bundle ci sono solo URL e chiave anon di Supabase, che senza login non danno accesso a nulla (RLS).
 - **Endpoint protetti:** `/api/extract` e `/api/ai` richiedono il token di sessione Supabase valido (401 altrimenti); facoltativamente solo per le email in `ALLOWED_EMAILS`.
 - **Lettura dei link sicura:** solo http/https su porte standard, nessun indirizzo privato o locale (controllato a ogni redirect), timeout di 8 secondi, massimo 2 MB letti. Limite noto: un dominio potrebbe cambiare IP tra il controllo e la connessione (DNS rebinding); con endpoint dietro login è un rischio accettabile per un'app personale.
@@ -233,9 +233,9 @@ I test end-to-end coprono: salvataggio di note, link e file; persistenza dopo il
 
 - La trascrizione dal link funziona solo con post pubblici e con `APIFY_TOKEN` configurato; i crediti gratuiti di Apify bastano per un numero limitato di post al mese. Nessuna lettura di contenuti dietro login.
 - I video più lunghi di qualche minuto possono non finire entro i 300 secondi della function: la scheda lo dice e si può rianalizzare.
-- Il testo nelle immagini caricate dall'app (OCR) non viene letto (solo quelle inviate dal Comando dei caroselli); i PDF scansionati senza testo neppure. Dei PDF si leggono al massimo le prime 50 pagine.
+- Le immagini e i PDF scansionati caricati dall'app vengono letti dall'AI (testo e descrizione) solo con l'AI attiva e l'archivio sincronizzato; in modalità locale no. Dei PDF con testo si leggono al massimo le prime 50 pagine.
 - Pagine molto dinamiche (contenuto caricato da JavaScript) danno solo titolo e descrizione.
 - La ricerca carica tutti gli elementi nel browser: va bene fino a qualche migliaia di elementi.
-- Le domande inviano a Gemini le schede di tutto l'archivio fino a circa 220.000 caratteri (alcune centinaia di elementi): oltre, prima le più pertinenti per parole e poi le più recenti, e la chat dice quante ne ha consultate.
+- Le domande inviano a Gemini il contenuto completo di tutto l'archivio fino a circa 240.000 caratteri; oltre, l'AI sceglie dalle schede brevi (fino a circa 200.000 caratteri, alcune centinaia di elementi) quali leggere per intero, e la chat dice quanti contenuti ha consultato se non sono tutti.
 - Per i link normali (non social) letti dall'app, se chiudi l'app durante "In elaborazione" l'elemento può restare in quello stato: usa "Rianalizza".
 - L'esportazione JSON non include i file caricati.

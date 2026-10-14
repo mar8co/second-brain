@@ -55,6 +55,22 @@ describe("lettura del link dall'app", () => {
     expect(local.updates.at(-1)).not.toHaveProperty("extracted_text");
   });
 
+  it("immagine salvata dall'app: con l'AI la legge il server, senza AI o in locale no", async () => {
+    const photo = { id: item.id, type: "image", file_path: "u/x/foto.jpg", file_mime: "image/jpeg", status: "saved", categories: [], tags: [] };
+    extract.mockClear();
+    extract.mockResolvedValueOnce({ background: true });
+    const sync = fakeStore("sync", [{ ...photo, status: "analyzed", extracted_text: "Locandina" }]);
+    const out = await processItem(photo, { store: sync, onUpdate: () => {}, ai: true, categories: ["Eventi"], wait: async () => ({ ...photo, status: "analyzed", extracted_text: "Locandina" }) });
+    expect(extract).toHaveBeenLastCalledWith(null, { id: photo.id, ai: true, categories: ["Eventi"], prev_status: "saved", file: true });
+    expect(sync.updates[0]).toEqual({ status: "processing", status_detail: "Lettura dell'immagine in corso…" });
+    expect(out.extracted_text).toBe("Locandina");
+    extract.mockClear();
+    await processItem(photo, { store: fakeStore("sync", []), onUpdate: () => {}, ai: false });
+    await processItem(photo, { store: fakeStore("local", []), onUpdate: () => {}, ai: true });
+    await processItem({ ...photo, extracted_text: "già letta" }, { store: fakeStore("sync", []), onUpdate: () => {}, ai: true });
+    expect(extract).not.toHaveBeenCalled();
+  });
+
   it("attesa oltre il limite: stato finale scritto dall'app, la scheda propone Rianalizza", async () => {
     extract.mockResolvedValueOnce({ background: true });
     let t = 0;

@@ -3,11 +3,12 @@
 //    al salvataggio) o con la scheda della versione precedente;
 //  - rilegge gli elementi rimasti "in elaborazione" (lavoro interrotto), i
 //    post social salvati prima della lettura completa (solo didascalia),
-//    quelli la cui lettura non è riuscita per un motivo momentaneo e quelli
-//    letti prima che si salvasse chi li ha pubblicati.
+//    quelli la cui lettura non è riuscita per un motivo momentaneo, quelli
+//    letti prima che si salvasse chi li ha pubblicati e le immagini (o i PDF
+//    senza testo) che l'AI non ha ancora letto.
 // Un elemento alla volta, con una pausa, per restare nei limiti gratuiti.
 
-import { DIGEST_VERSION, hasContent, withoutAiFailure } from "./enrich.js";
+import { DIGEST_VERSION, hasContent, unreadFile, withoutAiFailure } from "./enrich.js";
 
 // Da questo momento i post social vengono trascritti e letti dal solo link.
 export const FULL_READING_SINCE = "2026-10-13T11:00:00Z";
@@ -35,10 +36,14 @@ const TEMPORARY = /Limite gratuito|sovraccaric|Errore temporaneo|Impossibile con
 
 // Perché rileggere un elemento: "stale" (lavoro interrotto), "temporary"
 // (lettura non riuscita per poco), "old" (solo didascalia, letto prima della
-// trascrizione), "author" (manca chi l'ha pubblicato); null se non serve.
+// trascrizione), "author" (manca chi l'ha pubblicato), "file" (immagine o PDF
+// senza testo non ancora letto dall'AI); null se non serve.
 export function rereadReason(item, now = Date.now()) {
-  if (!item.url || item.file_path) return null;
-  if (item.status === "processing") return now - time(item.updated_at) > STALE_MS ? "stale" : null;
+  if (item.status === "processing") return (item.url || item.file_path) && now - time(item.updated_at) > STALE_MS ? "stale" : null;
+  // Immagini e PDF senza testo salvati prima che l'AI li leggesse, o la cui
+  // lettura non è riuscita.
+  if (item.file_path) return unreadFile(item) ? "file" : null;
+  if (!item.url) return null;
   if (!isSocialLink(item.url) || !item.processed_at) return null;
   if (!item.extracted_text) {
     // L'avviso di una rielaborazione dell'AI non riuscita non conta qui.
@@ -57,7 +62,7 @@ export const needsReread = (item, now = Date.now()) => Boolean(rereadReason(item
 // limitati): al massimo 3 per elemento, contate su questo dispositivo; una
 // sola per aggiungere l'autore.
 export const MAX_AUTO_REREADS = 3;
-export const rereadLimit = (reason) => (reason === "author" ? 1 : MAX_AUTO_REREADS);
+export const rereadLimit = (reason) => (reason === "author" ? 1 : reason === "file" ? 2 : MAX_AUTO_REREADS);
 
 // `canReread(item)`: la rilettura può ancora avvenire (limiti non raggiunti).
 export function needsDigest(item, now = Date.now(), canReread = () => true) {

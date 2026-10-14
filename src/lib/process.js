@@ -6,7 +6,7 @@
 // categorie e tag dell'AI vengono assegnati (con traccia in `ai.applied`).
 
 import { api } from "./api.js";
-import { aiFromDigest, aiPayload, extractionPatch, hasContent, withoutAiFailure } from "./enrich.js";
+import { aiFromDigest, aiPayload, extractionPatch, hasContent, unreadFile, withoutAiFailure } from "./enrich.js";
 
 export { aiPayload, extractionPatch };
 
@@ -67,17 +67,19 @@ export async function waitForServer(id, { store, onUpdate, everyMs = 4000, maxMs
 // categorie e tag dell'AI restano proposte, quelli dell'utente non cambiano.
 export async function processItem(item, { store, onUpdate, ai, categories = [], apply = true, wait = waitForServer }) {
   let cur = item;
-  if (item.url && !item.file_path) {
+  // Immagini e PDF senza testo: con l'AI e l'archivio sincronizzato li legge il server.
+  const file = ai && store.mode === "sync" ? unreadFile(item) : null;
+  if ((item.url && !item.file_path) || file) {
     // Stato prima della nuova lettura: se la lettura è peggiore resta quello.
     const prevStatus = item.status;
-    cur = await store.update(item.id, { status: "processing", status_detail: null });
+    cur = await store.update(item.id, { status: "processing", status_detail: file ? (file === "image" ? "Lettura dell'immagine in corso…" : "Lettura del PDF in corso…") : null });
     onUpdate(cur);
     let patch;
     try {
-      // Modalità sincronizzata: per i post social il server lavora in
-      // background, scrive lui il risultato (AI compresa) e qui si aspetta.
-      const opts = store.mode === "sync" ? { id: item.id, ai: Boolean(ai), categories, prev_status: prevStatus, ...(apply ? {} : { apply: false }) } : {};
-      const r = await api.extract(item.url, opts);
+      // Modalità sincronizzata: per i post social e i file il server lavora
+      // in background, scrive lui il risultato (AI compresa) e qui si aspetta.
+      const opts = store.mode === "sync" ? { id: item.id, ai: Boolean(ai), categories, prev_status: prevStatus, ...(apply ? {} : { apply: false }), ...(file ? { file: true } : {}) } : {};
+      const r = await api.extract(file ? null : item.url, opts);
       if (r?.background) {
         const done = await wait(item.id, { store, onUpdate });
         if (done && done.status !== "processing") return done;
@@ -95,7 +97,7 @@ export async function processItem(item, { store, onUpdate, ai, categories = [], 
       } else patch = extractionPatch(cur, r, { prevStatus });
     } catch (e) {
       patch = {
-        status: "saved",
+        status: file && prevStatus === "partial" ? "partial" : "saved",
         status_detail: `Analisi non eseguita: ${e.message} Puoi riprovare dalla scheda.`,
         processed_at: new Date().toISOString(),
       };

@@ -100,19 +100,30 @@ function prompt(kind) {
       "- slides: array vuoto.",
     ].join("\n");
   }
+  if (kind === "image") {
+    return [
+      "Questa è un'immagine salvata dall'utente (foto, screenshot, locandina, ricetta, scontrino…): leggila e descrivila perché possa ritrovarla e farci domande.",
+      ...common,
+      "- transcript: tutto il testo leggibile nell'immagine, nella lingua originale e nell'ordine di lettura; poi, dopo \"Descrizione:\", una descrizione precisa di ciò che si vede: soggetti, oggetti, prodotti e marche, luoghi, contesto. Non riconoscere le persone dal volto: nominale solo se il nome è scritto nell'immagine.",
+      "- slides: array vuoto.",
+    ].join("\n");
+  }
   return [
-    "Queste immagini (o pagine del PDF) sono le slide di un carosello, nell'ordine in cui sono state inviate.",
-    "Leggi tutto il testo di ogni slide, nella lingua originale, rispettando l'ordine di lettura.",
+    kind === "pages"
+      ? "Queste sono le pagine di un PDF salvato dall'utente, in ordine (probabilmente una scansione)."
+      : "Queste immagini (o pagine del PDF) sono le slide di un carosello, nell'ordine in cui sono state inviate.",
+    `Leggi tutto il testo di ogni ${kind === "pages" ? "pagina" : "slide"}, nella lingua originale, rispettando l'ordine di lettura.`,
     ...common,
-    "- slides: un elemento per ogni immagine o pagina, con il testo di quella slide (stringa vuota se non contiene testo). Se una slide è solo una foto, descrivila in una frase tra parentesi quadre.",
+    "- slides: un elemento per ogni immagine o pagina, con il suo testo (stringa vuota se non contiene testo). Se una slide o pagina è solo una foto, descrivi in una o due frasi tra parentesi quadre cosa mostra (soggetti, prodotti, luoghi).",
     "- transcript: stringa vuota.",
   ].join("\n");
 }
 
 function toText(kind, out) {
-  if (kind === "video") return String(out?.transcript || "").trim();
+  if (kind === "video" || kind === "image") return String(out?.transcript || "").trim();
   const slides = Array.isArray(out?.slides) ? out.slides.filter((s) => typeof s === "string") : [];
-  return slides.map((s, i) => `Slide ${i + 1}: ${s.trim()}`).join("\n\n").trim();
+  const label = kind === "pages" ? "Pagina" : "Slide";
+  return slides.map((s, i) => `${label} ${i + 1}: ${s.trim()}`).join("\n\n").trim();
 }
 
 // Valore di una stringa JSON anche se la risposta è stata interrotta a metà.
@@ -168,6 +179,14 @@ export async function transcribeFiles({ env, kind, files, fetchImpl, deadline })
     }
     throw e;
   }
+}
+
+// File salvato nell'archivio (immagine o PDF senza testo) → { title, text, textSource, model }.
+// kind: "image" | "pages".
+export async function readStoredFile({ env, kind, mime, data, fetchImpl = fetch, deadline = Date.now() + 150_000 }) {
+  const part = data.length <= INLINE_MAX ? { inline_data: { mime_type: mime, data: data.toString("base64") } } : await uploadToGemini({ env, data, mime, fetchImpl, deadline });
+  const r = await readWithGemini({ env, kind, parts: [part], fetchImpl, timeoutMs: 90_000, deadline });
+  return { ...r, textSource: kind === "image" ? "testo e descrizione dell'immagine letti dall'AI" : "testo del PDF letto dall'AI" };
 }
 
 // https://www.youtube.com/shorts/ID, youtu.be/ID, watch?v=ID → URL canonico, altrimenti null.

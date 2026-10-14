@@ -329,7 +329,8 @@ function Inline({ text, count, onCite }) {
         </Fragment>
       );
     }
-    return <Fragment key={i}>{part}</Fragment>;
+    // Niente spazio tra la parola e la citazione che la segue.
+    return <Fragment key={i}>{/^\[\d/.test(parts[i + 1] || "") ? part.trimEnd() : part}</Fragment>;
   });
 }
 
