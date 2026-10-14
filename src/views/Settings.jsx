@@ -1,4 +1,5 @@
-// Impostazioni: archivio (rianalizza, aggiungi), modalità dati, AI, esportazione, aggiunta da iPhone.
+// Impostazioni: archivio (rianalizza, aggiungi), AI, salvataggio rapido da iPhone, dati e
+// account; il resto (privacy, installazione) in "Informazioni e privacy", chiuso.
 import { Plus, RotateCw } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import QuickShare from "../components/QuickShare.jsx";
@@ -50,32 +51,10 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
             Aggiungi
           </button>
         </div>
-        <p className="micro text-[0.8rem]">Aggiungi salva un nuovo contenuto. Rianalizza rilegge e rielabora con l'AI i contenuti non ancora analizzati bene.</p>
+        <p className="micro text-[0.8rem]">Rianalizza rilegge con l'AI i contenuti non ancora analizzati bene.</p>
       </Section>
 
-      <Section title="Dove sono i tuoi dati">
-        {syncMode ? (
-          <>
-            <p>Sincronizzati sul tuo progetto <strong className="font-extrabold">Supabase</strong> (database e file privati), visibili solo al tuo account.</p>
-            <p className="micro text-[0.8rem]">Accesso come {session?.user?.email}</p>
-            <button type="button" className="bottone rosso" onClick={signOut}>
-              Esci
-            </button>
-          </>
-        ) : (
-          <p><strong className="font-extrabold">Modalità locale:</strong> tutto resta in questo browser (IndexedDB). Niente sincronizzazione tra dispositivi e niente backup: se cancelli i dati del sito li perdi. Esporta spesso.</p>
-        )}
-        <p className="text-tenue">Per leggere i link, l'indirizzo viene aperto dal server dell'app (Vercel), che legge solo dati pubblici.</p>
-      </Section>
-
-      <Section title="AI (Google Gemini)">
-        {aiStatus.ai === null ? (
-          <p className="text-tenue">Verifico…</p>
-        ) : aiStatus.ai ? (
-          <p>Attiva sul server (modello {aiStatus.model}). La chiave non è mai inviata all'app.</p>
-        ) : (
-          <p>Non configurata{aiStatus.error ? ` (${aiStatus.error})` : ""}. L'archivio, la ricerca e i filtri funzionano lo stesso.</p>
-        )}
+      <Section title="AI">
         <button
           type="button"
           role="switch"
@@ -86,24 +65,12 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
         >
           <span>
             <b className="block font-extrabold tracking-[-0.02em]">Rielabora con l'AI</b>
-            <span className="micro">Scheda, categorie e tag dei contenuti</span>
+            <span className="micro">
+              {aiStatus.ai === null ? "Verifico…" : aiStatus.ai ? "Scheda, categorie e tag dei contenuti" : "Non configurata: l'archivio funziona lo stesso"}
+            </span>
           </span>
           <i aria-hidden="true" />
         </button>
-        <p className="text-tenue">
-          Quando la usi, il testo degli elementi da rielaborare e i file da leggere (immagini e PDF senza testo, come le scansioni) vengono inviati a Google. Ogni domanda nella
-          chat invia il contenuto di tutti gli elementi salvati (titolo, autore, note, testo); se l'archivio è molto grande, il
-          contenuto completo dei più pertinenti e una scheda breve degli altri. L'uso dell'API Gemini può avere costi o limiti secondo il tuo piano Google: non è un servizio gratuito garantito
-          né illimitato.
-        </p>
-      </Section>
-
-      <Section title="Salvare da iPhone">
-        <p><strong className="font-extrabold">Installa l'app:</strong> in Safari tocca Condividi → “Aggiungi alla schermata Home”.</p>
-        <p>
-          <strong className="font-extrabold">Più veloce:</strong> copia il link (es. da Instagram: ··· → Copia link), apri Second Brain e incollalo nella chat.
-        </p>
-        {!syncMode && <p className="text-tenue">Il salvataggio rapido senza aprire l'app richiede la modalità sincronizzata (Supabase).</p>}
       </Section>
 
       {syncMode && (
@@ -112,12 +79,52 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
         </Section>
       )}
 
-      <Section title="Backup">
-        <p>Scarica tutto l'archivio (senza i file caricati) in formato JSON.</p>
+      <Section title="Dati e account">
         <button type="button" className="bottone chiaro" onClick={exportJson} disabled={!archive.items.length}>
           Esporta archivio <span className="num">({archive.items.length})</span>
         </button>
+        {syncMode ? (
+          <>
+            <p className="micro text-[0.8rem]">Accesso come {session?.user?.email}</p>
+            <button type="button" className="bottone rosso" onClick={signOut}>
+              Esci
+            </button>
+          </>
+        ) : (
+          <p className="text-tenue"><strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser: se cancelli i dati del sito li perdi. Esporta spesso.</p>
+        )}
       </Section>
+
+      <details className="group mt-6 border-y-[1.5px] border-inchiostro">
+        <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 py-2 text-[0.95rem] font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden">
+          <span>Informazioni e privacy</span>
+          <span aria-hidden="true" className="text-[1.3rem] font-bold leading-none">
+            <span className="group-open:hidden">+</span>
+            <span className="hidden group-open:inline">−</span>
+          </span>
+        </summary>
+        <div className="space-y-3 pb-5 text-[0.9rem] font-medium leading-snug">
+          <p>
+            <strong className="font-extrabold">Dove sono i dati.</strong>{" "}
+            {syncMode
+              ? "Sincronizzati sul tuo progetto Supabase (database e file privati), visibili solo al tuo account."
+              : "In questo browser (IndexedDB), senza sincronizzazione né backup."}
+          </p>
+          <p>Per leggere un link, il suo indirizzo viene aperto dal server dell'app (Vercel), che legge solo dati pubblici.</p>
+          <p>
+            <strong className="font-extrabold">AI (Google Gemini).</strong>{" "}
+            {aiStatus.ai ? `Attiva sul server (modello ${aiStatus.model}): la chiave non è mai inviata all'app.` : `Non configurata${aiStatus.error ? ` (${aiStatus.error})` : ""}.`}{" "}
+            Quando la usi, il testo degli elementi da rielaborare e i file da leggere (immagini e PDF senza testo) vengono inviati a Google. Ogni domanda nella chat invia a Google il
+            contenuto degli elementi salvati (se l'archivio è molto grande, solo dei più pertinenti e una scheda breve degli altri). L'uso dell'API Gemini può avere costi o limiti
+            secondo il tuo piano Google: non è un servizio gratuito garantito né illimitato.
+          </p>
+          <p>
+            <strong className="font-extrabold">Installare l'app.</strong> In Safari tocca Condividi → “Aggiungi alla schermata Home”. Per salvare un link copialo (da Instagram: ··· → Copia link) e
+            incollalo nella chat
+            {syncMode ? ", oppure usa il salvataggio rapido qui sopra." : "; il salvataggio rapido senza aprire l'app richiede la modalità sincronizzata."}
+          </p>
+        </div>
+      </details>
     </Page>
   );
 }

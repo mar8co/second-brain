@@ -61,12 +61,8 @@ export default function QuickShare({ toast }) {
   return (
     <div className="space-y-2.5">
       <p>
-        Con un Comando Rapido il link viene salvato <strong className="font-extrabold">senza aprire l'app</strong>: il server lo legge e l'AI assegna categorie e tag
-        in background. Ti serve un codice personale.
-      </p>
-      <p>
-        Reel, TikTok, video di Facebook, YouTube e Shorts vengono <strong className="font-extrabold">trascritti</strong> e i caroselli <strong className="font-extrabold">letti slide per
-        slide</strong> a partire dal solo link (post pubblici). Può servire qualche minuto.
+        Salva un link <strong className="font-extrabold">senza aprire l'app</strong>: serve un codice personale e un Comando Rapido. Il server legge il link (Reel, TikTok, video e
+        caroselli pubblici) e l'AI assegna categorie e tag in background.
       </p>
       {error && <ErrorBox>{error}</ErrorBox>}
       {token ? (

@@ -132,7 +132,7 @@ export default function Archive({ archive, query, navigate, openItem }) {
         )}
 
         {!loading && (
-          <h2 className="sezione !mt-3.5">
+          <h2 className="sezione !mt-3.5 !border-b-0 !pb-0">
             <span className="flex min-w-0 items-center gap-2">
               {indietro && (
                 <button type="button" className="pillola" onClick={indietro}>
