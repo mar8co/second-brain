@@ -4,6 +4,12 @@ import { expect, test } from "@playwright/test";
 const FIX = "http://127.0.0.1:4599";
 
 // Ogni test parte da un archivio locale vuoto (IndexedDB nuovo per contesto).
+// L'Archivio parte a box; gli altri test lo vogliono in lista (solo il test
+// "a box" parte dalla vista di partenza).
+test.beforeEach(async ({ page }, info) => {
+  if (info.title.includes("a box")) return;
+  await page.addInitScript(() => window.localStorage.setItem("sb-vista", "lista"));
+});
 
 async function addLink(page, url, note) {
   await page.goto("/aggiungi");
@@ -397,4 +403,50 @@ test("manifest PWA e icone", async ({ request }) => {
   for (const p of ["/favicon.svg", "/apple-touch-icon.png", "/icons/icon-192.png", "/icons/icon-512.png"]) {
     expect((await request.get(p)).ok(), p).toBeTruthy();
   }
+});
+
+test("Archivio a box: una scatola per categoria, dentro le copertine; Vista passa a lista", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/aggiungi");
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel(/^Titolo/).fill("Idea regalo per Giulia");
+  await page.getByLabel("Testo").fill("Lampada da lettura in ottone");
+  await page.getByRole("textbox", { name: "Categorie" }).fill("Acquisti");
+  await page.getByRole("textbox", { name: "Categorie" }).press("Enter");
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
+
+  // Di partenza: box, uno per categoria, con il numero dei contenuti.
+  await page.goto("/archivio");
+  const vista = page.getByRole("group", { name: "Vista" });
+  await expect(vista.getByRole("button", { name: "Box" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Ricette, 1 contenuto" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
+  await expect(page.locator("ul.righe")).toHaveCount(0);
+  await expect(page.getByText(/^\d+ categorie$/)).toBeVisible();
+
+  // Dentro un box: i contenuti della categoria, e "Categorie" per tornare indietro.
+  await page.getByRole("button", { name: "Ricette, 1 contenuto" }).click();
+  await expect(page).toHaveURL(/category=Ricette/);
+  await expect(page.getByText("1 elemento")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toBeVisible();
+  await expect(page.getByText("Idea regalo per Giulia")).toHaveCount(0);
+
+  // Vista Lista: la lista di sempre, e la scelta resta dopo il ricaricamento.
+  await vista.getByRole("button", { name: "Lista" }).click();
+  await expect(page.locator("ul.righe li")).toHaveCount(1);
+  await page.reload();
+  await expect(vista.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Tutte", exact: true })).toBeVisible();
+
+  // Di nuovo a box: "Categorie" riporta a tutte le scatole.
+  await vista.getByRole("button", { name: "Box" }).click();
+  await page.getByRole("button", { name: "Categorie", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
+
+  // Ricerca: i box mostrano solo ciò che corrisponde.
+  await page.getByLabel("Cerca nell'archivio").fill("lampada");
+  await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ricette, 1 contenuto" })).toHaveCount(0);
 });

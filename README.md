@@ -143,6 +143,7 @@ Insieme al testo si salvano **chi ha pubblicato il post** (`author`, es. "Mario 
 La grafica segue le linee guida comuni delle app di Marco (stile "manifesto svizzero"). In breve:
 
 - carattere Inter Tight, titoli enormi a peso 800, inchiostro nero sui colori pieni;
+- **Archivio a box o in lista**: di partenza una scatola colorata per categoria, con le copertine dei contenuti dentro e quanti sono (un contenuto con più categorie sta in ognuna; chi non ne ha sta in "Senza categoria"); toccandola si vedono tutti i contenuti della categoria in griglia. Il pulsante Box / Lista cambia vista e la scelta resta sul telefono. Ricerca e filtri valgono in entrambe;
 - un colore per schermata, che colora anche la barra di stato: Chat rosa, Archivio bianco, Mappa verde, Impostazioni giallo. Ogni elemento ha il suo colore fisso, nella riga dell'Archivio e nella sua scheda;
 - barra in basso a pillola nera, righe sottili al posto delle scatole, pillole e cerchi;
 - niente sfumature né sfocature, niente finestre del sistema: le conferme sono schede dell'app e le eliminazioni si annullano dall'avviso "Annulla";

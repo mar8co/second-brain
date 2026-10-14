@@ -11,9 +11,20 @@ export const PAGE = {
 
 export const ITEM_COLORS = ["var(--giallo)", "var(--grigio)", "var(--verde)", "#ffffff", "var(--arancio)", "var(--sabbia)", "var(--rosa)"];
 
-export function itemColor(item) {
-  const id = String(item?.id || "");
+function pick(key, palette) {
+  const s = String(key || "");
   let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return ITEM_COLORS[h % ITEM_COLORS.length];
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return palette[h % palette.length];
+}
+
+export function itemColor(item) {
+  return pick(item?.id, ITEM_COLORS);
+}
+
+// Ogni categoria ha il suo colore, sempre lo stesso; mai il bianco, così le
+// scatole si staccano dalla pagina.
+const BOX_COLORS = ITEM_COLORS.filter((c) => c !== "#ffffff");
+export function categoryColor(name) {
+  return pick(name, BOX_COLORS);
 }

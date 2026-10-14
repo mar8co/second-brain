@@ -1,5 +1,6 @@
 // Riga dell'elenco: copertina (o il colore dell'elemento con l'icona del tipo),
-// fonte e data in piccolo, titolo grande, in basso stato e categorie.
+// fonte e data in piccolo, titolo grande, in basso stato e categorie. In vista
+// a box, ogni elemento è una copertina con il titolo sotto.
 import { useState } from "react";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
@@ -10,7 +11,7 @@ import { formatDate, typeLabel } from "../lib/format.js";
 // Copertina in piccolo (Reel, video, link con immagine); se manca o non si
 // carica più (i link delle copertine social scadono) resta il quadrato del
 // colore dell'elemento con l'icona del tipo.
-export function Thumb({ item, size = "h-14 w-14" }) {
+export function Thumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
   const [failed, setFailed] = useState(false);
   const url = item.image_url;
   if (url && !failed && /^https?:\/\//.test(url)) {
@@ -21,13 +22,13 @@ export function Thumb({ item, size = "h-14 w-14" }) {
         loading="lazy"
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-        className={`${size} shrink-0 rounded-xl object-cover`}
+        className={`${size} shrink-0 ${rounded} object-cover`}
         style={{ background: itemColor(item) }}
       />
     );
   }
   return (
-    <div className={`${size} flex shrink-0 items-center justify-center rounded-xl text-[#0a0a0a]`} style={{ background: itemColor(item), boxShadow: "inset 0 0 0 1.5px #0a0a0a" }}>
+    <div className={`${size} flex shrink-0 items-center justify-center ${rounded} text-[#0a0a0a]`} style={{ background: itemColor(item), boxShadow: "inset 0 0 0 1.5px #0a0a0a" }}>
       <TypeIcon type={item.type} className="h-6 w-6" />
     </div>
   );
@@ -81,6 +82,42 @@ export function ItemList({ items, onOpen }) {
           <ItemCard item={it} onOpen={onOpen} />
         </li>
       ))}
+    </ul>
+  );
+}
+
+// Copertine in griglia (vista a box, dentro una categoria).
+export function ItemGrid({ items, onOpen }) {
+  return (
+    <ul className="grid grid-cols-2 gap-x-3 gap-y-5 pt-3.5">
+      {items.map((it) => {
+        const site = it.site_name || (it.url ? displayHost(it.url) : it.file_name ? "File caricato" : typeLabel(it.type));
+        return (
+          <li key={it.id} className="min-w-0">
+            <a
+              href={`/elemento/${it.id}`}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey) return;
+                e.preventDefault();
+                onOpen(it);
+              }}
+              className="block active:opacity-70"
+            >
+              <div className="aspect-square">
+                <Thumb item={it} size="h-full w-full" rounded="rounded-2xl" />
+              </div>
+              <p className="mt-1.5 line-clamp-2 text-[0.95rem] font-extrabold leading-[1.08] tracking-[-0.03em]">{displayTitle(it)}</p>
+              <p className="micro mt-0.5 flex items-center gap-0.5">
+                <span className="-ml-1 inline-flex">
+                  <StatusBadge status={it.status} compact />
+                </span>
+                <span className="sr-only">{typeLabel(it.type)} · </span>
+                <span className="truncate">{site}</span>
+              </p>
+            </a>
+          </li>
+        );
+      })}
     </ul>
   );
 }

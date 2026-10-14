@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countBy, countValues, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
+import { NO_CATEGORY, countBy, countValues, groupByCategory, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
 
 const items = [
   { id: "1", type: "link", title: "Ricetta pasta al limone", tags: ["pasta"], categories: ["Ricette"], created_at: "2026-10-01T10:00:00Z" },
@@ -54,6 +54,32 @@ describe("retrieveForQuestion", () => {
 describe("matchesFilters / countBy", () => {
   it("filtra per tag", () => expect(matchesFilters(items[0], { tag: "pasta" })).toBe(true));
   it("conta le categorie", () => expect(countBy(items, "categories")[0]).toEqual(["Acquisti", 1]));
+});
+
+describe("box per categoria", () => {
+  it("raggruppa dalla più piena; un elemento con più categorie sta in ognuna; senza categoria in fondo", () => {
+    const multi = [
+      { id: "a", categories: ["Cibo", "Ricette"] },
+      { id: "b", categories: ["Ricette"] },
+      { id: "c", categories: [] },
+      { id: "d" },
+    ];
+    const g = groupByCategory(multi);
+    expect(g.map(([c, list]) => [c, list.map((i) => i.id)])).toEqual([
+      ["Ricette", ["a", "b"]],
+      ["Cibo", ["a"]],
+      [NO_CATEGORY, ["c", "d"]],
+    ]);
+    expect(groupByCategory([{ id: "a", categories: ["X"] }]).some(([c]) => c === NO_CATEGORY)).toBe(false);
+    expect(groupByCategory([])).toEqual([]);
+  });
+
+  it("il filtro Categoria accetta anche 'Senza categoria'", () => {
+    expect(matchesFilters({ categories: [] }, { category: NO_CATEGORY })).toBe(true);
+    expect(matchesFilters({}, { category: NO_CATEGORY })).toBe(true);
+    expect(matchesFilters({ categories: ["Cibo"] }, { category: NO_CATEGORY })).toBe(false);
+    expect(matchesFilters({ categories: ["Cibo"] }, { category: "Cibo" })).toBe(true);
+  });
 });
 
 describe("ricerca nella scheda di memoria", () => {
