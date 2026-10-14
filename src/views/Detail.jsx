@@ -1,6 +1,8 @@
-// Scheda di un elemento: contenuto, link originale, stato, testo estratto,
-// categorie/tag modificabili e proposte dell'AI (separate dai dati letti).
+// Scheda di un elemento: copertina, titolo, link all'originale, riepilogo dell'AI
+// e categorie/tag; il resto (dati tecnici, trascrizione, testo letto) è in
+// "Dettagli", chiuso. Elimina è il cestino in alto accanto a Modifica.
 import { useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import { AiBadge, ChipEditor, EmptyState, ErrorBox, StatusBadge, TypeIcon } from "../components/ui.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -99,17 +101,31 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const site = item.site_name || (item.url ? displayHost(item.url) : TYPES[item.type]?.label);
   const reprocessable = ((item.url && !item.file_path) || canReadFile) && (item.status !== "processing" || stale);
 
+  const cover = showImage ? (
+    <img src={fileUrl} alt={item.title || item.file_name || "Immagine salvata"} className="w-full rounded-[18px]" />
+  ) : item.image_url ? (
+    <img src={item.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-80 w-full rounded-[18px] object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+  ) : null;
+  // Lo stato spiega cosa è andato storto solo quando qualcosa non è andato bene.
+  const problem = item.status !== "analyzed" && item.status !== "saved";
+
   return (
     <Page>
       <Testata
         onBack={() => back("/")}
         right={
-          <button type="button" className="pillola" onClick={() => setEditing(true)}>
-            Modifica
-          </button>
+          <>
+            <button type="button" className="pillola" onClick={() => setEditing(true)}>
+              Modifica
+            </button>
+            <button type="button" className="tondo !border-[#e02a0d] !bg-[#e02a0d] text-white" aria-label="Elimina" onClick={remove} disabled={!!busy}>
+              <Trash2 className="h-[17px] w-[17px]" strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </>
         }
       />
       <article>
+        {cover && <div className="mb-4">{cover}</div>}
         <header>
           <p className="micro flex items-center gap-1.5 font-semibold">
             <TypeIcon type={item.type} className="h-3.5 w-3.5" />
@@ -124,23 +140,10 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           )}
         </header>
 
-        {/* Dati come su una carta d'imbarco; lo stato con la sua spiegazione. */}
-        <section aria-live="polite">
-          <div className="griglia-dati">
-            <div className="min-w-0">
-              <span className="micro mb-1 block">Tipo</span>
-              <b className="truncate">{typeLabel(item.type)}</b>
-            </div>
-            <div className="min-w-0">
-              <span className="micro mb-1 block">Stato</span>
-              <b><StatusBadge status={item.status} /></b>
-            </div>
-            <div className="min-w-0">
-              <span className="micro mb-1 block">Salvato il</span>
-              <b className="num">{formatDate(item.created_at)}</b>
-            </div>
-          </div>
-          <p className="text-[0.92rem] font-medium leading-snug">{item.status_detail || status.hint}</p>
+        {/* Lo stato in piccolo; la spiegazione solo se la lettura non è riuscita. */}
+        <section aria-live="polite" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.92rem] font-semibold">
+          <StatusBadge status={item.status} />
+          {problem && <p className="order-last basis-full font-medium leading-snug">{item.status_detail || status.hint}</p>}
           {reprocessable && (
             <button type="button" className="link" disabled={!!busy} onClick={() => run("reprocess", () => archive.reprocess(item))}>
               {busy === "reprocess" ? "Rianalizzo…" : "Rianalizza"}
@@ -148,32 +151,20 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           )}
         </section>
 
-        <div className="mt-5 space-y-5">
+        <div className="mt-5 space-y-3">
           {item.url && (
-            <div>
-              <a href={item.url} target="_blank" rel="noopener noreferrer" className="bottone largo">
-                Apri l'originale <span aria-hidden="true">→</span>
-              </a>
-              <p className="micro mt-1.5 break-all">{item.url}</p>
-            </div>
-          )}
-
-          {item.place && (
-            <section className="border-y-[1.5px] border-inchiostro py-2.5">
-              <span className="micro">Posto</span>
-              <p className="text-[1.25rem] font-extrabold tracking-[-0.04em]">{item.place.name || "Posto senza nome"}</p>
-              {typeof item.place.lat === "number" && typeof item.place.lng === "number" && <p className="micro num">{item.place.lat.toFixed(5)}, {item.place.lng.toFixed(5)}</p>}
-              <a href={mapsLink(item.place)} target="_blank" rel="noopener noreferrer" className="link">Apri in Mappe <span aria-hidden="true">→</span></a>
-            </section>
-          )}
-
-          {showImage && <img src={fileUrl} alt={item.title || item.file_name || "Immagine salvata"} className="w-full rounded-[18px]" />}
-          {!showImage && item.image_url && (
-            <img src={item.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-72 w-full rounded-[18px] object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+            <a href={item.url} target="_blank" rel="noopener noreferrer" className="bottone largo">
+              Apri l'originale <span aria-hidden="true">→</span>
+            </a>
           )}
           {item.file_path && !isImage(item.file_mime) && (
             <a href={fileUrl || "#"} target="_blank" rel="noopener noreferrer" className="bottone chiaro largo" aria-disabled={!fileUrl}>
               Apri {item.file_name}
+            </a>
+          )}
+          {item.place && (
+            <a href={mapsLink(item.place)} target="_blank" rel="noopener noreferrer" className="bottone chiaro largo">
+              {item.place.name ? `${item.place.name} · ` : ""}Apri in Mappe <span aria-hidden="true">→</span>
             </a>
           )}
         </div>
@@ -185,36 +176,10 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           </section>
         )}
 
-        {item.description && (
-          <section>
-            <h2 className="sezione">Descrizione {item.text_source && item.text_source !== "inserito da te" ? "(dalla fonte)" : ""}</h2>
-            <p className="whitespace-pre-wrap font-medium leading-snug">{item.description}</p>
-          </section>
-        )}
-
-        <section>
-          <h2 className="sezione">Categorie e tag</h2>
-          {item.categories?.length || item.tags?.length ? (
-            <ul className="flex flex-wrap gap-1.5">
-              {(item.categories || []).map((c) => <li key={c} className="pillola attiva">{c}</li>)}
-              {(item.tags || []).map((t) => <li key={t} className="pillola">#{t}</li>)}
-            </ul>
-          ) : (
-            <p className="font-medium text-tenue">Nessuna</p>
-          )}
-        </section>
-
-        {/* Inferenze AI: sempre etichettate e da confermare */}
+        {/* Riepilogo dell'AI: sempre etichettato e da verificare */}
         {item.ai ? (
           <section>
-            <h2 className="sezione">
-              <span>Memoria dell'AI</span>
-              {ai && (
-                <button type="button" className="link min-h-0 p-0 text-[0.78rem]" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
-                  {busy === "classify" ? "Rigenero…" : "Rigenera"}
-                </button>
-              )}
-            </h2>
+            <h2 className="sezione">Riepilogo</h2>
             <AiBadge>{item.ai.applied ? "Categorie e tag assegnati dall'AI · da verificare" : "Generato dall'AI · da verificare"}</AiBadge>
             {item.ai.summary ? <p className="mt-2.5 font-medium leading-snug">{item.ai.summary}</p> : <p className="mt-2.5 font-medium text-tenue">Dati insufficienti per un riassunto.</p>}
             {points.length > 0 && (
@@ -225,19 +190,23 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
                 </ul>
               </div>
             )}
-            {entities.length > 0 && (
-              <div className="mt-4">
-                <h3 className="micro mb-1.5 font-semibold">Persone, luoghi e altro</h3>
-                <ul className="flex flex-wrap gap-1.5">
-                  {entities.map((e, i) => (
-                    <li key={i} className="cartellino text-[0.78rem]">{e.name}{typeof e.kind === "string" && e.kind && e.kind !== "altro" ? <span className="font-medium opacity-70">· {e.kind}</span> : null}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          </section>
+        ) : ai && item.status !== "processing" ? (
+          <button type="button" className="bottone chiaro largo mt-6" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
+            {busy === "classify" ? "Analizzo…" : "Proponi categorie e tag con l'AI"}
+          </button>
+        ) : null}
+
+        {/* Categorie e tag senza titolo; le proposte dell'AI sono pillole da toccare. */}
+        {(item.categories?.length > 0 || item.tags?.length > 0 || aiCats.length > 0 || aiTags.length > 0) && (
+          <section className="mt-5">
+            <ul className="flex flex-wrap gap-1.5" aria-label="Categorie e tag">
+              {(item.categories || []).map((c) => <li key={c} className="pillola attiva">{c}</li>)}
+              {(item.tags || []).map((t) => <li key={t} className="pillola">#{t}</li>)}
+            </ul>
             {(aiCats.length > 0 || aiTags.length > 0) && (
-              <div className="mt-4">
-                <p className="micro mb-1.5 font-semibold">Proposte (tocca per aggiungere)</p>
+              <div className="mt-3">
+                <p className="micro mb-1.5 font-semibold">Proposte dell'AI (tocca per aggiungere)</p>
                 <div className="flex flex-wrap gap-1.5">
                   {aiCats.map((c) => (
                     <button key={`c-${c}`} type="button" className="pillola" onClick={() => acceptAi([c], [])}>+ {c}</button>
@@ -252,17 +221,53 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
               </div>
             )}
           </section>
-        ) : ai && item.status !== "processing" ? (
-          <button type="button" className="bottone chiaro largo mt-6" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
-            {busy === "classify" ? "Analizzo…" : "Proponi categorie e tag con l'AI"}
-          </button>
-        ) : null}
+        )}
 
-        <div className="mt-6 border-b-[1.5px] border-inchiostro">
-          {item.url && item.type !== "file" && (
-            <details className="group border-t-[1.5px] border-inchiostro" open={!item.extracted_text || item.text_source === TRANSCRIPT_SOURCE}>
-              <Riassunto>Trascrizione del video</Riassunto>
-              <div className="pb-4">
+        {error && <div className="mt-4"><ErrorBox>{error}</ErrorBox></div>}
+
+        {/* Il resto, chiuso: dati tecnici, descrizione, trascrizione e testo letto. */}
+        <details className="group mt-6 border-y-[1.5px] border-inchiostro">
+          <Riassunto>Dettagli</Riassunto>
+          <div className="space-y-5 pb-5">
+            <div className="griglia-dati">
+              <div className="min-w-0">
+                <span className="micro mb-1 block">Tipo</span>
+                <b className="truncate">{typeLabel(item.type)}</b>
+              </div>
+              <div className="min-w-0">
+                <span className="micro mb-1 block">Salvato il</span>
+                <b className="num">{formatDate(item.created_at)}</b>
+              </div>
+              {item.processed_at && (
+                <div className="min-w-0">
+                  <span className="micro mb-1 block">Analizzato il</span>
+                  <b className="num">{formatDate(item.processed_at, true)}</b>
+                </div>
+              )}
+            </div>
+            {item.url && <p className="micro break-all">{item.final_url && item.final_url !== item.url ? `Indirizzo finale: ${item.final_url}` : item.url}</p>}
+
+            {item.description && (
+              <div>
+                <h3 className="micro mb-1 font-semibold">Descrizione {item.text_source && item.text_source !== "inserito da te" ? "(dalla fonte)" : ""}</h3>
+                <p className="whitespace-pre-wrap font-medium leading-snug">{item.description}</p>
+              </div>
+            )}
+
+            {entities.length > 0 && (
+              <div>
+                <h3 className="micro mb-1.5 font-semibold">Persone, luoghi e altro</h3>
+                <ul className="flex flex-wrap gap-1.5">
+                  {entities.map((e, i) => (
+                    <li key={i} className="cartellino text-[0.78rem]">{e.name}{typeof e.kind === "string" && e.kind && e.kind !== "altro" ? <span className="font-medium opacity-70">· {e.kind}</span> : null}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {item.url && item.type !== "file" && (
+              <div>
+                <h3 className="micro mb-1 font-semibold">Trascrizione del video</h3>
                 <p className="text-[0.92rem] font-medium leading-snug text-tenue">
                   Reel, TikTok, video di Facebook e YouTube vengono trascritti in automatico dal link, e i caroselli letti slide per slide (solo post pubblici). Se non è stato possibile, premi Rianalizza oppure incolla qui il testo.
                 </p>
@@ -272,28 +277,24 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
                   {busy === "transcript" ? "Salvo…" : "Salva trascrizione"}
                 </button>
               </div>
-            </details>
-          )}
+            )}
 
-          {item.extracted_text && (
-            <details className="group border-t-[1.5px] border-inchiostro">
-              <Riassunto>
-                Testo estratto <span className="micro ml-1 font-medium">fonte: {item.text_source || "sconosciuta"} · <span className="num">{item.extracted_text.length.toLocaleString("it-IT")}</span> caratteri</span>
-              </Riassunto>
-              <p className="max-h-[60vh] overflow-auto whitespace-pre-wrap pb-4 text-[0.92rem] font-medium leading-snug">{item.extracted_text}</p>
-            </details>
-          )}
-        </div>
+            {item.extracted_text && (
+              <div>
+                <h3 className="micro mb-1 font-semibold">
+                  Testo estratto · fonte: {item.text_source || "sconosciuta"} · <span className="num">{item.extracted_text.length.toLocaleString("it-IT")}</span> caratteri
+                </h3>
+                <p className="max-h-[50vh] overflow-auto whitespace-pre-wrap text-[0.92rem] font-medium leading-snug">{item.extracted_text}</p>
+              </div>
+            )}
 
-        {error && <div className="mt-4"><ErrorBox>{error}</ErrorBox></div>}
-
-        <footer className="mt-6 space-y-1">
-          {item.final_url && item.final_url !== item.url && <p className="micro break-all">Indirizzo finale: {item.final_url}</p>}
-          {item.processed_at && <p className="micro">Analizzato il {formatDate(item.processed_at, true)}</p>}
-          <button type="button" className="link rosso !mt-3" onClick={remove} disabled={!!busy}>
-            Elimina
-          </button>
-        </footer>
+            {item.ai && ai && (
+              <button type="button" className="link" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
+                {busy === "classify" ? "Rigenero…" : "Rigenera il riepilogo"}
+              </button>
+            )}
+          </div>
+        </details>
       </article>
     </Page>
   );

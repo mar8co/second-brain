@@ -144,12 +144,11 @@ test("chat: si apre dall'inizio dell'ultima risposta, anche se è lunga, non dal
 test("trascrizione incollata a mano su un link: salvata e mostrata come testo estratto", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
-  await page.getByText("Trascrizione del video").click();
+  await page.getByText("Dettagli", { exact: true }).click();
   await page.getByLabel("Testo della trascrizione").fill("Mettete il pecorino nella ciotola e mantecate fuori dal fuoco.");
   await page.getByRole("button", { name: "Salva trascrizione" }).click();
   await expect(page.getByText("Trascrizione salvata")).toBeVisible();
-  await page.getByText(/Testo estratto/).click();
-  await expect(page.getByText("fonte: trascrizione incollata da te")).toBeVisible();
+  await expect(page.getByText(/fonte: trascrizione incollata da te/)).toBeVisible();
   await expect(page.getByText("mantecate fuori dal fuoco")).toBeVisible();
 });
 
@@ -165,6 +164,15 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
   await expect(page).toHaveURL(/\/elemento\//);
   await expect(page.getByRole("heading", { name: "Idea regalo per Giulia" })).toBeVisible();
   await expect(page.getByText("Salvato", { exact: true })).toBeVisible();
+  // Elimina: solo il cestino rosso, in alto a destra accanto a Modifica.
+  const elimina = page.getByRole("button", { name: "Elimina" });
+  await expect(elimina).toHaveCSS("background-color", "rgb(224, 42, 13)");
+  expect((await elimina.innerText()).trim()).toBe("");
+  const modifica = await page.getByRole("button", { name: "Modifica" }).boundingBox();
+  const cestino = await elimina.boundingBox();
+  expect(cestino.x).toBeGreaterThan(modifica.x + modifica.width - 1);
+  expect(Math.abs(cestino.y - modifica.y)).toBeLessThan(12);
+  await expect(page.getByRole("button", { name: "Elimina" })).toHaveCount(1);
 
   await page.reload();
   await expect(page.getByRole("heading", { name: "Idea regalo per Giulia" })).toBeVisible();
@@ -196,8 +204,9 @@ test("link leggibile: Analizzato, testo estratto, categorie assegnate dall'AI", 
   await expect(page.getByText("Cucina di prova")).toBeVisible();
   await expect(page.getByRole("link", { name: "Apri l'originale" })).toHaveAttribute("href", `${FIX}/ricetta`);
 
-  // Testo estratto con la sua fonte
-  await page.getByText("Testo estratto").click();
+  // Dati tecnici e testo letto stanno in "Dettagli", chiuso di partenza.
+  await expect(page.getByText(/fonte: testo della pagina/)).toBeHidden();
+  await page.getByText("Dettagli", { exact: true }).click();
   await expect(page.getByText(/fonte: testo della pagina/)).toBeVisible();
 
   // Categorie e tag assegnati dall'AI, etichettati come tali
