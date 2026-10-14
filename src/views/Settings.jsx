@@ -42,7 +42,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
           <p><strong className="font-extrabold">Modalità locale:</strong> tutto resta in questo browser (IndexedDB). Niente sincronizzazione tra dispositivi e niente backup: se cancelli i dati del sito li perdi. Esporta spesso.</p>
         )}
         <p className="text-tenue">Per leggere i link, l'indirizzo viene aperto dal server dell'app (Vercel), che legge solo dati pubblici.</p>
-        <p className="text-tenue">Per la Mappa, il nome e l'indirizzo dei posti citati nei contenuti vengono cercati su OpenStreetMap (gratuito) dal server dell'app; la cartina è di CARTO.</p>
+        <p className="text-tenue">Per la Mappa, il nome e l'indirizzo dei posti citati nei contenuti vengono cercati su OpenStreetMap (gratuito) dal server dell'app; la cartina viene caricata dal sito di OpenStreetMap.</p>
       </Section>
 
       <Section title="AI (Google Gemini)">
