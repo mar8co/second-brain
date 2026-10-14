@@ -38,6 +38,23 @@ describe("lettura del link dall'app", () => {
     expect(store.updates).toEqual([{ status: "processing", status_detail: null }]);
   });
 
+  it("lo stato di prima della lettura arriva al server e alla lettura locale", async () => {
+    extract.mockResolvedValueOnce({ background: true });
+    const sync = fakeStore("sync", [{ ...item, status: "analyzed" }]);
+    await processItem({ ...item, status: "analyzed" }, { store: sync, onUpdate: () => {}, ai: false, wait: async () => ({ ...item, status: "analyzed" }) });
+    expect(extract).toHaveBeenLastCalledWith(item.url, expect.objectContaining({ prev_status: "analyzed" }));
+    extract.mockResolvedValueOnce({ text: "Didascalia", status: "partial" });
+    const local = fakeStore("local", []);
+    let row = { ...item, status: "analyzed", extracted_text: "Trascrizione completa e più lunga" };
+    local.update = async function (id, patch) {
+      this.updates.push(patch);
+      return (row = { ...row, ...patch });
+    };
+    await processItem(row, { store: local, onUpdate: () => {}, ai: false });
+    expect(local.updates.at(-1)).toMatchObject({ status: "analyzed" });
+    expect(local.updates.at(-1)).not.toHaveProperty("extracted_text");
+  });
+
   it("attesa oltre il limite: stato finale scritto dall'app, la scheda propone Rianalizza", async () => {
     extract.mockResolvedValueOnce({ background: true });
     let t = 0;
@@ -165,6 +182,18 @@ describe("dati del post letti dalla fonte", () => {
     expect(kept).not.toHaveProperty("text_source");
     expect(kept).toMatchObject({ status: "partial", image_url: "https://cdn.test/c.jpg", site_name: "Instagram" });
     expect(kept.status_detail).toMatch(/^Nuova lettura non completa, resta il testo letto in precedenza: Ho letto solo/);
+    // Il testo tenuto mantiene il suo stato: una trascrizione completa resta "analizzata".
+    expect(extractionPatch({ extracted_text: "Trascrizione di prima" }, { text: null, status: "inaccessible" }, { prevStatus: "analyzed" }).status).toBe("analyzed");
+    expect(extractionPatch({ extracted_text: "Trascrizione di prima", status: "analyzed" }, { text: null, status: "inaccessible" }).status).toBe("analyzed");
+    expect(extractionPatch({ extracted_text: "Trascrizione di prima" }, { text: null, status: "inaccessible" }, { prevStatus: "inaccessible" }).status).toBe("partial");
+    // Nuova lettura incompleta e più corta (solo didascalia): resta la trascrizione.
+    const longer = "Trascrizione completa del video sul workshop di intelligenza artificiale";
+    const shorter = extractionPatch({ extracted_text: longer }, { text: "Didascalia", status: "partial", detail: "Ho letto solo la didascalia." }, { prevStatus: "analyzed" });
+    expect(shorter).not.toHaveProperty("extracted_text");
+    expect(shorter).toMatchObject({ status: "analyzed", status_detail: "Nuova lettura incompleta e più corta della precedente: resta il testo letto prima." });
+    // Lettura completa, anche se più corta, o incompleta ma più lunga: sostituisce.
+    expect(extractionPatch({ extracted_text: longer }, { text: "Testo nuovo", status: "analyzed" }).extracted_text).toBe("Testo nuovo");
+    expect(extractionPatch({ extracted_text: "Breve" }, { text: "Testo nuovo più lungo", status: "partial" }).extracted_text).toBe("Testo nuovo più lungo");
     // Luogo di un post senza titolo: non diventa il titolo (una nuova lettura potrà darne uno).
     expect(extractionPatch({}, { place: { name: "Talent Garden", lat: null, lng: null }, status: "partial" })).not.toHaveProperty("title");
     // Link delle mappe: il nome del posto resta il titolo.

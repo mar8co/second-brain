@@ -831,6 +831,21 @@ describe("lettura dall'app in background (modalità sincronizzata)", () => {
     expect(patch).not.toHaveProperty("tags");
   });
 
+  it("rilettura peggiore della precedente: resta la trascrizione completa, con il suo stato", async () => {
+    const transcript = "Trascrizione completa del video: guanciale, pecorino, uova e pepe, senza panna.";
+    const row = { id: ID, url: "https://www.instagram.com/reel/C9abc/", status: "processing", extracted_text: transcript, text_source: "trascrizione dell'AI (video)", categories: [], tags: [] };
+    // Trascrizione non riuscita: la nuova lettura ha solo la didascalia.
+    const net = () => fakeNet({ apify: [{ type: "Video", caption: "Carbonara", videoUrl: "https://cdn.test/assente.mp4" }] });
+    let db = fakeDb(row);
+    await handleRead({ authHeader, body: { url: row.url, id: ID, ai: false, prev_status: "analyzed" }, env: envAuth, fetchImpl: net().fetchImpl, db });
+    expect(db.writes[0].patch).not.toHaveProperty("extracted_text");
+    expect(db.writes[0].patch).toMatchObject({ status: "analyzed", status_detail: expect.stringMatching(/resta il testo letto/) });
+    // Stato precedente non valido: si usa quello dell'elemento, mai "analizzato" per caso.
+    db = fakeDb(row);
+    await handleRead({ authHeader, body: { url: row.url, id: ID, ai: false, prev_status: "bogus" }, env: envAuth, fetchImpl: net().fetchImpl, db });
+    expect(db.writes[0].patch).toMatchObject({ status: "partial" });
+  });
+
   it("AI automatica disattivata: nessuna classificazione", async () => {
     const db = fakeDb({ id: ID, url: "https://www.instagram.com/reel/C9abc/", categories: [], tags: [] });
     const net = fakeNet({ apify: [{ type: "Video", caption: "Carbonara", videoUrl: "https://cdn.test/v.mp4" }], media: { "https://cdn.test/v.mp4": bytes(10, "video/mp4") }, gemini: { title: "T", transcript: "Testo.", slides: [] } });

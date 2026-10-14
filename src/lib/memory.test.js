@@ -109,10 +109,17 @@ describe("giro di manutenzione", () => {
     expect(how).toBe("failed");
   });
 
-  it("al massimo 5 riletture per giro", async () => {
-    const items = Array.from({ length: 7 }, (_, i) => ({ ...reel, id: `o${i}`, extracted_text: null, processed_at: "2026-10-13T09:00:00Z" }));
-    const { log } = await run(items);
+  it("un numero massimo di riletture per giro; gli altri post aspettano la rilettura, senza scheda a parte", async () => {
+    const items = Array.from({ length: 7 }, (_, i) => ({ ...reel, id: `o${i}`, extracted_text: null, description: "didascalia", processed_at: "2026-10-13T09:00:00Z" }));
+    const { log } = await run(items, { maxRereads: 5 });
     expect(log.filter((l) => l.startsWith("reread"))).toHaveLength(5);
+    expect(log.filter((l) => l.startsWith("digest"))).toHaveLength(0);
+  });
+
+  it("di norma un'apertura basta per rileggere qualche decina di post", async () => {
+    const items = Array.from({ length: 12 }, (_, i) => ({ ...reel, id: `o${i}`, author: null }));
+    const { log } = await run(items);
+    expect(log.filter((l) => l.startsWith("reread"))).toHaveLength(12);
   });
 });
 
@@ -192,6 +199,11 @@ describe("chi ha pubblicato i post già trascritti", () => {
     expect(rereadReason(saved, NOW)).toBe("author");
     expect(rereadReason({ ...saved, status: "inaccessible" }, NOW)).toBeNull();
     expect(rereadReason({ ...saved, url: "https://example.com/articolo" }, NOW)).toBeNull();
+  });
+  it("rilettura per l'autore non riuscita per un motivo momentaneo: valgono i tentativi normali", () => {
+    const failed = { ...saved, status: "partial", status_detail: "Nuova lettura non completa, resta il testo letto in precedenza: Apify non risponde." };
+    expect(rereadReason(failed, NOW)).toBe("temporary");
+    expect(rereadReason({ ...failed, status_detail: "Ho letto solo la didascalia. AI non disponibile: Limite gratuito raggiunto" }, NOW)).toBe("author");
   });
   it("una sola rilettura per l'autore; se non basta, la scheda dell'AI si fa comunque", async () => {
     const log = rereadLog(memStorage());

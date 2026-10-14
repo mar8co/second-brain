@@ -101,14 +101,14 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl, dea
 // caroselli letti slide per slide (server/social.js). Il tempo è limitato
 // dalla durata massima della funzione: resta margine per l'AI e il salvataggio.
 // `classify: false` quando l'utente ha disattivato l'AI automatica nell'app.
-export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000, classify = true, apply = true }) {
+export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000, classify = true, apply = true, prevStatus = item.status }) {
   let patch = {};
   if (item.url) {
     try {
       const r = await readLink(item.url, { env, fetchImpl, deadline });
       patch = r.error
         ? { status: "saved", status_detail: r.error, processed_at: new Date().toISOString() }
-        : extractionPatch(item, r);
+        : extractionPatch(item, r, { prevStatus });
     } catch {
       patch = { status: "saved", status_detail: "Analisi non eseguita: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
     }

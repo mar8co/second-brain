@@ -10,6 +10,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { rebasePatch } from "../src/lib/enrich.js";
+import { STATUS_KEYS } from "../src/lib/constants.js";
 import { cleanList, sanitizeItem } from "../src/lib/item.js";
 import { verifyRequest } from "./auth.js";
 import { enrichShared } from "./share.js";
@@ -70,7 +71,9 @@ export async function handleRead({ authHeader, body, env, fetchImpl, waitUntil, 
     if (!item?.url) return { status: 404, json: { error: "Elemento non trovato." } };
     const known = cleanList(Array.isArray(body.categories) ? body.categories : [], 50);
     // apply=false: categorie e tag dell'AI restano proposte (riletture automatiche).
-    const job = enrichShared({ item, known, env, fetchImpl, classify: body.ai === true, apply: body.apply !== false })
+    // Stato prima della nuova lettura (ora l'elemento è "in elaborazione").
+    const prevStatus = typeof body.prev_status === "string" && STATUS_KEYS.includes(body.prev_status) ? body.prev_status : item.status;
+    const job = enrichShared({ item, known, env, fetchImpl, classify: body.ai === true, apply: body.apply !== false, prevStatus })
       .then(async (patch) => {
         // Le modifiche fatte dall'utente durante la lettura non si perdono.
         const fresh = await store.get(id).catch(() => item);

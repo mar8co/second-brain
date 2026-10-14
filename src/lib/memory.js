@@ -46,7 +46,8 @@ export function rereadReason(item, now = Date.now()) {
     if (time(item.processed_at) < time(FULL_READING_SINCE)) return "old";
   }
   // Letti prima che si salvassero autore e data: una nuova lettura li aggiunge.
-  if (!item.author && item.status !== "inaccessible") return "author";
+  // Se l'ultima lettura non è riuscita per poco, valgono i tentativi normali.
+  if (!item.author && item.status !== "inaccessible") return TEMPORARY.test(withoutAiFailure(item.status_detail) || "") ? "temporary" : "author";
   return null;
 }
 
@@ -114,7 +115,7 @@ export function rereadLog(storage = globalThis.localStorage) {
 // (nessun nuovo tentativo finché l'app non viene riaperta).
 // Restituisce "done" (niente da fare), "stopped" (app chiusa o AI spenta) o
 // "failed" (errori ripetuti: meglio aspettare prima di riprovare).
-export async function runUpkeep({ getItems, digest, reread, isActive, tried, log = rereadLog(null), now = Date.now, sleep = sleepFor, gapMs = 6000, maxRereads = 5 }) {
+export async function runUpkeep({ getItems, digest, reread, isActive, tried, log = rereadLog(null), now = Date.now, sleep = sleepFor, gapMs = 6000, maxRereads = 20 }) {
   let failures = 0;
   let rereads = 0;
   const canReread = (it) => {
@@ -127,8 +128,11 @@ export async function runUpkeep({ getItems, digest, reread, isActive, tried, log
     // Riletture sospese dopo il limite dell'AI, anche tra un'apertura e l'altra
     // (una pausa più lunga del massimo viene ignorata).
     const until = log.pausedUntil();
-    const rereadsOn = rereads < maxRereads && !(until > now() && until - now() <= AI_LIMIT_PAUSE_MS);
-    const willReread = (it) => rereadsOn && canReread(it);
+    const paused = until > now() && until - now() <= AI_LIMIT_PAUSE_MS;
+    // Gli elementi da rileggere aspettano la rilettura anche oltre il numero
+    // massimo di questo giro: arriverà al prossimo.
+    const willReread = (it) => !paused && canReread(it);
+    const rereadsOn = !paused && rereads < maxRereads;
     const next = items.find((it) => !tried.has(it.id) && needsDigest(it, now(), willReread));
     if (next) {
       tried.add(next.id);

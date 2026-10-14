@@ -5,7 +5,9 @@ import { cleanList } from "./item.js";
 
 export const TRANSCRIPT_SOURCE = "trascrizione incollata da te";
 
-export function extractionPatch(item, r) {
+// prevStatus: lo stato dell'elemento prima della nuova lettura (durante la
+// lettura è "processing").
+export function extractionPatch(item, r, { prevStatus = item.status } = {}) {
   const patch = {
     final_url: r.finalUrl || item.final_url || null,
     site_name: r.siteName || item.site_name || null,
@@ -20,13 +22,16 @@ export function extractionPatch(item, r) {
   if (item.text_source === TRANSCRIPT_SOURCE) {
     delete patch.extracted_text;
     delete patch.text_source;
-  } else if (!r.text && item.extracted_text) {
-    // Nuova lettura senza testo (trascrizione non riuscita, post non più
-    // leggibile): resta il testo letto prima, e la scheda lo dice.
+  } else if (item.extracted_text && (!r.text || (r.status !== "analyzed" && r.text.length < item.extracted_text.length))) {
+    // Nuova lettura senza testo, o incompleta e più corta (trascrizione non
+    // riuscita, post non più leggibile): resta il testo letto prima, con il
+    // suo stato, e la scheda lo dice.
     delete patch.extracted_text;
     delete patch.text_source;
-    patch.status = "partial";
-    patch.status_detail = `Nuova lettura non completa, resta il testo letto in precedenza${r.detail ? `: ${r.detail}` : "."}`;
+    patch.status = prevStatus === "analyzed" ? "analyzed" : "partial";
+    patch.status_detail = r.text
+      ? "Nuova lettura incompleta e più corta della precedente: resta il testo letto prima."
+      : `Nuova lettura non completa, resta il testo letto in precedenza${r.detail ? `: ${r.detail}` : "."}`;
   }
   // Mai sovrascrivere titolo e descrizione inseriti a mano.
   if (!item.title && r.title) patch.title = r.title;

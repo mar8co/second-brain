@@ -68,13 +68,15 @@ export async function waitForServer(id, { store, onUpdate, everyMs = 4000, maxMs
 export async function processItem(item, { store, onUpdate, ai, categories = [], apply = true, wait = waitForServer }) {
   let cur = item;
   if (item.url && !item.file_path) {
+    // Stato prima della nuova lettura: se la lettura è peggiore resta quello.
+    const prevStatus = item.status;
     cur = await store.update(item.id, { status: "processing", status_detail: null });
     onUpdate(cur);
     let patch;
     try {
       // Modalità sincronizzata: per i post social il server lavora in
       // background, scrive lui il risultato (AI compresa) e qui si aspetta.
-      const opts = store.mode === "sync" ? { id: item.id, ai: Boolean(ai), categories, ...(apply ? {} : { apply: false }) } : {};
+      const opts = store.mode === "sync" ? { id: item.id, ai: Boolean(ai), categories, prev_status: prevStatus, ...(apply ? {} : { apply: false }) } : {};
       const r = await api.extract(item.url, opts);
       if (r?.background) {
         const done = await wait(item.id, { store, onUpdate });
@@ -90,7 +92,7 @@ export async function processItem(item, { store, onUpdate, ai, categories = [], 
         // Il lavoro sul server si è interrotto senza scrivere (dura al massimo
         // 5 minuti): stato finale, così la scheda propone "Rianalizza".
         patch = { status: "saved", status_detail: "Analisi non completata: puoi riprovare dalla scheda.", processed_at: new Date().toISOString() };
-      } else patch = extractionPatch(cur, r);
+      } else patch = extractionPatch(cur, r, { prevStatus });
     } catch (e) {
       patch = {
         status: "saved",
