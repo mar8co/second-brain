@@ -33,10 +33,12 @@ test("link incollato nella chat: salvato nell'archivio, la chat resta per le dom
   await expect(page.getByText(/Salvato nell'archivio/)).toBeVisible();
   await expect(page.getByText("Memoria: 1 contenuto")).toBeVisible();
   await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toHaveCount(0);
-  await page.goto("/archivio");
+  // Navigazione dentro l'app (non un ricaricamento): la lettura in corso continua.
+  const nav = page.getByRole("navigation", { name: "Navigazione principale" });
+  await nav.getByRole("link", { name: "Archivio" }).click();
   await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
   // Domande suggerite per cominciare, dalle categorie.
-  await page.goto("/");
+  await nav.getByRole("link", { name: "Chat" }).click();
   await expect(page.getByRole("button", { name: "Cosa ho salvato su ricette?" })).toBeVisible();
 });
 
@@ -148,15 +150,10 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
 
-  // Filtri rapidi: categorie sempre visibili; il periodo sta nel pannello Filtri
+  // Filtri rapidi: categorie sempre visibili; il periodo si sceglie con le date Dal e Al
+  await expect(page.getByRole("button", { name: /^Rianalizza/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Tutte", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Ultimi 7 giorni" })).toHaveCount(0);
-  await page.getByRole("button", { name: /Filtri/ }).click();
-  await page.getByRole("button", { name: "Ultimi 7 giorni" }).click();
-  await expect(page).toHaveURL(/from=/);
-  await page.getByRole("button", { name: "Ultimi 7 giorni" }).click();
-  await expect(page).not.toHaveURL(/from=/);
-  await page.getByRole("button", { name: /Filtri/ }).click();
 
   // Filtro per tipo
   await page.getByLabel("Cerca nell'archivio").fill("");

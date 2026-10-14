@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countBy, countValues, daysAgo, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
+import { countBy, countValues, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
 
 const items = [
   { id: "1", type: "link", title: "Ricetta pasta al limone", tags: ["pasta"], categories: ["Ricette"], created_at: "2026-10-01T10:00:00Z" },
@@ -81,9 +81,7 @@ describe("filtri per autore, sito e periodo", () => {
     expect(matchesFilters(post, { site: "Instagram" })).toBe(true);
     expect(matchesFilters(post, { site: "TikTok" })).toBe(false);
   });
-  it("conteggi di un campo e data di n giorni fa", () => {
+  it("conteggi di un campo", () => {
     expect(countValues([post, post, { ...post, author: "Anna" }, { id: "y" }], "author")).toEqual([["Mario Rossi (@mario.ai)", 2], ["Anna", 1]]);
-    expect(daysAgo(7, new Date(2026, 9, 14, 12))).toBe("2026-10-07");
-    expect(daysAgo(30, new Date(2026, 9, 14, 12))).toBe("2026-09-14");
   });
 });

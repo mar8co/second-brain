@@ -1,21 +1,17 @@
 // Archivio: ricerca testuale istantanea + filtri per tipo, categoria, tag, data.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
-import { Plus, Search, Settings, SlidersHorizontal, X } from "lucide-react";
+import { Loader2, Plus, RefreshCw, Search, Settings, SlidersHorizontal, X } from "lucide-react";
 import { Page, TopBar } from "../components/Layout.jsx";
 import { ItemList } from "../components/ItemCard.jsx";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
-import { countBy, countValues, daysAgo, searchItems } from "../lib/search.js";
+import { countBy, countValues, searchItems } from "../lib/search.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
 
 const FILTER_KEYS = ["type", "category", "tag", "status", "author", "site", "from", "to"];
-const PERIODS = [
-  [7, "Ultimi 7 giorni"],
-  [30, "Ultimi 30 giorni"],
-];
 
-export default function Archive({ archive, query, navigate, openItem }) {
-  const { items, loading, error, reload } = archive;
+export default function Archive({ archive, query, navigate, openItem, toast, ai }) {
+  const { items, loading, error, reload, reanalysis, reanalyzable, reanalyzeAll } = archive;
   const q = query.get("q") || "";
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, query.get(k) || ""]));
   const active = FILTER_KEYS.filter((k) => filters[k]);
@@ -89,16 +85,35 @@ export default function Archive({ archive, query, navigate, openItem }) {
             <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
             Filtri{active.length ? ` (${active.length})` : ""}
           </button>
-          {active.length > 0 && (
+          {ai && (
+            <button
+              type="button"
+              className="btn-ghost min-h-[38px] px-3 text-sm"
+              disabled={Boolean(reanalysis) || reanalyzable.length === 0}
+              onClick={async () => {
+                const r = await reanalyzeAll();
+                if (!r) return;
+                if (r.stopped === "limit") toast(`Fermo: limite gratuito dell'AI raggiunto (${r.done} su ${r.total}). Riprova più tardi.`);
+                else if (r.failed) toast(`Rianalizzati ${r.done - r.failed} su ${r.total}: ${r.failed} non riusciti, riprova più tardi.`);
+                else toast(`Rianalizzati ${r.done} elementi`);
+              }}
+            >
+              {reanalysis ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+              {reanalysis ? `Rianalizzo ${reanalysis.done}/${reanalysis.total}…` : `Rianalizza${reanalyzable.length ? ` (${reanalyzable.length})` : ""}`}
+            </button>
+          )}
+          <button type="button" className="btn-ghost ml-auto h-[38px] min-h-[38px] w-[38px] shrink-0 px-0" aria-label="Aggiungi manualmente" onClick={() => navigate("/aggiungi")}>
+            <Plus className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
+
+        {active.length > 0 && (
+          <p className="mt-1.5">
             <button type="button" className="text-sm font-medium text-accent" onClick={() => setParam(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))}>
               Azzera filtri
             </button>
-          )}
-        </div>
-
-        <button type="button" className="btn-ghost mt-2 w-full" onClick={() => navigate("/aggiungi")}>
-          <Plus className="h-4 w-4" aria-hidden="true" /> Aggiungi manualmente
-        </button>
+          </p>
+        )}
 
         {open && (
           <div id="filters" className="card mt-2 grid grid-cols-2 gap-3 p-3.5">
@@ -114,28 +129,13 @@ export default function Archive({ archive, query, navigate, openItem }) {
               options={authors.map(([c, n]) => [c, `${c} (${n})`])} />
             <Select label="Sito" value={filters.site} onChange={(v) => setParam({ site: v })}
               options={sites.map(([c, n]) => [c, `${c} (${n})`])} />
-            <div className="col-span-2">
-              <span className="label">Periodo</span>
-              <ul className="flex flex-wrap gap-1.5" aria-label="Periodo">
-                {PERIODS.map(([n, label]) => {
-                  const on = filters.from === daysAgo(n) && !filters.to;
-                  return (
-                    <li key={n}>
-                      <button type="button" className={on ? "chip-on" : "chip"} aria-pressed={on} onClick={() => setParam({ from: on ? "" : daysAgo(n), to: "" })}>
-                        {label}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-            <div>
+            <div className="min-w-0">
               <label htmlFor="f-from" className="label">Dal</label>
-              <input id="f-from" type="date" className="input py-2" value={filters.from} onChange={(e) => setParam({ from: e.target.value })} />
+              <input id="f-from" type="date" className="input min-w-0 max-w-full py-2" value={filters.from} onChange={(e) => setParam({ from: e.target.value })} />
             </div>
-            <div>
+            <div className="min-w-0">
               <label htmlFor="f-to" className="label">Al</label>
-              <input id="f-to" type="date" className="input py-2" value={filters.to} onChange={(e) => setParam({ to: e.target.value })} />
+              <input id="f-to" type="date" className="input min-w-0 max-w-full py-2" value={filters.to} onChange={(e) => setParam({ to: e.target.value })} />
             </div>
           </div>
         )}
