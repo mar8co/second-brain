@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_LIMIT_PAUSE_MS, MAX_AUTO_REREADS, needsDigest, needsReread, rereadLog, rereadReason, runUpkeep, STALE_MS } from "./memory.js";
+import { AI_LIMIT_PAUSE_MS, MAX_AUTO_REREADS, needsDigest, needsReread, rereadLimit, rereadLog, rereadReason, runUpkeep, STALE_MS } from "./memory.js";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const reel = { id: "r", type: "social", url: "https://www.instagram.com/reel/abc/", author: "@mario.ai", status: "analyzed", processed_at: "2026-10-13T13:15:05Z", extracted_text: "Ho preparato un workshop" };
@@ -38,6 +38,21 @@ describe("quali elementi rileggere", () => {
     expect(needsReread({ ...old, extracted_text: "testo" }, NOW)).toBe(false);
     expect(needsReread({ ...old, url: "https://example.com/articolo" }, NOW)).toBe(false);
     expect(needsReread({ ...old, file_path: "u/x/f.jpg" }, NOW)).toBe(false);
+  });
+});
+
+describe("immagini e PDF non ancora letti dall'AI", () => {
+  const photo = { id: "f", type: "image", file_path: "u/x/foto.jpg", file_mime: "image/jpeg", status: "saved", processed_at: "2026-10-01T10:00:00Z" };
+  it("immagini e PDF senza testo da leggere; non i file già letti o di testo", () => {
+    expect(rereadReason(photo, NOW)).toBe("file");
+    expect(rereadReason({ ...photo, file_mime: "application/pdf", status: "partial" }, NOW)).toBe("file");
+    expect(rereadReason({ ...photo, extracted_text: "Locandina" }, NOW)).toBeNull();
+    expect(rereadReason({ ...photo, file_mime: "text/plain" }, NOW)).toBeNull();
+    expect(rereadLimit("file")).toBe(2);
+  });
+  it("lettura del file interrotta: da rifare", () => {
+    expect(rereadReason({ ...photo, status: "processing", updated_at: new Date(NOW - STALE_MS - 1).toISOString() }, NOW)).toBe("stale");
+    expect(rereadReason({ ...photo, status: "processing", updated_at: new Date(NOW - 1000).toISOString() }, NOW)).toBeNull();
   });
 });
 

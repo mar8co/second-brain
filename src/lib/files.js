@@ -2,6 +2,7 @@
 // Il testo dei PDF si estrae con pdf.js (caricato solo quando serve).
 
 import { ACCEPTED_MIME, LIMITS } from "./constants.js";
+import { aiReadableImage } from "./enrich.js";
 
 const EXT_MIME = {
   md: "text/markdown",
@@ -42,7 +43,10 @@ export const isImage = (mime) => /^image\//.test(mime || "");
 export async function extractFileText(file) {
   const mime = fileMime(file);
   if (isImage(mime)) {
-    return { text: null, source: null, status: "saved", detail: "Immagine conservata. Il testo nelle immagini non viene letto automaticamente: aggiungi una nota per ritrovarla." };
+    const detail = aiReadableImage(mime)
+      ? "Immagine conservata. Con l'AI attiva viene letta e descritta in automatico; altrimenti aggiungi una nota per ritrovarla."
+      : "Immagine conservata. Il testo di questo formato di immagine non viene letto automaticamente: aggiungi una nota per ritrovarla.";
+    return { text: null, source: null, status: "saved", detail };
   }
   if (/^text\/|json$/.test(mime)) {
     const text = (await file.text()).slice(0, LIMITS.textChars);
@@ -63,7 +67,7 @@ export async function extractFileText(file) {
       }
       text = text.replace(/[ \t]+/g, " ").trim().slice(0, LIMITS.textChars);
       if (!text) {
-        return { text: null, source: null, status: "partial", detail: "PDF senza testo selezionabile (probabilmente una scansione): non l'ho letto." };
+        return { text: null, source: null, status: "partial", detail: "PDF senza testo selezionabile (probabilmente una scansione): con l'AI attiva viene letto in automatico." };
       }
       const partial = doc.numPages > maxPages || text.length >= LIMITS.textChars;
       return {

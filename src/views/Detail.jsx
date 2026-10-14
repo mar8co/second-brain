@@ -9,7 +9,7 @@ import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
 import { isImage } from "../lib/files.js";
-import { TRANSCRIPT_SOURCE } from "../lib/enrich.js";
+import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
 
 function mapsLink(place) {
   const p = new URLSearchParams();
@@ -94,6 +94,8 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   // video può durarne cinque): l'elaborazione si è interrotta, si può riprovare.
   const stale = item.status === "processing" && openedAt - new Date(item.updated_at).getTime() > 330_000;
   const showImage = item.file_path && isImage(item.file_mime) && fileUrl;
+  // Immagine o PDF scansionato non ancora letti dall'AI: si può riprovare.
+  const canReadFile = Boolean(ai && store.mode === "sync" && unreadFile(item));
 
   return (
     <>
@@ -128,7 +130,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           <section aria-live="polite" className="card p-3.5">
             <div className="flex items-center justify-between gap-2">
               <StatusBadge status={item.status} />
-              {item.url && !item.file_path && (item.status !== "processing" || stale) && (
+              {((item.url && !item.file_path) || canReadFile) && (item.status !== "processing" || stale) && (
                 <button type="button" className="text-sm font-medium text-accent" disabled={!!busy} onClick={() => run("reprocess", () => archive.reprocess(item))}>
                   <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${busy === "reprocess" ? "animate-spin" : ""}`} aria-hidden="true" />
                   Rianalizza

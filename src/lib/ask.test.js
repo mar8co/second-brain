@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 const ask = vi.hoisted(() => vi.fn());
-vi.mock("./api.js", () => ({ api: { ask } }));
-const { askArchive, detailEntry, memoryEntry, memoryFor } = await import("./ask.js");
+const select = vi.hoisted(() => vi.fn());
+vi.mock("./api.js", () => ({ api: { ask, select } }));
+const { askArchive, detailEntry, memoryEntry, memoryFor, recentTurns } = await import("./ask.js");
 
 const workshop = {
   id: "w",
@@ -29,10 +30,12 @@ describe("schede inviate all'AI", () => {
     const full = { ...workshop, title: "t".repeat(300), ai: { summary: "s".repeat(800), points: Array(8).fill("p".repeat(300)), entities: Array(12).fill({ name: "n".repeat(100), kind: "persona" }), keywords: Array(15).fill("k".repeat(60)) } };
     expect(JSON.stringify(memoryEntry(full)).length).toBeLessThan(2000);
   });
-  it("contenuto completo dei pertinenti: autore e testo fino a 5000 caratteri", () => {
+  it("contenuto completo: autore, parole chiave e testo (8000 caratteri, o di più se richiesto)", () => {
     const d = detailEntry(workshop);
     expect(d.author).toBe("Mario Rossi (@mario.ai)");
-    expect(d.extracted_text).toHaveLength(5000);
+    expect(d.ai.keywords).toEqual(["corso", "formazione"]);
+    expect(d.extracted_text).toHaveLength(8000);
+    expect(detailEntry(workshop, 12000).extracted_text).toHaveLength(12000);
   });
   it("ordine: prima i pertinenti, poi i più recenti; entro il limite di dimensione", () => {
     expect(memoryFor([pasta, workshop, recent], [workshop]).map((e) => e.id)).toEqual(["w", "n", "p"]);
@@ -42,17 +45,82 @@ describe("schede inviate all'AI", () => {
 });
 
 describe("domanda sull'archivio", () => {
-  it("con l'AI: anche senza parole in comune, l'AI riceve le schede di tutto l'archivio", async () => {
-    ask.mockResolvedValueOnce({ answer: "Mario Rossi (@mario.ai).", sufficient: true, sources: ["w", "inventato"] });
-    const r = await askArchive([pasta, workshop, recent], "chi tiene corsi di IA?", { ai: true });
-    const [question, details, memory] = ask.mock.calls.at(-1);
+  it("archivio che ci sta: l'AI legge per intero tutti i contenuti, anche senza parole in comune", async () => {
+    select.mockClear();
+    ask.mockResolvedValueOnce({ answer: "Mario Rossi (@mario.ai) [1].", sufficient: true, sources: [{ id: "w", quote: "Ho preparato un workshop" }, { id: "p", quote: "" }], consulted: 3 });
+    const history = [{ q: "workshop?", a: "Sì [1].", sources: ["w"] }];
+    const r = await askArchive([pasta, workshop, recent], "chi tiene corsi di IA?", { ai: true, history });
+    const [question, details, memory, total, turns] = ask.mock.calls.at(-1);
     expect(question).toBe("chi tiene corsi di IA?");
-    expect(memory.map((m) => m.id).sort()).toEqual(["n", "p", "w"]);
-    // "corsi" trova la parola chiave "corso" della scheda: il Reel è tra i pertinenti.
-    expect(details.map((d) => d.id)).toContain("w");
-    expect(r).toMatchObject({ kind: "answer", answer: "Mario Rossi (@mario.ai).", sources: ["w"], consulted: 3, total: 3 });
-    expect(ask.mock.calls.at(-1)[3]).toBe(3);
+    expect(details.map((d) => d.id).sort()).toEqual(["n", "p", "w"]);
+    expect(details.find((d) => d.id === "w").extracted_text).toHaveLength(12000);
+    expect(memory).toEqual([]);
+    expect(total).toBe(3);
+    expect(turns).toEqual([{ q: "workshop?", a: "Sì [1]." }]);
+    expect(select).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ kind: "answer", answer: "Mario Rossi (@mario.ai) [1].", sources: ["w", "p"], quotes: { w: "Ho preparato un workshop" }, consulted: 3, total: 3 });
   });
+
+  it("archivio grande: l'AI sceglie dalle schede cosa leggere per intero", async () => {
+    const big = Array.from({ length: 40 }, (_, i) => ({ id: `b${i}`, type: "social", title: `Video ${i}`, extracted_text: "parole ".repeat(1500), created_at: `2026-09-${String((i % 28) + 1).padStart(2, "0")}T10:00:00Z` }));
+    const items = [...big, workshop, pasta];
+    select.mockResolvedValueOnce({ ids: ["b7", "inventato"] });
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: false, sources: [] });
+    const history = [{ q: "pasta al limone?", a: "Sì.", sources: ["p"] }];
+    const r = await askArchive(items, "chi tiene corsi di IA?", { ai: true, history });
+    const [, memCards, turns] = select.mock.calls.at(-1);
+    expect(memCards.length).toBe(42);
+    expect(turns).toEqual([{ q: "pasta al limone?", a: "Sì." }]);
+    const [, details, memory] = ask.mock.calls.at(-1);
+    // Prima la scelta dell'AI, poi le fonti della risposta precedente, poi le parole della domanda.
+    expect(details.map((d) => d.id).slice(0, 3)).toEqual(["b7", "p", "w"]);
+    expect(details.length).toBeLessThanOrEqual(10);
+    expect(details[0].extracted_text.length).toBeLessThanOrEqual(8000);
+    expect(memory.some((m) => details.some((d) => d.id === m.id))).toBe(false);
+    expect(details.length + memory.length).toBe(42);
+    expect(r).toMatchObject({ kind: "insufficient", total: 42 });
+  });
+
+  it("le fonti della conversazione restano tra i contenuti letti anche se l'AI ne sceglie molti", async () => {
+    const big = Array.from({ length: 40 }, (_, i) => ({ id: `b${i}`, type: "social", title: `Video ${i}`, extracted_text: "parole ".repeat(1500), created_at: "2026-09-01T10:00:00Z" }));
+    select.mockResolvedValueOnce({ ids: big.slice(0, 10).map((b) => b.id) });
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: false, sources: [] });
+    const history = [
+      { q: "vecchia", a: "a", sources: ["b30", "b31", "b32"] },
+      { q: "pasta?", a: "b", sources: ["p"] },
+      { q: "workshop?", a: "c", sources: ["w"] },
+    ];
+    await askArchive([...big, workshop, pasta], "e quando?", { ai: true, history });
+    const ids = ask.mock.calls.at(-1)[1].map((d) => d.id);
+    expect(ids).toHaveLength(10);
+    // Le fonti più recenti prima: "w" e "p" ci sono sempre.
+    expect(ids.slice(6)).toEqual(["w", "p", "b30", "b31"]);
+  });
+
+  it("più di 400 elementi: anche se corti, l'AI sceglie cosa leggere", async () => {
+    const many = Array.from({ length: 401 }, (_, i) => ({ id: `s${i}`, type: "note", note: `nota ${i}`, created_at: "2026-09-01T10:00:00Z" }));
+    select.mockResolvedValueOnce({ ids: ["s3"] });
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: false, sources: [] });
+    await askArchive(many, "nota", { ai: true });
+    expect(ask.mock.calls.at(-1)[1][0].id).toBe("s3");
+    expect(ask.mock.calls.at(-1)[1].length).toBeLessThanOrEqual(10);
+  });
+
+  it("note lunghe dell'utente inviate per intero", async () => {
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: false, sources: [] });
+    await askArchive([{ ...recent, note: "n".repeat(5000) }], "idea?", { ai: true });
+    expect(ask.mock.calls.at(-1)[1][0].note).toHaveLength(5000);
+  });
+
+  it("scelta dell'AI non riuscita: restano le parole della domanda", async () => {
+    const big = Array.from({ length: 40 }, (_, i) => ({ id: `b${i}`, type: "social", title: `Video ${i}`, extracted_text: "parole ".repeat(1500), created_at: "2026-09-01T10:00:00Z" }));
+    select.mockRejectedValueOnce(new Error("limite"));
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: true, sources: [{ id: "w", quote: "" }] });
+    const r = await askArchive([...big, workshop], "workshop", { ai: true });
+    expect(ask.mock.calls.at(-1)[1][0].id).toBe("w");
+    expect(r.kind).toBe("answer");
+  });
+
   it("chi ha pubblicato è cercabile anche senza AI", async () => {
     const r = await askArchive([pasta, workshop], "mario rossi", { ai: false });
     expect(r).toMatchObject({ kind: "noai", candidates: ["w"] });
@@ -68,5 +136,26 @@ describe("domanda sull'archivio", () => {
     expect(r).toMatchObject({ kind: "error", error: "Servizio AI sovraccarico", candidates: ["w"] });
     // Nessuna scheda consultata: la chat non lo dichiara.
     expect(r).not.toHaveProperty("consulted");
+  });
+});
+
+describe("domande di seguito", () => {
+  const at = (min) => new Date(Date.parse("2026-10-14T12:00:00Z") + min * 60_000).toISOString();
+  const now = Date.parse(at(0));
+  it("gli ultimi turni con una risposta, finché la conversazione continua", () => {
+    const log = [
+      { at: at(-200), q: "vecchia", result: { kind: "answer", answer: "a", sources: ["x"] } },
+      { at: at(-50), q: "uno", result: { kind: "answer", answer: "r1", sources: ["a"] } },
+      { at: at(-40), q: "errore", result: { kind: "error" } },
+      { at: at(-30), q: "due", result: { kind: "insufficient", answer: "r2", sources: [] } },
+      { at: at(-1), q: "tre", result: { kind: "answer", answer: "r3", sources: ["b"] } },
+    ];
+    expect(recentTurns(log, now)).toEqual([
+      { q: "uno", a: "r1", sources: ["a"] },
+      { q: "due", a: "r2", sources: [] },
+      { q: "tre", a: "r3", sources: ["b"] },
+    ]);
+    expect(recentTurns(log, now + 3 * 60 * 60_000)).toEqual([]);
+    expect(recentTurns([], now)).toEqual([]);
   });
 });

@@ -16,7 +16,7 @@ import { detectType, extractUrl } from "../src/lib/detect.js";
 import { extractionPatch, hasContent, aiPayload, aiFromDigest, rebasePatch } from "../src/lib/enrich.js";
 import { cleanList, sanitizeItem } from "../src/lib/item.js";
 import { aiConfigured, classifyWithAi } from "./ai.js";
-import { checkMedia, transcribeFiles } from "./media.js";
+import { checkMedia, readStoredFile, transcribeFiles } from "./media.js";
 import { readLink, socialTarget } from "./social.js";
 
 const MAX_TEXT = 5000;
@@ -94,6 +94,20 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl, dea
   patch.processed_at = new Date().toISOString();
   if (patch.extracted_text) patch.status_detail = [patch.status_detail, SHARED_FILE_NOTE].filter(Boolean).join(" ");
   return withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000 });
+}
+
+// Immagine o PDF senza testo già salvato nell'archivio: lettura dell'AI
+// (testo e descrizione) e scheda di memoria. Se la lettura non riesce, resta
+// lo stato di prima con il motivo.
+export async function enrichFile({ item, kind, data, known = [], env, fetchImpl, deadline = Date.now() + 200_000, classify = true, apply = true, prevStatus = item.status }) {
+  const what = kind === "image" ? "Lettura dell'immagine" : "Lettura del PDF";
+  const mime = String(item.file_mime || "").toLowerCase();
+  const patch = await transcriptionPatch(() => readStoredFile({ env, kind, mime, data, fetchImpl, deadline }), what);
+  patch.processed_at = new Date().toISOString();
+  // Il titolo scelto dall'utente resta.
+  if (item.title) delete patch.title;
+  if (!patch.extracted_text) patch.status = prevStatus === "partial" ? "partial" : "saved";
+  return classify ? withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000, apply }) : patch;
 }
 
 // Lettura del link + AI. Scrive il risultato con un solo aggiornamento.

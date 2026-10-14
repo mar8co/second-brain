@@ -1,26 +1,33 @@
-// Domanda sull'archivio. Senza AI: elementi pertinenti trovati nel browser.
-// Con l'AI: Gemini riceve la scheda breve di ogni elemento salvato (la
-// "memoria": sintesi, punti chiave, autore, parole chiave) e il contenuto
-// completo dei più pertinenti, e risponde SOLO con quelli. Così trova anche
-// ciò che non contiene le parole della domanda ("corso di IA" → un Reel che
-// parla di "workshop sull'intelligenza artificiale").
+// Domanda alla memoria, come NotebookLM. Senza AI: elementi pertinenti
+// trovati nel browser. Con l'AI: Gemini legge il contenuto completo di tutto
+// l'archivio, se ci sta; altrimenti prima sceglie dalle schede brevi (la
+// "memoria": sintesi, punti chiave, autore, parole chiave) quali leggere per
+// intero. Risponde SOLO con i contenuti salvati e cita le fonti con [n].
+// Le domande di seguito ("e quanto costa?") portano con sé i turni precedenti.
 import { retrieveForQuestion } from "./search.js";
 import { api } from "./api.js";
 
-const DETAILS = 8;
-// Dimensione massima delle schede inviate (circa 60.000 token, alcune
-// centinaia di elementi): per archivi più grandi si inviano prima quelle con
-// parole in comune con la domanda, poi le più recenti, e la chat lo dice.
-const MEMORY_CHARS = 220_000;
+// Tutto l'archivio per intero se ci sta (circa 65.000 token, al massimo 400
+// elementi come sul server).
+const FULL_CHARS = 240_000;
+const FULL_ITEMS = 400;
+const FULL_TEXT = 12_000;
+// Archivio più grande: contenuto completo di alcuni elementi, schede degli altri.
+const DETAILS = 10;
+const PART_TEXT = 8_000;
+const MEMORY_CHARS = 200_000;
+// Domande di seguito: gli ultimi turni dell'ultima ora.
+const HISTORY_TURNS = 4;
+const HISTORY_MS = 60 * 60_000;
 
 const cut = (s, n) => (typeof s === "string" ? s.slice(0, n) : null);
 const byDateDesc = (a, b) => new Date(b.created_at) - new Date(a.created_at);
+const sizeOf = (list) => list.reduce((n, e) => n + JSON.stringify(e).length + 1, 0);
 
 const strings = (v, n, each) => (Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, n).map((x) => x.slice(0, each)) : []);
 const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)));
 
 // Scheda breve di un elemento: corta, così ci stanno centinaia di elementi.
-// Il contenuto completo arriva solo per i più pertinenti (detailEntry).
 export function memoryEntry(item) {
   const ai = item.ai || {};
   const digested = Boolean(ai.summary || ai.points?.length);
@@ -46,31 +53,36 @@ export function memoryEntry(item) {
   });
 }
 
-// Contenuto completo di un elemento pertinente.
-export function detailEntry(item) {
+// Contenuto completo di un elemento.
+export function detailEntry(item, textChars = PART_TEXT) {
   const ai = item.ai || {};
-  return {
+  return compact({
     id: item.id,
     type: item.type,
     url: item.url,
     title: item.title,
-    author: item.author || null,
-    site_name: item.site_name || null,
-    published_at: item.published_at || null,
+    author: item.author,
+    site_name: item.site_name,
+    published_at: item.published_at,
     created_at: item.created_at,
-    description: cut(item.description, 1500),
-    note: cut(item.note, 1500),
+    description: cut(item.description, Math.max(1500, textChars)),
+    note: cut(item.note, textChars),
     place: item.place?.name ? { name: item.place.name } : null,
     categories: item.categories,
     tags: item.tags,
-    ai: { summary: ai.summary, points: ai.points },
-    text_source: item.text_source || null,
-    extracted_text: cut(item.extracted_text, 5000),
-  };
+    ai: compact({
+      summary: ai.summary,
+      points: Array.isArray(ai.points) ? ai.points : null,
+      entities: Array.isArray(ai.entities) ? ai.entities : null,
+      keywords: Array.isArray(ai.keywords) ? ai.keywords : null,
+    }),
+    text_source: item.text_source,
+    extracted_text: cut(item.extracted_text, textChars),
+  });
 }
 
-// Schede da inviare: prima gli elementi che contengono le parole della
-// domanda, poi tutti gli altri dal più recente, entro il limite.
+// Schede da inviare: prima gli elementi più vicini alla domanda, poi tutti
+// gli altri dal più recente, entro il limite.
 export function memoryFor(items, ranked, budget = MEMORY_CHARS) {
   const first = new Set(ranked.map((i) => i.id));
   const ordered = [...ranked, ...items.filter((i) => !first.has(i.id)).sort(byDateDesc)];
@@ -86,20 +98,68 @@ export function memoryFor(items, ranked, budget = MEMORY_CHARS) {
   return out;
 }
 
-// Risultato: { kind, answer?, sources: [id], candidates: [id], consulted?, total?, error? }
+// Turni precedenti della chat (dal più vecchio), per le domande di seguito:
+// solo risposte arrivate, al massimo un'ora prima della domanda nuova.
+// log: [{ at, q, result: { kind, answer, sources } }]
+export function recentTurns(log, now = Date.now()) {
+  const out = [];
+  let after = now;
+  for (const m of [...log].reverse()) {
+    const at = Date.parse(m?.at || "");
+    if (!Number.isFinite(at) || after - at > HISTORY_MS) break;
+    after = at;
+    const r = m.result;
+    if (!m.q || !r || (r.kind !== "answer" && r.kind !== "insufficient")) continue;
+    out.unshift({ q: m.q, a: r.answer || "", sources: Array.isArray(r.sources) ? r.sources : [] });
+    if (out.length >= HISTORY_TURNS) break;
+  }
+  return out;
+}
+
+// Risultato: { kind, answer?, sources: [id], quotes: { id: estratto }, candidates: [id], consulted?, total?, error? }
 //   kind: "answer" | "insufficient" | "none" | "noai" | "error"
-export async function askArchive(items, question, { ai }) {
+//   Nella risposta [n] è la fonte sources[n - 1].
+export async function askArchive(items, question, { ai, history = [] }) {
   const ranked = retrieveForQuestion(items, question, items.length);
   const ids = ranked.slice(0, 12).map((c) => c.id);
   if (!ai) return ranked.length ? { kind: "noai", sources: [], candidates: ids } : { kind: "none", sources: [], candidates: [] };
   if (!items.length) return { kind: "none", sources: [], candidates: [] };
-  const memory = memoryFor(items, ranked);
-  const consulted = { consulted: memory.length, total: items.length };
+  const turns = history.map(({ q, a }) => ({ q, a }));
+  const byId = new Map(items.map((i) => [i.id, i]));
   try {
-    const r = await api.ask(question, ranked.slice(0, DETAILS).map(detailEntry), memory, items.length);
-    const known = new Set(items.map((i) => i.id));
-    const sources = r.sources.filter((id) => known.has(id));
-    return { kind: r.sufficient ? "answer" : "insufficient", answer: r.answer, sources, candidates: ids, ...consulted };
+    let details = items.map((it) => detailEntry(it, FULL_TEXT));
+    let memory = [];
+    if (items.length > FULL_ITEMS || sizeOf(details) > FULL_CHARS) {
+      // Archivio grande: l'AI sceglie dalle schede cosa leggere per intero,
+      // insieme alle fonti della risposta precedente e agli elementi con le
+      // parole della domanda (anche di quella precedente).
+      const context = history.length ? retrieveForQuestion(items, [question, history.at(-1).q].join(" "), items.length) : ranked;
+      memory = memoryFor(items, context);
+      let picked = [];
+      try {
+        const r = await api.select(question, memory, turns);
+        picked = (Array.isArray(r?.ids) ? r.ids : []).filter((id) => byId.has(id));
+      } catch {
+        /* scelta non riuscita: restano le parole della domanda */
+      }
+      // Le fonti più recenti della conversazione restano sempre tra quelle lette.
+      const prev = [...new Set([...history].reverse().flatMap((t) => t.sources))].filter((id) => byId.has(id)).slice(0, 4);
+      const chosen = [...new Set([...picked.slice(0, DETAILS - prev.length), ...prev, ...picked, ...context.map((i) => i.id)])].filter((id) => byId.has(id)).slice(0, DETAILS);
+      details = chosen.map((id) => detailEntry(byId.get(id), PART_TEXT));
+      const inDetails = new Set(chosen);
+      memory = memory.filter((m) => !inDetails.has(m.id));
+    }
+    const r = await api.ask(question, details, memory, items.length, turns);
+    const sources = (r.sources || []).filter((s) => typeof s?.id === "string");
+    return {
+      kind: r.sufficient ? "answer" : "insufficient",
+      answer: r.answer,
+      sources: sources.map((s) => s.id),
+      quotes: Object.fromEntries(sources.filter((s) => s.quote).map((s) => [s.id, s.quote])),
+      candidates: ids,
+      consulted: Math.min(Number(r.consulted) || details.length + memory.length, items.length),
+      total: items.length,
+    };
   } catch (e) {
     return { kind: "error", error: e.message, sources: [], candidates: ids };
   }

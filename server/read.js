@@ -9,11 +9,12 @@
 //   scrittura ai suoi elementi. Così chiudere l'app non fa perdere la lettura.
 
 import { createClient } from "@supabase/supabase-js";
-import { rebasePatch } from "../src/lib/enrich.js";
+import { rebasePatch, unreadFile } from "../src/lib/enrich.js";
 import { STATUS_KEYS } from "../src/lib/constants.js";
 import { cleanList, sanitizeItem } from "../src/lib/item.js";
 import { verifyRequest } from "./auth.js";
-import { enrichShared } from "./share.js";
+import { aiConfigured } from "./ai.js";
+import { enrichFile, enrichShared } from "./share.js";
 import { readLink, socialTarget } from "./social.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,12 +50,58 @@ export function userItemsDb(env, authHeader) {
       const { error } = await supabase.from("items").update(patch).eq("id", id);
       if (error) throw new Error(error.message);
     },
+    // File dell'elemento nello Storage (le regole RLS limitano ai propri file).
+    async download(path) {
+      const { data, error } = await supabase.storage.from("files").download(path);
+      if (error) throw new Error(error.message || "file non scaricabile");
+      return Buffer.from(await data.arrayBuffer());
+    },
   };
+}
+
+// File letti dall'AI: fino a 15 MB (limite del bucket).
+const FILE_MAX = 15 * 1024 * 1024;
+
+// Immagine o PDF senza testo già salvato: l'AI lo legge in background e
+// scrive il risultato con il token dell'utente, come per i post social.
+async function readSavedFile({ authHeader, body, env, fetchImpl, waitUntil, db, now }) {
+  const id = typeof body?.id === "string" && UUID.test(body.id) ? body.id : null;
+  const store = db || (id && env.SUPABASE_URL && env.SUPABASE_ANON_KEY && authHeader ? userItemsDb(env, authHeader) : null);
+  if (!id || !store) return { status: 400, json: { error: "Lettura del file disponibile solo con l'archivio sincronizzato." } };
+  if (!aiConfigured(env)) return { status: 503, json: { error: "AI non configurata: manca GEMINI_API_KEY sul server.", code: "ai_disabled" } };
+  if (tokenExpiresAt(authHeader) - now() <= BACKGROUND_TOKEN_MS) return { status: 401, json: { error: "Sessione in scadenza: riapri l'app e riprova." } };
+  let item;
+  try {
+    item = await store.get(id);
+  } catch {
+    return { status: 502, json: { error: "Elemento non leggibile dal database: riprova." } };
+  }
+  if (!item?.file_path) return { status: 404, json: { error: "Elemento non trovato." } };
+  const kind = unreadFile(item);
+  if (!kind) return { status: 400, json: { error: "Questo file non va letto dall'AI (già letto o di un tipo non supportato)." } };
+  if (Number(item.file_size) > FILE_MAX) return { status: 400, json: { error: "File troppo grande per la lettura dell'AI." } };
+  const known = cleanList(Array.isArray(body.categories) ? body.categories : [], 50);
+  // Stato prima della lettura (ora l'elemento è "in elaborazione").
+  const prevStatus = typeof body.prev_status === "string" && STATUS_KEYS.includes(body.prev_status) ? body.prev_status : "saved";
+  const job = store
+    .download(item.file_path)
+    .then((data) => enrichFile({ item, kind, data, known, env, fetchImpl, classify: body.ai !== false, apply: body.apply !== false, prevStatus }))
+    .catch((e) => ({ status: prevStatus === "partial" ? "partial" : "saved", status_detail: `Lettura del file non riuscita: ${e?.message || "errore"}. Puoi riprovare dalla scheda.`, processed_at: new Date().toISOString() }))
+    .then(async (patch) => {
+      const fresh = await store.get(id).catch(() => item);
+      const next = rebasePatch(fresh, item, patch);
+      if (next) await store.update(id, sanitizeItem(next));
+    })
+    .catch((e) => console.warn("extract: lettura del file non riuscita", e?.message));
+  if (waitUntil) waitUntil(job);
+  else await job;
+  return { status: 202, json: { background: true } };
 }
 
 export async function handleRead({ authHeader, body, env, fetchImpl, waitUntil, db, now = Date.now }) {
   const auth = await verifyRequest({ authHeader, env });
   if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
+  if (body?.file === true) return readSavedFile({ authHeader, body, env, fetchImpl, waitUntil, db, now });
   const raw = body?.url;
   if (typeof raw !== "string" || raw.length > 4000) return { status: 400, json: { error: "Link mancante o troppo lungo." } };
 
