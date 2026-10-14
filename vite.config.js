@@ -48,7 +48,7 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         registerType: "autoUpdate",
         injectRegister: "auto",
-        includeAssets: ["favicon.svg", "apple-touch-icon.png"],
+        includeAssets: ["favicon.svg", "icon.svg", "apple-touch-icon.png"],
         manifest: {
           id: "/",
           name: "Second Brain",
@@ -60,8 +60,8 @@ export default defineConfig(({ mode }) => {
           scope: "/",
           display: "standalone",
           orientation: "portrait",
-          background_color: "#f6f4ef",
-          theme_color: "#f6f4ef",
+          background_color: "#ffb5d0",
+          theme_color: "#ffb5d0",
           categories: ["productivity", "utilities"],
           icons: [
             { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

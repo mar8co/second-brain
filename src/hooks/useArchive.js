@@ -123,6 +123,67 @@ export function useArchive(store, { ai }) {
     [store],
   );
 
+  // Eliminazione con "Annulla": l'elemento sparisce subito e viene cancellato
+  // davvero dopo qualche secondo (o subito se l'app va in background).
+  // Restituisce la funzione che lo rimette com'era.
+  const pendingRemovals = useRef(new Map());
+  const [hidden, setHidden] = useState(() => new Set());
+  const commitRemoval = useCallback(
+    (id) => {
+      const p = pendingRemovals.current.get(id);
+      if (!p) return;
+      clearTimeout(p.timer);
+      pendingRemovals.current.delete(id);
+      store
+        .remove(p.item)
+        .then(() => setItems((list) => list.filter((x) => x.id !== id)))
+        .catch((e) => {
+          console.warn("Eliminazione non riuscita", e);
+          setError("Eliminazione non riuscita: l'elemento è ancora nell'archivio.");
+        })
+        .finally(() =>
+          setHidden((h) => {
+            const n = new Set(h);
+            n.delete(id);
+            return n;
+          }),
+        );
+    },
+    [store],
+  );
+  const removeSoon = useCallback(
+    (item, delayMs = 5000) => {
+      setHidden((h) => new Set(h).add(item.id));
+      const timer = setTimeout(() => commitRemoval(item.id), delayMs);
+      pendingRemovals.current.set(item.id, { item, timer });
+      return () => {
+        const p = pendingRemovals.current.get(item.id);
+        if (!p) return false;
+        clearTimeout(p.timer);
+        pendingRemovals.current.delete(item.id);
+        setHidden((h) => {
+          const n = new Set(h);
+          n.delete(item.id);
+          return n;
+        });
+        return true;
+      };
+    },
+    [commitRemoval],
+  );
+  useEffect(() => {
+    const flush = () => {
+      for (const id of [...pendingRemovals.current.keys()]) commitRemoval(id);
+    };
+    const onVisibility = () => document.visibilityState === "hidden" && flush();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [commitRemoval]);
+
   const reprocess = useCallback((item) => runProcess(item), [runProcess]);
 
   const classify = useCallback(
@@ -277,5 +338,8 @@ export function useArchive(store, { ai }) {
     return { done, total: list.length, failed, stopped };
   }, [store, upsert, runProcess]);
 
-  return { items, loading, error, reload, add, update, remove, reprocess, classify, categories, reanalysis, reanalyzable, reanalyzeAll };
+  // Gli elementi in attesa di eliminazione non si vedono da nessuna parte.
+  const visible = useMemo(() => (hidden.size ? items.filter((x) => !hidden.has(x.id)) : items), [items, hidden]);
+
+  return { items: visible, loading, error, reload, add, update, remove, removeSoon, reprocess, classify, categories, reanalysis, reanalyzable, reanalyzeAll };
 }

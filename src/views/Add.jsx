@@ -5,8 +5,9 @@
 // Se `text` contiene un link (come quando Instagram condivide "… https://…"),
 // il link viene estratto e il resto del testo diventa la nota.
 import { useMemo, useRef, useState } from "react";
-import { ClipboardPaste, FileUp, Link2, StickyNote } from "lucide-react";
-import { Page, TopBar } from "../components/Layout.jsx";
+import { Page, Testata } from "../components/Layout.jsx";
+import { usePageColor } from "../hooks/usePageColor.js";
+import { PAGE } from "../lib/colors.js";
 import { ChipEditor, ErrorBox, TypeIcon } from "../components/ui.jsx";
 import { typeLabel } from "../lib/format.js";
 import { detectType, displayHost, extractUrl } from "../lib/detect.js";
@@ -22,9 +23,9 @@ function initialFromQuery(query) {
 }
 
 const MODES = [
-  ["link", "Link", Link2],
-  ["note", "Nota", StickyNote],
-  ["file", "File", FileUp],
+  ["link", "Link"],
+  ["note", "Nota"],
+  ["file", "File"],
 ];
 
 export default function Add({ archive, query, navigate, back, toast }) {
@@ -40,6 +41,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
+  usePageColor(PAGE.add, { pieno: false });
 
   const cleanUrl = extractUrl(url);
   const autoType =
@@ -109,117 +111,117 @@ export default function Add({ archive, query, navigate, back, toast }) {
   };
 
   return (
-    <>
-      <TopBar title="Aggiungi" onBack={() => back("/")} />
-      <Page>
-        <form onSubmit={save} noValidate className="space-y-5">
-          <div role="tablist" aria-label="Cosa vuoi salvare" className="grid grid-cols-3 gap-1 rounded-xl bg-sunken p-1">
-            {MODES.map(([k, label, Icon]) => (
-              <button
-                key={k}
-                type="button"
-                role="tab"
-                aria-selected={mode === k}
-                onClick={() => {
-                  setMode(k);
-                  setTypeOverride(null);
-                  setError(null);
-                }}
-                className={`flex min-h-[40px] items-center justify-center gap-1.5 rounded-lg text-sm font-medium ${mode === k ? "bg-surface text-ink shadow-sm" : "text-muted"}`}
-              >
-                <Icon className="h-4 w-4" aria-hidden="true" /> {label}
+    <Page>
+      <Testata onBack={() => back("/")} />
+      <h1 className="gigante">Aggiungi</h1>
+      <form onSubmit={save} noValidate className="space-y-6">
+        <div role="tablist" aria-label="Cosa vuoi salvare" className="grid grid-cols-3 gap-1.5">
+          {MODES.map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={mode === k}
+              onClick={() => {
+                setMode(k);
+                setTypeOverride(null);
+                setError(null);
+              }}
+              className={`pillola${mode === k ? " attiva" : ""}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === "link" && (
+          <div>
+            <label htmlFor="add-url" className="etichetta">Link</label>
+            <div className="flex items-end gap-2">
+              <input
+                id="add-url"
+                type="url"
+                inputMode="url"
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                autoFocus={!init.url}
+                className="campo"
+                placeholder="https://www.instagram.com/reel/…"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                aria-describedby="url-help"
+              />
+              <button type="button" className="pillola mb-1.5" onClick={paste} aria-label="Incolla dagli appunti">
+                Incolla
+              </button>
+            </div>
+            <p id="url-help" className="micro mt-1.5 text-[0.8rem]">
+              {cleanUrl ? <>Da <strong className="font-bold text-inchiostro">{displayHost(cleanUrl)}</strong>: leggerò titolo e testo pubblici dopo il salvataggio.</> : "Incolla un link: articoli, Reel, video, posti di Google o Apple Maps…"}
+            </p>
+          </div>
+        )}
+
+        {mode === "file" && (
+          <div>
+            <label htmlFor="add-file" className="etichetta">File (immagini, PDF, testo · max 15 MB)</label>
+            <input
+              id="add-file"
+              ref={fileRef}
+              type="file"
+              accept={[...ACCEPTED_MIME, ".md", ".heic"].join(",")}
+              className="mt-1.5 block w-full text-sm font-semibold file:mr-3 file:min-h-[44px] file:rounded-full file:border-0 file:bg-inchiostro file:px-5 file:font-bold file:text-sfondo"
+              onChange={(e) => pickFile(e.target.files?.[0] || null)}
+            />
+            {file && <p className="micro mt-1.5 text-[0.8rem]">{file.name} · <span className="num">{(file.size / 1024 / 1024).toFixed(1)} MB</span></p>}
+          </div>
+        )}
+
+        <div>
+          <label htmlFor="add-title" className="etichetta">Titolo {mode === "note" ? "" : "(facoltativo)"}</label>
+          <input id="add-title" className="campo" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={mode === "link" ? "Lo leggo dal link se lo lasci vuoto" : ""} maxLength={300} autoComplete="off" />
+        </div>
+
+        <div>
+          <label htmlFor="add-note" className="etichetta">{mode === "note" ? "Testo" : "Nota (facoltativa)"}</label>
+          <textarea
+            id="add-note"
+            className="campo min-h-[110px]"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={mode === "link" ? "Perché lo salvi? Es. “ricetta pasta al limone da provare”" : "Scrivi qui…"}
+            maxLength={20000}
+          />
+          {mode === "link" && /instagram/i.test(cleanUrl || "") && (
+            <p className="micro mt-1.5 text-[0.8rem]">Instagram di solito non permette di leggere il contenuto senza accesso: una nota ti aiuterà a ritrovarlo.</p>
+          )}
+        </div>
+
+        <fieldset>
+          <legend className="etichetta">Tipo</legend>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {typeChoices.map((t) => (
+              <button key={t} type="button" aria-pressed={type === t} className={`pillola${type === t ? " attiva" : ""}`} onClick={() => setTypeOverride(t)}>
+                <TypeIcon type={t} className="h-4 w-4" /> {typeLabel(t)}
               </button>
             ))}
-          </div>
-
-          {mode === "link" && (
-            <div>
-              <label htmlFor="add-url" className="label">Link</label>
-              <div className="flex gap-2">
-                <input
-                  id="add-url"
-                  type="url"
-                  inputMode="url"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoFocus={!init.url}
-                  className="input"
-                  placeholder="https://www.instagram.com/reel/…"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  aria-describedby="url-help"
-                />
-                <button type="button" className="btn-ghost shrink-0 px-3" onClick={paste} aria-label="Incolla dagli appunti">
-                  <ClipboardPaste className="h-5 w-5" aria-hidden="true" />
-                </button>
-              </div>
-              <p id="url-help" className="mt-1.5 text-sm text-muted">
-                {cleanUrl ? <>Da <strong>{displayHost(cleanUrl)}</strong>: leggerò titolo e testo pubblici dopo il salvataggio.</> : "Incolla un link: articoli, Reel, video, posti di Google o Apple Maps…"}
-              </p>
-            </div>
-          )}
-
-          {mode === "file" && (
-            <div>
-              <label htmlFor="add-file" className="label">File (immagini, PDF, testo · max 15 MB)</label>
-              <input
-                id="add-file"
-                ref={fileRef}
-                type="file"
-                accept={[...ACCEPTED_MIME, ".md", ".heic"].join(",")}
-                className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-accent file:px-4 file:py-2.5 file:font-medium file:text-accent-ink"
-                onChange={(e) => pickFile(e.target.files?.[0] || null)}
-              />
-              {file && <p className="mt-1.5 text-sm text-muted">{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</p>}
-            </div>
-          )}
-
-          <div>
-            <label htmlFor="add-title" className="label">Titolo {mode === "note" ? "" : "(facoltativo)"}</label>
-            <input id="add-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={mode === "link" ? "Lo leggo dal link se lo lasci vuoto" : ""} maxLength={300} />
-          </div>
-
-          <div>
-            <label htmlFor="add-note" className="label">{mode === "note" ? "Testo" : "Nota (facoltativa)"}</label>
-            <textarea
-              id="add-note"
-              className="input min-h-[110px]"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={mode === "link" ? "Perché lo salvi? Es. “ricetta pasta al limone da provare”" : "Scrivi qui…"}
-              maxLength={20000}
-            />
-            {mode === "link" && /instagram/i.test(cleanUrl || "") && (
-              <p className="mt-1.5 text-sm text-muted">Instagram di solito non permette di leggere il contenuto senza accesso: una nota ti aiuterà a ritrovarlo.</p>
+            {!typeChoices.includes(type) && (
+              <span className="pillola attiva"><TypeIcon type={type} className="h-4 w-4" /> {TYPES[type]?.label}</span>
             )}
           </div>
+        </fieldset>
 
-          <fieldset>
-            <legend className="label">Tipo</legend>
-            <div className="flex flex-wrap gap-1.5">
-              {typeChoices.map((t) => (
-                <button key={t} type="button" aria-pressed={type === t} className={type === t ? "chip-on" : "chip"} onClick={() => setTypeOverride(t)}>
-                  <TypeIcon type={t} className="h-4 w-4" /> {typeLabel(t)}
-                </button>
-              ))}
-              {!typeChoices.includes(type) && (
-                <span className="chip-on"><TypeIcon type={type} className="h-4 w-4" /> {TYPES[type]?.label}</span>
-              )}
-            </div>
-          </fieldset>
+        <ChipEditor label="Categorie" values={categories} onChange={setCategories} suggestions={archive.categories} placeholder="Scegli o scrivi e premi Invio" />
+        <ChipEditor label="Tag" values={tags} onChange={setTags} lowercase placeholder="es. pasta, roma, regalo" />
 
-          <ChipEditor label="Categorie" values={categories} onChange={setCategories} suggestions={archive.categories} placeholder="Scegli o scrivi e premi Invio" />
-          <ChipEditor label="Tag" values={tags} onChange={setTags} lowercase placeholder="es. pasta, roma, regalo" />
+        {error && <ErrorBox>{error}</ErrorBox>}
 
-          {error && <ErrorBox>{error}</ErrorBox>}
-
-          <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] -mx-4 bg-bg/95 px-4 py-3 backdrop-blur">
-            <button type="submit" className="btn-primary w-full min-h-[52px] text-[17px]" disabled={saving}>
-              {saving ? "Salvataggio…" : "Salva"}
-            </button>
-          </div>
-        </form>
-      </Page>
-    </>
+        <div className="sticky bottom-0 -mx-4 bg-sfondo px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3">
+          <button type="submit" className="bottone grande-azione" disabled={saving}>
+            {saving ? "Salvo…" : "Salva"}
+          </button>
+        </div>
+      </form>
+    </Page>
   );
 }

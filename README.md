@@ -138,6 +138,18 @@ Insieme al testo si salvano **chi ha pubblicato il post** (`author`, es. "Mario 
 - **Ricerca** nel browser su titolo, autore, tag, categorie, descrizione, nota, nome del posto, URL, scheda dell'AI (riassunto, punti chiave, persone, parole chiave) e testo estratto, ignorando accenti e con riconoscimento semplice di singolare/plurale. **Filtri** per tipo, stato, categoria, tag e intervallo di date.
 - **Chat (come NotebookLM)**: la schermata principale è solo una conversazione con la propria memoria; i contenuti salvati stanno in Archivio (un link incollato nella chat viene salvato lì). Se tutto l'archivio ci sta (circa 240.000 caratteri), Gemini ne riceve il **contenuto completo** (didascalie, trascrizioni, testi, fino a 12.000 caratteri per elemento). Altrimenti prima sceglie dalle **schede brevi** di tutto l'archivio quali elementi leggere per intero (azione `select`), poi risponde con il contenuto completo di quelli (fino a 10, insieme alle fonti della risposta precedente e agli elementi con le parole della domanda) e le schede degli altri. La risposta usa esclusivamente questi dati, cita le fonti nel testo con [1], [2] e per ogni fonte riporta un breve passaggio copiato dal contenuto: il server rinumera le citazioni, scarta le fonti che non erano tra quelle inviate e tiene un passaggio solo se si trova davvero nel testo. Le domande di seguito ("e quanto costa?") portano con sé gli ultimi turni della conversazione (fino a 4, dell'ultima ora). Se le informazioni non bastano lo dice. Senza AI vengono mostrati gli elementi più pertinenti per parole.
 
+### Aspetto
+
+La grafica segue le linee guida comuni delle app di Marco (stile "manifesto svizzero"). In breve:
+
+- carattere Inter Tight, titoli enormi a peso 800, inchiostro nero sui colori pieni;
+- un colore per schermata, che colora anche la barra di stato: Chat rosa, Archivio bianco, Impostazioni giallo. Ogni elemento ha il suo colore fisso, nella riga dell'Archivio e nella sua scheda;
+- barra in basso a pillola nera, righe sottili al posto delle scatole, pillole e cerchi;
+- niente sfumature né sfocature, niente finestre del sistema: le conferme sono schede dell'app e le eliminazioni si annullano dall'avviso "Annulla";
+- l'icona è un cervello nero su quadrato rosa (`public/icon.svg`; PNG con `npm run icons`).
+
+I token sono in `src/index.css` e `tailwind.config.js`, i colori delle pagine in `src/lib/colors.js`.
+
 ## Modello dei dati
 
 Tabella `items` (vedi `supabase/schema.sql`; la modalità locale usa la stessa forma):
@@ -175,7 +187,7 @@ Tabella `items` (vedi `supabase/schema.sql`; la modalità locale usa la stessa f
 Funziona oggi:
 
 1. In Instagram (o in qualsiasi app) tocca Condividi o ··· → **Copia link**.
-2. Apri Second Brain e tocca **Incolla link** (iOS chiede il permesso di incollare) oppure Aggiungi → icona appunti.
+2. Apri Second Brain e incolla il link nella chat, oppure Archivio → **+** → **Incolla** (iOS chiede il permesso di incollare).
 
 L'app accetta anche indirizzi già compilati, pensati per Comandi Rapidi:
 

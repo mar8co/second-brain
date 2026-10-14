@@ -2,43 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Token di colore (RGB separati per l'alpha di Tailwind). Contrasti verificati
-   per testo normale ≥ 4.5:1 su bg e surface. */
+/* Stile "manifesto svizzero", comune alle app di Marco (LINEE-GUIDA-DESIGN.md):
+   tipografia protagonista, un colore pieno per schermata, inchiostro nero,
+   righe sottili al posto delle scatole, pillole e cerchi. Niente sfumature,
+   vetro, sfocature o trasparenze decorative. */
 :root {
-  --bg: 246 244 239;
-  --surface: 255 255 255;
-  --sunken: 236 233 225;
-  --ink: 28 30 33;
-  --muted: 92 96 102;
-  --line: 222 218 208;
-  --accent: 31 77 71;
-  --accent-ink: 255 255 255;
-  --accent-soft: 220 234 230;
-  --ok: 30 110 60;
-  --warn: 150 90 0;
-  --bad: 170 40 40;
-  --ai: 100 60 160;
+  --carta: #efede8;
+  --superficie: #ffffff;
+  --inchiostro: #0a0a0a;
+  --tenue: rgb(10 10 10 / 0.62);
+  --riga: rgb(10 10 10 / 0.16);
+  --rosso: #ff3b1c;
+  --giallo: #ffd60a;
+  --blu: #3572e8;
+  --verde: #22b35e;
+  --rosa: #ffb5d0;
+  --arancio: #ff7a1a;
+  --grigio: #c9c5bd;
+  --sabbia: #dccdb2;
+  --sfondo: var(--carta);
+  --font: "Inter Tight Variable", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: 22 23 26;
-    --surface: 32 34 38;
-    --sunken: 42 44 49;
-    --ink: 236 236 232;
-    --muted: 168 170 174;
-    --line: 58 61 67;
-    --accent: 128 196 184;
-    --accent-ink: 16 32 30;
-    --accent-soft: 34 58 54;
-    --ok: 120 200 140;
-    --warn: 230 180 90;
-    --bad: 240 130 120;
-    --ai: 190 160 240;
+    --carta: #0c0c0c;
+    --superficie: #1a1a1a;
+    --inchiostro: #f3f1ec;
+    --tenue: rgb(243 241 236 / 0.55);
+    --riga: rgb(243 241 236 / 0.18);
     color-scheme: dark;
   }
 }
+
+/* Pagine e schede a colore pieno: inchiostro nero anche col tema scuro. */
+.pieno {
+  --inchiostro: #0a0a0a;
+  --tenue: rgb(10 10 10 / 0.72);
+  --riga: rgb(10 10 10 / 0.18);
+  --superficie: #ffffff;
+  color: var(--inchiostro);
+  color-scheme: light;
+}
+
+/* Nessuna barra di scorrimento visibile, mai: si scorre lo stesso. */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
 html {
   -webkit-text-size-adjust: 100%;
@@ -46,47 +56,210 @@ html {
 }
 
 body {
-  @apply bg-bg text-ink font-sans antialiased;
+  background: var(--sfondo);
+  color: var(--inchiostro);
+  font: 500 16px/1.35 var(--font);
+  -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
+  transition: background-color 0.25s;
 }
 
-/* Focus visibile per la tastiera, discreto al tocco. */
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
 :focus-visible {
-  outline: 3px solid rgb(var(--accent));
+  outline: 3px solid var(--inchiostro);
   outline-offset: 2px;
   border-radius: 6px;
 }
 
-.pt-safe { padding-top: max(env(safe-area-inset-top), 0.75rem); }
-.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-.no-scrollbar { scrollbar-width: none; }
+@layer components {
+  /* Pagina e intestazione */
+  .pagina { max-width: 560px; margin: 0 auto; padding: 0 16px calc(110px + env(safe-area-inset-bottom)); }
+  .testata {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    min-height: 36px; padding: calc(12px + env(safe-area-inset-top)) 0 14px;
+  }
 
-/* Chat sul telefono: mentre si scrive la barra Chat / Archivio sparisce e il
-   campo scende sopra la tastiera. */
+  /* Tipografia: più il testo è grande, più è stretto. */
+  .gigante { font-size: clamp(3.4rem, 17vw, 5.4rem); font-weight: 800; letter-spacing: -0.065em; line-height: 0.84; margin: 0.2rem 0 1.1rem -0.04em; }
+  .titolo-home { font-size: clamp(2.6rem, 13.5vw, 3.6rem); font-weight: 800; letter-spacing: -0.065em; line-height: 0.9; margin: 0.1rem 0 1rem -0.03em; }
+  .titolo-scheda { font-size: clamp(1.9rem, 9vw, 2.5rem); font-weight: 800; letter-spacing: -0.055em; line-height: 0.98; margin-left: -0.02em; overflow-wrap: anywhere; }
+  .grande { font-size: 1.9rem; font-weight: 750; letter-spacing: -0.045em; line-height: 0.95; }
+  .micro { font-size: 0.72rem; font-weight: 500; color: var(--tenue); line-height: 1.25; }
+  .num { font-variant-numeric: tabular-nums; }
+  .errore { color: #c21d05; font-weight: 600; }
+  .etichetta { display: block; font-size: 0.72rem; font-weight: 600; color: var(--tenue); line-height: 1.25; margin-bottom: 2px; }
+  .sezione {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    font-size: 0.78rem; font-weight: 600; margin: 1.6rem 0 0.5rem;
+    padding-bottom: 0.4rem; border-bottom: 1.5px solid var(--inchiostro);
+  }
+
+  /* Pulsanti */
+  .bottone {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    border: none; border-radius: 999px; padding: 0.85rem 1.3rem; min-height: 50px;
+    font-weight: 700; font-size: 1rem; letter-spacing: -0.01em; text-decoration: none;
+    background: var(--inchiostro); color: var(--sfondo); transition: transform 0.08s;
+  }
+  .pieno .bottone { background: #0a0a0a; color: #fff; }
+  .bottone:active { transform: scale(0.97); }
+  .bottone.chiaro, .pieno .bottone.chiaro { background: transparent; color: inherit; border: 1.5px solid currentColor; }
+  .bottone.largo { width: 100%; }
+  .bottone.grande-azione { width: 100%; min-height: 60px; font-size: 1.15rem; font-weight: 750; }
+  .bottone.rosso, .pieno .bottone.rosso { background: #e02a0d; color: #fff; }
+  .bottone:disabled, .bottone[aria-disabled="true"] { opacity: 0.35; cursor: default; transform: none; }
+  .bottoni { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .bottoni .bottone { flex: 1 1 auto; }
+
+  .link {
+    display: inline-flex; align-items: center; gap: 0.35rem; min-height: 36px; padding: 0.35rem 0;
+    background: none; border: none; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; color: inherit;
+  }
+  .link.rosso { color: #e02a0d; }
+  .link:disabled { opacity: 0.35; }
+
+  .tondo {
+    width: 36px; height: 36px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+    border: 1.5px solid var(--inchiostro); background: transparent; font-size: 1.2rem; font-weight: 500; line-height: 1; padding: 0;
+  }
+  .tondo.nero { background: var(--inchiostro); color: var(--sfondo); }
+  .pieno .tondo.nero { background: #0a0a0a; color: #fff; }
+  .tondo:disabled { opacity: 0.35; }
+
+  /* Pillole e chip: selezionato = pieno nero, altrimenti solo bordo. */
+  .pillola {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; flex: none;
+    border: 1.5px solid var(--inchiostro); background: transparent; border-radius: 999px;
+    padding: 0.45rem 0.85rem; min-height: 38px; font-weight: 700; font-size: 0.88rem; white-space: nowrap;
+  }
+  .pillola.attiva { background: var(--inchiostro); color: var(--sfondo); }
+  .pieno .pillola.attiva { background: #0a0a0a; color: #fff; }
+  .pillola:disabled { opacity: 0.35; }
+  .fila-chip { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px; padding: 0 16px 2px; }
+  .cartellino {
+    display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+    border: 1.3px solid var(--inchiostro); border-radius: 999px; padding: 1px 8px; font-size: 0.7rem; font-weight: 700; line-height: 1.4;
+  }
+  .cartellino.nero { background: var(--inchiostro); color: var(--sfondo); }
+  .pieno .cartellino.nero { background: #0a0a0a; color: #fff; }
+
+  /* Campi: solo una riga sotto, niente scatola. */
+  .campo {
+    width: 100%; min-height: 50px; padding: 0.6rem 0 calc(0.6rem + 1.5px); border: none; border-radius: 0;
+    border-bottom: 1.5px solid var(--inchiostro); background: transparent; outline: none;
+    font-size: 1.25rem; font-weight: 600; letter-spacing: -0.02em;
+  }
+  .campo:focus, .campo:focus-visible { border-bottom-width: 3px; padding-bottom: 0.6rem; outline: none; border-radius: 0; }
+  .campo::placeholder { color: var(--tenue); opacity: 1; }
+  textarea.campo { resize: none; font-size: 1.05rem; line-height: 1.35; letter-spacing: 0; }
+  .campo.piccolo { font-size: 1.05rem; min-height: 44px; letter-spacing: 0; }
+
+  /* Riquadri */
+  .card-bianca {
+    --inchiostro: #0a0a0a; --tenue: rgb(10 10 10 / 0.62); --riga: rgb(10 10 10 / 0.14); --sfondo: #fff;
+    background: #fff; color: #0a0a0a; border-radius: 18px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.1);
+  }
+  .riquadro { background: #fff; color: #0a0a0a; border-radius: 14px; padding: 12px 14px; }
+
+  /* Righe di una lista: un filo sottile fra una e l'altra. */
+  .righe > li + li { border-top: 1px solid var(--riga); }
+
+  /* Dati come su una carta d'imbarco: etichetta piccola sopra, valore sotto. */
+  .griglia-dati {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0;
+    padding: 10px 0; border-top: 1.5px solid var(--inchiostro); border-bottom: 1.5px solid var(--inchiostro);
+  }
+  .griglia-dati > :last-child { text-align: right; }
+  .griglia-dati b { display: block; font-weight: 750; font-size: 1.05rem; letter-spacing: -0.02em; line-height: 1.15; }
+
+  /* Interruttore */
+  .riga-interruttore {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 50px;
+    padding: 8px 0; background: none; border: none; text-align: left;
+  }
+  .riga-interruttore i {
+    position: relative; flex: none; width: 44px; height: 26px; border-radius: 999px; background: rgb(10 10 10 / 0.18); transition: background-color 0.15s;
+  }
+  .riga-interruttore i::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); transition: transform 0.15s;
+  }
+  .riga-interruttore[aria-checked="true"] i { background: var(--verde); }
+  .riga-interruttore[aria-checked="true"] i::after { transform: translateX(18px); }
+  .riga-interruttore:disabled { opacity: 0.4; }
+
+  /* Barra in basso: pillola nera flottante, solo parole. */
+  .schede {
+    position: fixed; left: 50%; transform: translateX(-50%); z-index: 20; bottom: calc(12px + env(safe-area-inset-bottom));
+    display: flex; gap: 4px; padding: 5px; border-radius: 999px; background: #0a0a0a; box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
+  }
+  .schede a {
+    border-radius: 999px; padding: 0.7rem 1.25rem; font-weight: 650; font-size: 0.92rem; letter-spacing: -0.01em;
+    white-space: nowrap; color: #f3f1ec; text-decoration: none; transition: background-color 0.18s, color 0.18s;
+  }
+  .schede a[aria-current="page"] { background: #f3f1ec; color: #0a0a0a; }
+
+  /* Avviso breve, appena sopra la barra; "Annulla" in giallo. */
+  .brindisi {
+    position: fixed; left: 50%; translate: -50% 0; z-index: 50; max-width: calc(100vw - 32px);
+    display: flex; align-items: center; gap: 14px; padding: 0.7rem 1.1rem; border-radius: 999px;
+    background: #0a0a0a; color: #fff; font-weight: 650; font-size: 0.92rem; animation: sale 0.2s ease-out;
+  }
+  .brindisi span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .brindisi button { flex: none; background: none; border: none; padding: 0; color: var(--giallo); font-weight: 800; font-size: 0.95rem; }
+
+  /* Scheda che sale dal basso: messaggi e domande dell'app. */
+  .velo { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / 0.45); animation: appare 0.15s ease-out; }
+  .zona-foglio { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; }
+  .foglio {
+    width: 100%; max-width: 560px; max-height: min(94dvh, calc(100% - 10px)); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+    background: var(--c, var(--giallo)); border-radius: 28px 28px 0 0;
+    padding: 16px 18px max(16px, calc(env(safe-area-inset-bottom) - 8px)); animation: sale 0.25s ease-out;
+  }
+  .maniglia { display: block; width: 44px; height: 5px; border-radius: 3px; background: rgb(10 10 10 / 0.25); margin: -6px auto 14px; }
+  .velo.esce { animation: sparisce 0.2s ease-in forwards; pointer-events: none; }
+  .velo.esce .foglio { animation: scende 0.2s ease-in forwards; }
+  .domanda-titolo { font-size: 2.3rem; font-weight: 800; letter-spacing: -0.06em; line-height: 0.95; }
+  .domanda-testo { font-size: 1.05rem; font-weight: 600; line-height: 1.38; margin-top: 18px; }
+
+  .pulsa { animation: pulsa 1s ease-in-out infinite; }
+}
+
+@media (display-mode: standalone) {
+  /* iOS 26 sfoca la fascia sotto l'orologio: lì non va niente di importante. */
+  .testata { padding-top: calc(env(safe-area-inset-top) + 20px); }
+  .foglio { max-height: min(94dvh, calc(100% - env(safe-area-inset-top) - 50px)); }
+}
+
+/* Chat: il campo resta in fondo con la barra sopra. Sul telefono, mentre si
+   scrive, la barra sparisce e il campo scende subito sopra la tastiera. */
+.chat-composer { padding: 8px 16px calc(78px + env(safe-area-inset-bottom)); background: var(--sfondo); }
+.campo-chat {
+  flex: 1; min-width: 0; min-height: 46px; max-height: 10rem; overflow-y: auto; resize: none; outline: none;
+  padding: 11px 16px; border: 1.5px solid #0a0a0a; border-radius: 23px; background: #fff; color: #0a0a0a;
+  font-size: 1.05rem; font-weight: 600; line-height: 1.3;
+}
+.campo-chat::placeholder { color: rgb(10 10 10 / 0.5); opacity: 1; }
+.campo-chat:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px #0a0a0a; }
+/* Nuova chat e Impostazioni restano sempre a portata, in alto a destra. */
+.comandi-chat { position: fixed; z-index: 20; right: 16px; top: calc(12px + env(safe-area-inset-top)); display: flex; gap: 8px; }
+.comandi-chat > * { background: var(--sfondo); }
+@media (display-mode: standalone) {
+  .comandi-chat { top: calc(env(safe-area-inset-top) + 20px); }
+}
 @media (pointer: coarse) {
   body:has(.chat-composer:focus-within) .bottom-nav { display: none; }
-  .chat-composer:focus-within { bottom: 0; }
+  .chat-composer:focus-within { padding-bottom: 8px; }
 }
-.no-scrollbar::-webkit-scrollbar { display: none; }
 
-@layer components {
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 min-h-[44px] font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none;
-  }
-  .btn-primary { @apply btn bg-accent text-accent-ink; }
-  .btn-ghost { @apply btn bg-transparent text-ink border border-line; }
-  .btn-danger { @apply btn bg-transparent text-bad border border-bad/40; }
-  .input {
-    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-3 text-[16px] text-ink placeholder:text-muted focus:border-accent focus:outline-none;
-  }
-  .label { @apply block text-sm font-medium text-muted mb-1.5; }
-  .card { @apply rounded-2xl bg-surface border border-line; }
-  .chip {
-    @apply inline-flex items-center gap-1 rounded-full border border-line bg-surface px-3 min-h-[34px] text-sm text-ink;
-  }
-  .chip-on { @apply chip bg-accent text-accent-ink border-accent; }
-}
+@keyframes appare { from { opacity: 0; } }
+@keyframes sale { from { transform: translateY(24px); opacity: 0; } }
+@keyframes sparisce { to { opacity: 0; } }
+@keyframes scende { to { transform: translateY(24px); opacity: 0; } }
+@keyframes pulsa { 50% { transform: scale(0.9); } }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }

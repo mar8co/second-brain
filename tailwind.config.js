@@ -1,26 +1,31 @@
 /** @type {import('tailwindcss').Config} */
+// Colori e carattere dalle linee guida comuni delle app di Marco (stile
+// "manifesto svizzero"): i token cambiano col tema in src/index.css.
 export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
       colors: {
-        bg: "rgb(var(--bg) / <alpha-value>)",
-        surface: "rgb(var(--surface) / <alpha-value>)",
-        sunken: "rgb(var(--sunken) / <alpha-value>)",
-        ink: "rgb(var(--ink) / <alpha-value>)",
-        muted: "rgb(var(--muted) / <alpha-value>)",
-        line: "rgb(var(--line) / <alpha-value>)",
-        accent: "rgb(var(--accent) / <alpha-value>)",
-        "accent-ink": "rgb(var(--accent-ink) / <alpha-value>)",
-        "accent-soft": "rgb(var(--accent-soft) / <alpha-value>)",
-        ok: "rgb(var(--ok) / <alpha-value>)",
-        warn: "rgb(var(--warn) / <alpha-value>)",
-        bad: "rgb(var(--bad) / <alpha-value>)",
-        ai: "rgb(var(--ai) / <alpha-value>)",
+        carta: "var(--carta)",
+        superficie: "var(--superficie)",
+        inchiostro: "var(--inchiostro)",
+        tenue: "var(--tenue)",
+        riga: "var(--riga)",
+        sfondo: "var(--sfondo)",
+        rosso: "#ff3b1c",
+        giallo: "#ffd60a",
+        blu: "#3572e8",
+        verde: "#22b35e",
+        rosa: "#ffb5d0",
+        arancio: "#ff7a1a",
+        grigio: "#c9c5bd",
+        sabbia: "#dccdb2",
+        "rosso-azione": "#e02a0d",
+        errore: "#c21d05",
+        crema: "#f3f1ec",
       },
       fontFamily: {
-        sans: ["-apple-system", "BlinkMacSystemFont", '"SF Pro Text"', "Inter", "system-ui", "sans-serif"],
-        serif: ['"New York"', "ui-serif", "Georgia", "serif"],
+        sans: ['"Inter Tight Variable"', '"Helvetica Neue"', "Helvetica", "Arial", "system-ui", "sans-serif"],
       },
     },
   },

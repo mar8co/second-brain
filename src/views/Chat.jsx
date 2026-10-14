@@ -4,9 +4,10 @@
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, ExternalLink, Loader2, Settings } from "lucide-react";
-import { TopBar } from "../components/Layout.jsx";
-import { AiBadge, ErrorBox, TypeIcon } from "../components/ui.jsx";
+import { ArrowUp, Settings } from "lucide-react";
+import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
+import { usePageColor } from "../hooks/usePageColor.js";
+import { PAGE } from "../lib/colors.js";
 import { askArchive, recentTurns } from "../lib/ask.js";
 import { getChatLog, updateChatLog, useChatLog } from "../lib/chatlog.js";
 import { countBy } from "../lib/search.js";
@@ -36,6 +37,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   const endRef = useRef(null);
   const boxRef = useRef(null);
   const autoAsked = useRef(false);
+  usePageColor(PAGE.chat);
 
   // Il campo cresce con il testo (fino a circa 6 righe, poi scorre).
   useLayoutEffect(() => {
@@ -59,7 +61,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 
   // Si parte dal fondo, come in una chat, e si scende a ogni nuovo messaggio.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
+    if (log.length) endRef.current?.scrollIntoView({ block: "end" });
   }, [log, loading]);
 
   const ask = async (question) => {
@@ -103,71 +105,68 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     ask(t);
   };
 
+  // Nuova chat subito, con "Annulla" per ripensarci.
   const clearLog = () => {
-    if (!window.confirm("Iniziare una nuova conversazione? Domande e risposte spariscono dalla chat; i contenuti salvati restano.")) return;
+    const prev = getChatLog();
     updateChatLog(() => []);
+    toast("Chat svuotata", { action: { label: "Annulla", run: () => updateChatLog(() => prev) } });
   };
 
   return (
     <>
-      <TopBar
-        title="Second Brain"
-        right={
-          <>
-            {log.length > 0 && (
-              <button type="button" className="text-sm font-medium text-muted" onClick={clearLog}>
-                Nuova chat
-              </button>
-            )}
-            <button type="button" className="btn -mr-2 px-2 text-ink" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
-              <Settings className="h-6 w-6" aria-hidden="true" />
-            </button>
-          </>
-        }
-      />
+      <div className="comandi-chat">
+        {log.length > 0 && (
+          <button type="button" className="pillola" onClick={clearLog}>
+            Nuova chat
+          </button>
+        )}
+        <button type="button" className="tondo" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
+          <Settings className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
+        </button>
+      </div>
 
-      <main className="mx-auto max-w-2xl px-3 pb-[calc(9.5rem+env(safe-area-inset-bottom))] pt-3" aria-label="Chat">
+      <main className="pagina !pb-[calc(160px+env(safe-area-inset-bottom))]" aria-label="Chat">
+        <div className="testata" aria-hidden="true" />
+        <h1 className="gigante">Second Brain</h1>
+        {!loading && items.length > 0 && (
+          <p className="micro -mt-2 mb-4 font-semibold" role="status">
+            Memoria: <span className="num">{items.length}</span> {items.length === 1 ? "contenuto" : "contenuti"}
+            {pending > 0 && <> · <span className="num">{pending}</span> ancora da elaborare</>}
+          </p>
+        )}
         {!syncMode && (
-          <p className="mb-3 rounded-xl border border-warn/30 bg-warn/5 p-3 text-sm">
-            <strong>Modalità locale:</strong> i dati restano solo in questo browser, senza sincronizzazione né backup.
+          <p className="riquadro mb-4 text-[0.92rem] font-semibold">
+            <strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser, senza sincronizzazione né backup.
           </p>
         )}
         {error && <ErrorBox onRetry={reload}>{error}</ErrorBox>}
-        {!loading && items.length > 0 && (
-          <p className="mb-2 text-center text-xs text-muted" role="status">
-            Memoria: {items.length} {items.length === 1 ? "contenuto" : "contenuti"}
-            {pending > 0 && ` · ${pending} ancora da elaborare`}
-          </p>
-        )}
         {loading ? (
-          <p role="status" className="flex items-center justify-center gap-2 py-10 text-muted">
-            <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> Carico la tua memoria…
-          </p>
+          <Spinner label="Carico la tua memoria…" />
         ) : log.length === 0 ? (
-          <div className="px-4 py-14 text-center text-muted">
-            <p className="text-lg font-semibold text-ink">Chiedimi qualsiasi cosa</p>
-            <p className="mt-1.5">
+          <div className="pt-4">
+            <p className="grande">Chiedimi qualsiasi cosa</p>
+            <p className="mt-2.5 max-w-sm font-medium text-tenue">
               {items.length
                 ? "Rispondo solo con i contenuti che hai salvato: Reel, TikTok, video, caroselli, immagini, siti e note. Ti indico sempre le fonti."
                 : 'Salva qualcosa con il Comando Rapido "Second Brain" o incolla qui un link: lo leggo, lo trascrivo e lo aggiungo alla tua memoria.'}
             </p>
             {suggestions.length > 0 && (
-              <ul className="mt-5 flex flex-col items-center gap-2">
+              <ul className="mt-5 flex flex-wrap gap-1.5">
                 {suggestions.map((s) => (
                   <li key={s}>
-                    <button type="button" className="chip" onClick={() => ask(s)}>{s}</button>
+                    <button type="button" className="pillola" onClick={() => ask(s)}>{s}</button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
         ) : (
-          <ol className="space-y-3">
+          <ol className="space-y-4">
             {conversation.map(({ msg, newDay }) => (
               <li key={msg.id}>
                 {newDay && (
-                  <p className="my-3 text-center">
-                    <span className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted">{dayLabel(msg.at)}</span>
+                  <p className="my-4 text-center">
+                    <span className="cartellino">{dayLabel(msg.at)}</span>
                   </p>
                 )}
                 <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} />
@@ -178,19 +177,14 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
         <div ref={endRef} />
       </main>
 
-      {/* Mentre si scrive, sul telefono la barra Chat / Archivio si nasconde e il
-          campo resta subito sopra la tastiera (vedi .chat-composer in index.css). */}
-      <form
-        onSubmit={send}
-        className="chat-composer fixed inset-x-0 bottom-[calc(56px+env(safe-area-inset-bottom))] z-20 border-t border-line/60 bg-bg/95 backdrop-blur"
-      >
-        <div className="mx-auto flex max-w-2xl items-end gap-2 px-3 py-2">
+      <form onSubmit={send} className="chat-composer fixed inset-x-0 bottom-0 z-10">
+        <div className="mx-auto flex max-w-[528px] items-end gap-2">
           <label htmlFor="chat-q" className="sr-only">Chiedi alla tua memoria</label>
           <textarea
             ref={boxRef}
             id="chat-q"
             rows={1}
-            className="input max-h-40 min-h-[44px] resize-none overflow-y-auto py-2.5"
+            className="campo-chat"
             placeholder="Chiedi alla tua memoria…"
             value={text}
             maxLength={1000}
@@ -202,8 +196,8 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
           />
           {/* Il tocco sul tasto non toglie il cursore dal campo: niente salto della
               barra prima dell'invio. */}
-          <button type="submit" className="btn-primary h-11 w-11 shrink-0 rounded-full px-0" disabled={!text.trim()} aria-label="Invia" onMouseDown={(e) => e.preventDefault()}>
-            <ArrowUp className="h-5 w-5" aria-hidden="true" />
+          <button type="submit" className="tondo nero h-[46px] w-[46px]" disabled={!text.trim()} aria-label="Invia" onMouseDown={(e) => e.preventDefault()}>
+            <ArrowUp className="h-5 w-5" strokeWidth={3} aria-hidden="true" />
           </button>
         </div>
       </form>
@@ -211,7 +205,8 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   );
 }
 
-// Domanda (a destra) e risposta di Second Brain (a sinistra), con le fonti.
+// Domanda (a destra, nera) e risposta di Second Brain (a sinistra, bianca),
+// con le fonti.
 function QaBubbles({ msg, byId, archiveOk, onOpen }) {
   const r = msg.result;
   const answered = r && (r.kind === "answer" || r.kind === "insufficient");
@@ -224,16 +219,16 @@ function QaBubbles({ msg, byId, archiveOk, onOpen }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <p className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-accent px-3.5 py-2 text-accent-ink">
+        <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-md bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white">
           {msg.q}
-          <time className="ml-2 align-bottom text-[11px] opacity-70" dateTime={msg.at}>{timeOf(msg.at)}</time>
+          <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
         </p>
       </div>
       <div className="flex justify-start">
-        <div className="w-full max-w-[94%] rounded-2xl rounded-bl-md border border-line bg-surface px-3.5 py-2.5">
+        <div className="card-bianca w-full max-w-[94%] rounded-bl-md px-4 py-3.5">
           {msg.pending || !r ? (
-            <p role="status" className="flex items-center gap-2 text-muted">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Cerco nella tua memoria…
+            <p role="status" className="flex items-center gap-2 font-semibold">
+              <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
             </p>
           ) : r.kind === "answer" ? (
             <>
@@ -242,18 +237,18 @@ function QaBubbles({ msg, byId, archiveOk, onOpen }) {
             </>
           ) : r.kind === "insufficient" ? (
             <>
-              <p className="font-medium">I tuoi contenuti non bastano per rispondere.</p>
+              <p className="font-extrabold tracking-[-0.02em]">I tuoi contenuti non bastano per rispondere.</p>
               {r.answer && <AnswerText text={r.answer} count={sources.length} onCite={openSource} />}
             </>
           ) : r.kind === "none" ? (
-            <p>Nei tuoi contenuti non trovo nulla su questo. Prova con altre parole.</p>
+            <p className="font-semibold">Nei tuoi contenuti non trovo nulla su questo. Prova con altre parole.</p>
           ) : r.kind === "error" ? (
-            <p>Risposta AI non disponibile ({r.error}).{maybe.length ? " Ecco i contenuti più vicini:" : " Riprova tra poco."}</p>
+            <p className="font-semibold">Risposta AI non disponibile ({r.error}).{maybe.length ? " Ecco i contenuti più vicini:" : " Riprova tra poco."}</p>
           ) : (
-            <p>Ecco i contenuti più vicini alla tua domanda:</p>
+            <p className="font-semibold">Ecco i contenuti più vicini alla tua domanda:</p>
           )}
           {answered && r.total > r.consulted && (
-            <p className="mt-1.5 text-xs text-muted">Ho consultato {r.consulted} contenuti su {r.total}: quelli più vicini alla domanda e i più recenti.</p>
+            <p className="micro mt-2">Ho consultato <span className="num">{r.consulted}</span> contenuti su <span className="num">{r.total}</span>: quelli più vicini alla domanda e i più recenti.</p>
           )}
           {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
           {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
@@ -278,10 +273,10 @@ export function AnswerText({ text, count, onCite }) {
     } else blocks.push({ p: t });
   }
   return (
-    <div className="mt-1.5 space-y-2 leading-relaxed">
+    <div className="mt-2.5 space-y-2.5 text-[1.02rem] font-medium leading-[1.45]">
       {blocks.map((b, i) =>
         b.list ? (
-          <ul key={i} className="list-disc space-y-1 pl-5">
+          <ul key={i} className="list-disc space-y-1 pl-5 marker:text-[#0a0a0a]">
             {b.list.map((t, j) => (
               <li key={j}>
                 <Inline text={t} count={count} onCite={onCite} />
@@ -303,7 +298,7 @@ function Inline({ text, count, onCite }) {
   return parts.map((part, i) => {
     if (/^\*\*[^*]+\*\*$/.test(part)) {
       return (
-        <strong key={i}>
+        <strong key={i} className="font-extrabold">
           <Inline text={part.slice(2, -2)} count={count} onCite={onCite} />
         </strong>
       );
@@ -317,7 +312,7 @@ function Inline({ text, count, onCite }) {
             <button
               key={n}
               type="button"
-              className="mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent-soft px-1 align-text-top text-[11px] font-semibold text-accent"
+              className="num mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0a0a0a] px-1 align-text-top text-[11px] font-extrabold text-white"
               aria-label={`Fonte ${n}`}
               onClick={() => onCite(n)}
             >
@@ -337,12 +332,12 @@ function Inline({ text, count, onCite }) {
 function Sources({ sources, archiveOk, onOpen }) {
   if (!sources.length) return null;
   return (
-    <div className="mt-3 border-t border-line pt-2">
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">Fonti</p>
-      <ol className="space-y-2">
+    <div className="mt-4">
+      <p className="mb-1 border-b-[1.5px] border-[#0a0a0a] pb-1.5 text-[0.78rem] font-semibold">Fonti</p>
+      <ol className="righe">
         {sources.map(({ id, item, quote }, i) => (
-          <li key={id} className="flex gap-2">
-            <span className="mt-0.5 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent-soft px-1 text-[11px] font-semibold text-accent">{i + 1}</span>
+          <li key={id} className="flex gap-2.5 py-2.5">
+            <span className="num mt-0.5 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#0a0a0a] px-1 text-[11px] font-extrabold text-white">{i + 1}</span>
             {item ? (
               <div className="min-w-0 flex-1">
                 <a
@@ -352,23 +347,23 @@ function Sources({ sources, archiveOk, onOpen }) {
                     ev.preventDefault();
                     onOpen(item);
                   }}
-                  className="line-clamp-2 text-sm font-medium text-accent underline-offset-2 hover:underline"
+                  className="line-clamp-2 font-extrabold leading-tight tracking-[-0.02em] underline-offset-[3px] hover:underline"
                 >
                   {displayTitle(item)}
                 </a>
-                <p className="flex items-center gap-1 text-xs text-muted">
+                <p className="micro mt-0.5 flex items-center gap-1">
                   <TypeIcon type={item.type} className="h-3.5 w-3.5 shrink-0" />
                   <span className="truncate">{sourceLine(item)}</span>
                 </p>
-                {quote && <blockquote className="mt-1 border-l-2 border-line pl-2 text-sm italic text-ink/80">«{quote}»</blockquote>}
+                {quote && <blockquote className="mt-1.5 border-l-2 border-[#0a0a0a] pl-2.5 text-[0.92rem] font-semibold leading-snug">«{quote}»</blockquote>}
                 {item.url && (
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted underline-offset-2 hover:underline">
-                    <ExternalLink className="h-3 w-3" aria-hidden="true" /> Apri l'originale
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[0.8rem] font-bold underline underline-offset-[3px]">
+                    Apri l'originale<span aria-hidden="true"> →</span>
                   </a>
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted">{archiveOk ? "Contenuto non più nell'archivio." : "Fonte non disponibile ora: l'archivio non è stato caricato."}</p>
+              <p className="text-sm font-medium text-tenue">{archiveOk ? "Contenuto non più nell'archivio." : "Fonte non disponibile ora: l'archivio non è stato caricato."}</p>
             )}
           </li>
         ))}
@@ -386,7 +381,7 @@ function sourceLine(item) {
 function Nearby({ items, onOpen }) {
   if (!items.length) return null;
   return (
-    <ul className="mt-2 space-y-1 border-t border-line pt-2">
+    <ul className="righe mt-2 border-t-[1.5px] border-[#0a0a0a]">
       {items.map((it) => (
         <li key={it.id}>
           <a
@@ -395,10 +390,11 @@ function Nearby({ items, onOpen }) {
               ev.preventDefault();
               onOpen(it);
             }}
-            className="flex items-center gap-2 rounded-lg py-1 text-sm text-accent underline-offset-2 hover:underline"
+            className="flex items-center gap-2 py-2.5 font-bold leading-tight"
           >
             <TypeIcon type={it.type} className="h-4 w-4 shrink-0" />
-            <span className="line-clamp-1">{displayTitle(it)}</span>
+            <span className="line-clamp-1 flex-1">{displayTitle(it)}</span>
+            <span aria-hidden="true">→</span>
           </a>
         </li>
       ))}

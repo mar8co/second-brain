@@ -1,9 +1,10 @@
 // Scheda di un elemento: contenuto, link originale, stato, testo estratto,
 // categorie/tag modificabili e proposte dell'AI (separate dai dati letti).
 import { useEffect, useState } from "react";
-import { Check, ExternalLink, FileText, MapPin, Pencil, RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { Page, TopBar } from "../components/Layout.jsx";
+import { Page, Testata } from "../components/Layout.jsx";
 import { AiBadge, ChipEditor, EmptyState, ErrorBox, StatusBadge, TypeIcon } from "../components/ui.jsx";
+import { usePageColor } from "../hooks/usePageColor.js";
+import { itemColor, PAGE } from "../lib/colors.js";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
@@ -26,6 +27,8 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const [fileUrl, setFileUrl] = useState(null);
   const [transcript, setTranscript] = useState("");
   const [openedAt] = useState(() => Date.now());
+  // La scheda ha il colore dell'elemento, lo stesso della sua riga in Archivio.
+  usePageColor(item ? itemColor(item) : PAGE.archive);
 
   useEffect(() => {
     let alive = true;
@@ -37,16 +40,14 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
 
   if (!item) {
     return (
-      <>
-        <TopBar title="Elemento" onBack={() => back("/")} />
-        <Page>
-          {archive.loading ? null : (
-            <EmptyState title="Elemento non trovato" action={<button className="btn-primary" onClick={() => navigate("/archivio")}>Vai all'archivio</button>}>
-              Potrebbe essere stato eliminato.
-            </EmptyState>
-          )}
-        </Page>
-      </>
+      <Page>
+        <Testata onBack={() => back("/")} />
+        {archive.loading ? null : (
+          <EmptyState title="Elemento non trovato" action={<button type="button" className="bottone" onClick={() => navigate("/archivio")}>Vai all'archivio</button>}>
+            Potrebbe essere stato eliminato.
+          </EmptyState>
+        )}
+      </Page>
     );
   }
 
@@ -62,13 +63,11 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
     }
   };
 
+  // Eliminazione subito, con "Annulla" per qualche secondo.
   const remove = () => {
-    if (!window.confirm("Eliminare definitivamente questo elemento?")) return;
-    run("delete", async () => {
-      await archive.remove(item);
-      toast("Eliminato");
-      navigate("/archivio", { replace: true });
-    });
+    const undo = archive.removeSoon(item);
+    navigate("/archivio", { replace: true });
+    toast("Elemento eliminato", { action: { label: "Annulla", run: undo } });
   };
 
   const saveTranscript = () =>
@@ -97,196 +96,219 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   // Immagine o PDF scansionato non ancora letti dall'AI: si può riprovare.
   const canReadFile = Boolean(ai && store.mode === "sync" && unreadFile(item));
 
+  const site = item.site_name || (item.url ? displayHost(item.url) : TYPES[item.type]?.label);
+  const reprocessable = ((item.url && !item.file_path) || canReadFile) && (item.status !== "processing" || stale);
+
   return (
-    <>
-      <TopBar
-        title={typeLabel(item.type)}
+    <Page>
+      <Testata
         onBack={() => back("/")}
         right={
-          <button type="button" className="btn px-2 text-accent" onClick={() => setEditing(true)} aria-label="Modifica">
-            <Pencil className="h-5 w-5" aria-hidden="true" />
+          <button type="button" className="pillola" onClick={() => setEditing(true)}>
+            Modifica
           </button>
         }
       />
-      <Page>
-        <article className="space-y-5">
-          <header>
-            <div className="mb-2 flex items-center gap-2 text-sm text-muted">
-              <TypeIcon type={item.type} className="h-4 w-4" />
-              <span>{item.site_name || (item.url ? displayHost(item.url) : TYPES[item.type]?.label)}</span>
-              <span aria-hidden="true">·</span>
-              <time dateTime={item.created_at}>Salvato il {formatDate(item.created_at, true)}</time>
-            </div>
-            <h2 className="font-serif text-2xl font-semibold leading-tight">{displayTitle(item)}</h2>
-            {(item.author || item.published_at) && (
-              <p className="mt-1.5 text-sm text-muted">
-                {item.author && <>Pubblicato da <span className="font-medium text-ink">{item.author}</span></>}
-                {item.published_at && <>{item.author ? " il " : "Pubblicato il "}{formatDate(item.published_at)}</>}
-              </p>
-            )}
-          </header>
+      <article>
+        <header>
+          <p className="micro flex items-center gap-1.5 font-semibold">
+            <TypeIcon type={item.type} className="h-3.5 w-3.5" />
+            <span className="truncate">{site}</span>
+          </p>
+          <h1 className="titolo-scheda mt-1.5">{displayTitle(item)}</h1>
+          {(item.author || item.published_at) && (
+            <p className="mt-2 font-semibold">
+              {item.author && <>Pubblicato da <span className="font-extrabold">{item.author}</span></>}
+              {item.published_at && <>{item.author ? " il " : "Pubblicato il "}{formatDate(item.published_at)}</>}
+            </p>
+          )}
+        </header>
 
-          {/* Stato di elaborazione con spiegazione */}
-          <section aria-live="polite" className="card p-3.5">
-            <div className="flex items-center justify-between gap-2">
-              <StatusBadge status={item.status} />
-              {((item.url && !item.file_path) || canReadFile) && (item.status !== "processing" || stale) && (
-                <button type="button" className="text-sm font-medium text-accent" disabled={!!busy} onClick={() => run("reprocess", () => archive.reprocess(item))}>
-                  <RefreshCw className={`mr-1 inline h-3.5 w-3.5 ${busy === "reprocess" ? "animate-spin" : ""}`} aria-hidden="true" />
-                  Rianalizza
-                </button>
-              )}
+        {/* Dati come su una carta d'imbarco; lo stato con la sua spiegazione. */}
+        <section aria-live="polite">
+          <div className="griglia-dati">
+            <div className="min-w-0">
+              <span className="micro mb-1 block">Tipo</span>
+              <b className="truncate">{typeLabel(item.type)}</b>
             </div>
-            <p className="mt-1.5 text-sm text-muted">{item.status_detail || status.hint}</p>
-          </section>
+            <div className="min-w-0">
+              <span className="micro mb-1 block">Stato</span>
+              <b><StatusBadge status={item.status} /></b>
+            </div>
+            <div className="min-w-0">
+              <span className="micro mb-1 block">Salvato il</span>
+              <b className="num">{formatDate(item.created_at)}</b>
+            </div>
+          </div>
+          <p className="text-[0.92rem] font-medium leading-snug">{item.status_detail || status.hint}</p>
+          {reprocessable && (
+            <button type="button" className="link" disabled={!!busy} onClick={() => run("reprocess", () => archive.reprocess(item))}>
+              {busy === "reprocess" ? "Rianalizzo…" : "Rianalizza"}
+            </button>
+          )}
+        </section>
 
+        <div className="mt-5 space-y-5">
           {item.url && (
-            <div className="space-y-1.5">
-              <a href={item.url} target="_blank" rel="noopener noreferrer" className="btn-primary w-full">
-                <ExternalLink className="h-4 w-4" aria-hidden="true" /> Apri l'originale
+            <div>
+              <a href={item.url} target="_blank" rel="noopener noreferrer" className="bottone largo">
+                Apri l'originale <span aria-hidden="true">→</span>
               </a>
-              <p className="break-all text-xs text-muted">{item.url}</p>
+              <p className="micro mt-1.5 break-all">{item.url}</p>
             </div>
           )}
 
           {item.place && (
-            <section className="card flex items-start gap-3 p-3.5">
-              <MapPin className="mt-0.5 h-5 w-5 text-accent" aria-hidden="true" />
-              <div className="flex-1">
-                <p className="font-medium">{item.place.name || "Posto senza nome"}</p>
-                {typeof item.place.lat === "number" && typeof item.place.lng === "number" && <p className="text-sm text-muted">{item.place.lat.toFixed(5)}, {item.place.lng.toFixed(5)}</p>}
-                <a href={mapsLink(item.place)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-sm font-medium text-accent">Apri in Mappe</a>
-              </div>
+            <section className="border-y-[1.5px] border-inchiostro py-2.5">
+              <span className="micro">Posto</span>
+              <p className="text-[1.25rem] font-extrabold tracking-[-0.04em]">{item.place.name || "Posto senza nome"}</p>
+              {typeof item.place.lat === "number" && typeof item.place.lng === "number" && <p className="micro num">{item.place.lat.toFixed(5)}, {item.place.lng.toFixed(5)}</p>}
+              <a href={mapsLink(item.place)} target="_blank" rel="noopener noreferrer" className="link">Apri in Mappe <span aria-hidden="true">→</span></a>
             </section>
           )}
 
-          {showImage && <img src={fileUrl} alt={item.title || item.file_name || "Immagine salvata"} className="w-full rounded-2xl border border-line" />}
+          {showImage && <img src={fileUrl} alt={item.title || item.file_name || "Immagine salvata"} className="w-full rounded-[18px]" />}
           {!showImage && item.image_url && (
-            <img src={item.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-72 w-full rounded-2xl border border-line object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+            <img src={item.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-72 w-full rounded-[18px] object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
           )}
           {item.file_path && !isImage(item.file_mime) && (
-            <a href={fileUrl || "#"} target="_blank" rel="noopener noreferrer" className="btn-ghost w-full" aria-disabled={!fileUrl}>
-              <FileText className="h-4 w-4" aria-hidden="true" /> Apri {item.file_name}
+            <a href={fileUrl || "#"} target="_blank" rel="noopener noreferrer" className="bottone chiaro largo" aria-disabled={!fileUrl}>
+              Apri {item.file_name}
             </a>
           )}
+        </div>
 
-          {item.note && (
-            <section>
-              <h3 className="label">La tua nota</h3>
-              <p className="whitespace-pre-wrap">{item.note}</p>
-            </section>
-          )}
-
-          {item.description && (
-            <section>
-              <h3 className="label">Descrizione {item.text_source && item.text_source !== "inserito da te" ? "(dalla fonte)" : ""}</h3>
-              <p className="whitespace-pre-wrap text-ink/90">{item.description}</p>
-            </section>
-          )}
-
-          <section className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <h3 className="label">Categorie</h3>
-              {item.categories?.length ? (
-                <ul className="flex flex-wrap gap-1.5">{item.categories.map((c) => <li key={c} className="chip">{c}</li>)}</ul>
-              ) : <p className="text-sm text-muted">Nessuna</p>}
-            </div>
-            <div>
-              <h3 className="label">Tag</h3>
-              {item.tags?.length ? (
-                <ul className="flex flex-wrap gap-1.5">{item.tags.map((t) => <li key={t} className="chip">#{t}</li>)}</ul>
-              ) : <p className="text-sm text-muted">Nessuno</p>}
-            </div>
+        {item.note && (
+          <section>
+            <h2 className="sezione">La tua nota</h2>
+            <p className="whitespace-pre-wrap text-[1.05rem] font-semibold leading-[1.38]">{item.note}</p>
           </section>
+        )}
 
-          {/* Inferenze AI: sempre etichettate e da confermare */}
-          {item.ai ? (
-            <section className="rounded-2xl border border-ai/30 bg-ai/5 p-3.5">
-              <div className="flex items-center justify-between">
-                <AiBadge>{item.ai.applied ? "Categorie e tag assegnati dall'AI · da verificare" : "Generato dall'AI · da verificare"}</AiBadge>
-                {ai && (
-                  <button type="button" className="text-sm font-medium text-ai" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
-                    {busy === "classify" ? "…" : "Rigenera"}
-                  </button>
-                )}
+        {item.description && (
+          <section>
+            <h2 className="sezione">Descrizione {item.text_source && item.text_source !== "inserito da te" ? "(dalla fonte)" : ""}</h2>
+            <p className="whitespace-pre-wrap font-medium leading-snug">{item.description}</p>
+          </section>
+        )}
+
+        <section>
+          <h2 className="sezione">Categorie e tag</h2>
+          {item.categories?.length || item.tags?.length ? (
+            <ul className="flex flex-wrap gap-1.5">
+              {(item.categories || []).map((c) => <li key={c} className="pillola attiva">{c}</li>)}
+              {(item.tags || []).map((t) => <li key={t} className="pillola">#{t}</li>)}
+            </ul>
+          ) : (
+            <p className="font-medium text-tenue">Nessuna</p>
+          )}
+        </section>
+
+        {/* Inferenze AI: sempre etichettate e da confermare */}
+        {item.ai ? (
+          <section>
+            <h2 className="sezione">
+              <span>Memoria dell'AI</span>
+              {ai && (
+                <button type="button" className="link min-h-0 p-0 text-[0.78rem]" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
+                  {busy === "classify" ? "Rigenero…" : "Rigenera"}
+                </button>
+              )}
+            </h2>
+            <AiBadge>{item.ai.applied ? "Categorie e tag assegnati dall'AI · da verificare" : "Generato dall'AI · da verificare"}</AiBadge>
+            {item.ai.summary ? <p className="mt-2.5 font-medium leading-snug">{item.ai.summary}</p> : <p className="mt-2.5 font-medium text-tenue">Dati insufficienti per un riassunto.</p>}
+            {points.length > 0 && (
+              <div className="mt-4">
+                <h3 className="micro mb-1 font-semibold">Punti chiave</h3>
+                <ul className="righe">
+                  {points.map((p, i) => <li key={i} className="py-1.5 font-semibold leading-snug">{p}</li>)}
+                </ul>
               </div>
-              {item.ai.summary ? <p className="mt-2 text-sm">{item.ai.summary}</p> : <p className="mt-2 text-sm text-muted">Dati insufficienti per un riassunto.</p>}
-              {points.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Punti chiave</h3>
-                  <ul className="list-disc space-y-1 pl-5 text-sm">
-                    {points.map((p, i) => <li key={i}>{p}</li>)}
-                  </ul>
+            )}
+            {entities.length > 0 && (
+              <div className="mt-4">
+                <h3 className="micro mb-1.5 font-semibold">Persone, luoghi e altro</h3>
+                <ul className="flex flex-wrap gap-1.5">
+                  {entities.map((e, i) => (
+                    <li key={i} className="cartellino text-[0.78rem]">{e.name}{typeof e.kind === "string" && e.kind && e.kind !== "altro" ? <span className="font-medium opacity-70">· {e.kind}</span> : null}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {(aiCats.length > 0 || aiTags.length > 0) && (
+              <div className="mt-4">
+                <p className="micro mb-1.5 font-semibold">Proposte (tocca per aggiungere)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {aiCats.map((c) => (
+                    <button key={`c-${c}`} type="button" className="pillola" onClick={() => acceptAi([c], [])}>+ {c}</button>
+                  ))}
+                  {aiTags.map((t) => (
+                    <button key={`t-${t}`} type="button" className="pillola" onClick={() => acceptAi([], [t])}>+ #{t}</button>
+                  ))}
                 </div>
-              )}
-              {entities.length > 0 && (
-                <div className="mt-3">
-                  <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">Persone, luoghi e altro</h3>
-                  <ul className="flex flex-wrap gap-1.5">
-                    {entities.map((e, i) => (
-                      <li key={i} className="chip">{e.name}{typeof e.kind === "string" && e.kind && e.kind !== "altro" ? <span className="text-muted"> · {e.kind}</span> : null}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {(aiCats.length > 0 || aiTags.length > 0) && (
-                <div className="mt-3">
-                  <p className="mb-1.5 text-xs text-muted">Proposte (tocca per aggiungere):</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {aiCats.map((c) => (
-                      <button key={`c-${c}`} type="button" className="chip" onClick={() => acceptAi([c], [])}>+ {c}</button>
-                    ))}
-                    {aiTags.map((t) => (
-                      <button key={`t-${t}`} type="button" className="chip" onClick={() => acceptAi([], [t])}>+ #{t}</button>
-                    ))}
-                  </div>
-                  <button type="button" className="mt-2 text-sm font-medium text-ai" onClick={() => acceptAi(aiCats, aiTags)}>
-                    <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" />Accetta tutte
-                  </button>
-                </div>
-              )}
-            </section>
-          ) : ai && item.status !== "processing" ? (
-            <button type="button" className="btn-ghost w-full text-ai" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
-              <Sparkles className="h-4 w-4" aria-hidden="true" /> {busy === "classify" ? "Analizzo…" : "Proponi categorie e tag con l'AI"}
-            </button>
-          ) : null}
+                <button type="button" className="link mt-1" onClick={() => acceptAi(aiCats, aiTags)}>
+                  Accetta tutte
+                </button>
+              </div>
+            )}
+          </section>
+        ) : ai && item.status !== "processing" ? (
+          <button type="button" className="bottone chiaro largo mt-6" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
+            {busy === "classify" ? "Analizzo…" : "Proponi categorie e tag con l'AI"}
+          </button>
+        ) : null}
 
+        <div className="mt-6 border-b-[1.5px] border-inchiostro">
           {item.url && item.type !== "file" && (
-            <details className="card p-3.5" open={!item.extracted_text || item.text_source === TRANSCRIPT_SOURCE}>
-              <summary className="cursor-pointer font-medium">Trascrizione del video</summary>
-              <p className="mt-2 text-sm text-muted">
-                Reel, TikTok, video di Facebook e YouTube vengono trascritti in automatico dal link, e i caroselli letti slide per slide (solo post pubblici). Se non è stato possibile, premi Rianalizza oppure incolla qui il testo.
-              </p>
-              <label htmlFor="transcript" className="sr-only">Testo della trascrizione</label>
-              <textarea id="transcript" className="input mt-2 min-h-[110px]" placeholder="Incolla la trascrizione…" value={transcript} onChange={(e) => setTranscript(e.target.value)} />
-              <button type="button" className="btn-ghost mt-2 w-full" disabled={!!busy || !transcript.trim()} onClick={saveTranscript}>
-                {busy === "transcript" ? "Salvo…" : "Salva trascrizione"}
-              </button>
+            <details className="group border-t-[1.5px] border-inchiostro" open={!item.extracted_text || item.text_source === TRANSCRIPT_SOURCE}>
+              <Riassunto>Trascrizione del video</Riassunto>
+              <div className="pb-4">
+                <p className="text-[0.92rem] font-medium leading-snug text-tenue">
+                  Reel, TikTok, video di Facebook e YouTube vengono trascritti in automatico dal link, e i caroselli letti slide per slide (solo post pubblici). Se non è stato possibile, premi Rianalizza oppure incolla qui il testo.
+                </p>
+                <label htmlFor="transcript" className="sr-only">Testo della trascrizione</label>
+                <textarea id="transcript" className="campo mt-2 min-h-[110px]" placeholder="Incolla la trascrizione…" value={transcript} onChange={(e) => setTranscript(e.target.value)} />
+                <button type="button" className="bottone chiaro largo mt-3" disabled={!!busy || !transcript.trim()} onClick={saveTranscript}>
+                  {busy === "transcript" ? "Salvo…" : "Salva trascrizione"}
+                </button>
+              </div>
             </details>
           )}
 
           {item.extracted_text && (
-            <details className="card p-3.5">
-              <summary className="cursor-pointer font-medium">
-                Testo estratto <span className="text-sm font-normal text-muted">· fonte: {item.text_source || "sconosciuta"} · {item.extracted_text.length.toLocaleString("it-IT")} caratteri</span>
-              </summary>
-              <p className="mt-3 max-h-[60vh] overflow-auto whitespace-pre-wrap text-sm text-ink/90">{item.extracted_text}</p>
+            <details className="group border-t-[1.5px] border-inchiostro">
+              <Riassunto>
+                Testo estratto <span className="micro ml-1 font-medium">fonte: {item.text_source || "sconosciuta"} · <span className="num">{item.extracted_text.length.toLocaleString("it-IT")}</span> caratteri</span>
+              </Riassunto>
+              <p className="max-h-[60vh] overflow-auto whitespace-pre-wrap pb-4 text-[0.92rem] font-medium leading-snug">{item.extracted_text}</p>
             </details>
           )}
+        </div>
 
-          {error && <ErrorBox>{error}</ErrorBox>}
+        {error && <div className="mt-4"><ErrorBox>{error}</ErrorBox></div>}
 
-          <footer className="space-y-1 border-t border-line pt-4 text-xs text-muted">
-            {item.final_url && item.final_url !== item.url && <p className="break-all">Indirizzo finale: {item.final_url}</p>}
-            {item.processed_at && <p>Analizzato il {formatDate(item.processed_at, true)}</p>}
-            <button type="button" className="btn-danger mt-3 w-full" onClick={remove} disabled={!!busy}>
-              <Trash2 className="h-4 w-4" aria-hidden="true" /> Elimina
-            </button>
-          </footer>
-        </article>
-      </Page>
-    </>
+        <footer className="mt-6 space-y-1">
+          {item.final_url && item.final_url !== item.url && <p className="micro break-all">Indirizzo finale: {item.final_url}</p>}
+          {item.processed_at && <p className="micro">Analizzato il {formatDate(item.processed_at, true)}</p>}
+          <button type="button" className="link rosso !mt-3" onClick={remove} disabled={!!busy}>
+            Elimina
+          </button>
+        </footer>
+      </article>
+    </Page>
+  );
+}
+
+// Riga che apre e chiude una parte lunga: "+" chiusa, "−" aperta.
+function Riassunto({ children }) {
+  return (
+    <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 py-2 font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden">
+      <span>{children}</span>
+      <span aria-hidden="true" className="text-[1.3rem] font-bold leading-none">
+        <span className="group-open:hidden">+</span>
+        <span className="hidden group-open:inline">−</span>
+      </span>
+    </summary>
   );
 }
 
@@ -313,37 +335,40 @@ function EditForm({ item, archive, onDone }) {
   };
 
   return (
-    <>
-      <TopBar title="Modifica" onBack={onDone} />
-      <Page>
-        <form onSubmit={save} className="space-y-5">
-          <div>
-            <label htmlFor="ed-title" className="label">Titolo</label>
-            <input id="ed-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} />
+    <Page>
+      <Testata onBack={onDone} />
+      <h1 className="titolo-home">Modifica</h1>
+      <form onSubmit={save} className="space-y-6">
+        <div>
+          <label htmlFor="ed-title" className="etichetta">Titolo</label>
+          <input id="ed-title" className="campo" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={300} autoComplete="off" />
+        </div>
+        <fieldset>
+          <legend className="etichetta">Tipo</legend>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {Object.entries(TYPES).map(([k, t]) => (
+              <button key={k} type="button" aria-pressed={type === k} className={`pillola${type === k ? " attiva" : ""}`} onClick={() => setType(k)}>
+                <TypeIcon type={k} className="h-4 w-4" /> {t.label}
+              </button>
+            ))}
           </div>
-          <div>
-            <label htmlFor="ed-type" className="label">Tipo</label>
-            <select id="ed-type" className="input" value={type} onChange={(e) => setType(e.target.value)}>
-              {Object.entries(TYPES).map(([k, t]) => <option key={k} value={k}>{t.label}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="ed-note" className="label">La tua nota</label>
-            <textarea id="ed-note" className="input min-h-[110px]" value={note} onChange={(e) => setNote(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor="ed-desc" className="label">Descrizione</label>
-            <textarea id="ed-desc" className="input min-h-[90px]" value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-          <ChipEditor label="Categorie" values={categories} onChange={setCategories} suggestions={archive.categories} placeholder="Scegli o scrivi e premi Invio" />
-          <ChipEditor label="Tag" values={tags} onChange={setTags} lowercase suggestions={item.ai?.tags || []} placeholder="Scrivi e premi Invio" />
-          {error && <ErrorBox>{error}</ErrorBox>}
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" className="btn-ghost" onClick={onDone}>Annulla</button>
-            <button type="submit" className="btn-primary" disabled={saving}>{saving ? "Salvo…" : "Salva modifiche"}</button>
-          </div>
-        </form>
-      </Page>
-    </>
+        </fieldset>
+        <div>
+          <label htmlFor="ed-note" className="etichetta">La tua nota</label>
+          <textarea id="ed-note" className="campo min-h-[110px]" value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div>
+          <label htmlFor="ed-desc" className="etichetta">Descrizione</label>
+          <textarea id="ed-desc" className="campo min-h-[90px]" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+        <ChipEditor label="Categorie" values={categories} onChange={setCategories} suggestions={archive.categories} placeholder="Scegli o scrivi e premi Invio" />
+        <ChipEditor label="Tag" values={tags} onChange={setTags} lowercase suggestions={item.ai?.tags || []} placeholder="Scrivi e premi Invio" />
+        {error && <ErrorBox>{error}</ErrorBox>}
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="bottone chiaro" onClick={onDone}>Annulla</button>
+          <button type="submit" className="bottone" disabled={saving}>{saving ? "Salvo…" : "Salva modifiche"}</button>
+        </div>
+      </form>
+    </Page>
   );
 }

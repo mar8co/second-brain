@@ -1,4 +1,5 @@
-// Genera le icone PNG della PWA a partire da public/favicon.svg (sharp).
+// Genera le icone PNG della PWA a partire da public/favicon.svg (sharp):
+// cervello nero su quadrato rosa, come vogliono le linee guida.
 // Uso: npm run icons
 import sharp from "sharp";
 import { mkdir, readFile } from "node:fs/promises";
@@ -19,7 +20,7 @@ const full = Buffer.from(
 );
 await sharp(full).resize(180, 180).png().toFile(out("apple-touch-icon.png"));
 const inner = await sharp(full).resize(400, 400).png().toBuffer();
-await sharp({ create: { width: 512, height: 512, channels: 4, background: "#1f4d47" } })
+await sharp({ create: { width: 512, height: 512, channels: 4, background: "#ffb5d0" } })
   .composite([{ input: inner, left: 56, top: 56 }])
   .png()
   .toFile(out("icons/icon-maskable-512.png"));

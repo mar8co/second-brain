@@ -60,6 +60,18 @@ test("campo della chat: cresce con il testo; mentre si scrive la barra Chat / Ar
   await expect(nav).toBeVisible();
 });
 
+test("nuova chat subito, con Annulla per ripensarci", async ({ page }) => {
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("dove ho salvato le ricette?");
+  await box.press("Enter");
+  await expect(page.getByText("dove ho salvato le ricette?")).toBeVisible();
+  await page.getByRole("button", { name: "Nuova chat" }).click();
+  await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
+  await page.getByRole("button", { name: "Annulla" }).click();
+  await expect(page.getByText("dove ho salvato le ricette?")).toBeVisible();
+});
+
 test("trascrizione incollata a mano su un link: salvata e mostrata come testo estratto", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
@@ -93,9 +105,18 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
   await expect(page.getByText("Idea regalo per Giulia")).toHaveCount(0);
   await page.goto("/archivio");
   await page.getByText("Idea regalo per Giulia").click();
-  page.once("dialog", (d) => d.accept());
+  // Eliminazione subito, senza "Sei sicuro?": l'avviso permette di annullare.
   await page.getByRole("button", { name: "Elimina" }).click();
   await expect(page).toHaveURL(/\/archivio$/);
+  await expect(page.getByText("Ancora niente qui")).toBeVisible();
+  await page.getByRole("button", { name: "Annulla" }).click();
+  await expect(page.getByText("Idea regalo per Giulia")).toBeVisible();
+  await page.getByText("Idea regalo per Giulia").click();
+  await page.getByRole("button", { name: "Elimina" }).click();
+  await expect(page.getByText("Elemento eliminato")).toBeVisible();
+  await expect(page.getByText("Elemento eliminato")).toBeHidden({ timeout: 8000 });
+  await page.waitForTimeout(500);
+  await page.reload();
   await expect(page.getByText("Ancora niente qui")).toBeVisible();
 });
 
@@ -116,9 +137,9 @@ test("link leggibile: Analizzato, testo estratto, categorie assegnate dall'AI", 
   // Scheda di memoria: punti chiave e persone, luoghi e prodotti citati
   await expect(page.getByText("Punti chiave")).toBeVisible();
   await expect(page.getByText("La pasta al limone si condisce con scorza di limone, burro e parmigiano.")).toBeVisible();
-  await expect(page.locator("li.chip", { hasText: "Parmigiano" })).toBeVisible();
-  await expect(page.locator("li.chip", { hasText: "Ricette" })).toBeVisible();
-  await expect(page.locator("li.chip", { hasText: "#pasta" })).toBeVisible();
+  await expect(page.locator("li.cartellino", { hasText: "Parmigiano" })).toBeVisible();
+  await expect(page.locator("li.pillola", { hasText: "Ricette" })).toBeVisible();
+  await expect(page.locator("li.pillola", { hasText: "#pasta" })).toBeVisible();
 });
 
 test("contenuti salvati senza AI: rielaborati da soli all'apertura dell'app", async ({ page }) => {
@@ -133,7 +154,7 @@ test("contenuti salvati senza AI: rielaborati da soli all'apertura dell'app", as
   await page.goto(url);
   await expect(page.getByText("Punti chiave")).toBeVisible();
   await expect(page.getByText("Ricetta veloce di pasta al limone.")).toBeVisible();
-  await expect(page.locator("li.chip", { hasText: "Ricette" })).toBeVisible();
+  await expect(page.locator("li.pillola", { hasText: "Ricette" })).toBeVisible();
 });
 
 test("contenuto dietro login: Non accessibile con spiegazione, link conservato", async ({ page }) => {
@@ -176,7 +197,10 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   // Filtro per tipo
   await page.getByLabel("Cerca nell'archivio").fill("");
   await page.getByRole("button", { name: /Filtri/ }).click();
-  await page.getByLabel("Tipo").selectOption("note");
+  // Scelte disegnate dall'app, niente menu a tendina del sistema.
+  await expect(page.locator("#filters select")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Tipo/ }).click();
+  await page.getByRole("option", { name: "Nota" }).click();
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Trattoria Da Enzo")).toBeVisible();
 
