@@ -134,9 +134,15 @@ export function scoreItem(item, queryTokens, mode = "all") {
   return matched ? total * (matched / queryTokens.length) : 0;
 }
 
+// Valore del filtro Categoria per gli elementi che non ne hanno nessuna.
+export const NO_CATEGORY = "Senza categoria";
+
 export function matchesFilters(item, f = {}) {
   if (f.type && item.type !== f.type) return false;
-  if (f.category && !(item.categories || []).includes(f.category)) return false;
+  if (f.category) {
+    const cats = item.categories || [];
+    if (f.category === NO_CATEGORY ? cats.length > 0 : !cats.includes(f.category)) return false;
+  }
   if (f.tag && !(item.tags || []).includes(f.tag)) return false;
   if (f.status && item.status !== f.status) return false;
   if (f.author && item.author !== f.author) return false;
@@ -179,6 +185,21 @@ export function countBy(items, field) {
   const m = new Map();
   for (const it of items) for (const v of it[field] || []) m.set(v, (m.get(v) || 0) + 1);
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "it"));
+}
+
+// Elementi raggruppati per categoria, per i box dell'Archivio: [[categoria,
+// elementi]], dalla più piena; un elemento con più categorie sta in ognuna.
+// "Senza categoria" in fondo.
+export function groupByCategory(items) {
+  const m = new Map();
+  const none = [];
+  for (const it of items) {
+    const cats = it.categories || [];
+    if (!cats.length) none.push(it);
+    for (const c of cats) m.set(c, [...(m.get(c) || []), it]);
+  }
+  const out = [...m.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "it"));
+  return none.length ? [...out, [NO_CATEGORY, none]] : out;
 }
 
 // Conteggi di un campo a valore singolo (autore, sito), dal più frequente.

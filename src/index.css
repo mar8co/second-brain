@@ -220,6 +220,16 @@ button { cursor: pointer; }
   }
   .riquadro { background: #fff; color: #0a0a0a; border-radius: 14px; padding: 12px 14px; }
 
+  /* Archivio a box: scatola colorata con le copertine dentro. */
+  .scatola {
+    display: block; width: 100%; text-align: left; border-radius: 22px; padding: 10px 10px 12px; color: #0a0a0a;
+    --tenue: rgb(10 10 10 / 0.7); box-shadow: inset 0 0 0 1.5px #0a0a0a;
+  }
+  .scatola:active { opacity: 0.75; }
+  .mosaico { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .mosaico .cella { display: block; aspect-ratio: 1; border-radius: 8px; background: rgb(10 10 10 / 0.07); overflow: hidden; }
+  .sezione .pillola { min-height: 30px; padding: 0.2rem 0.65rem; font-size: 0.75rem; gap: 0.3rem; }
+
   /* Righe di una lista: un filo sottile fra una e l'altra. */
   .righe > li + li { border-top: 1px solid var(--riga); }
 
