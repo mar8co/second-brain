@@ -2,7 +2,7 @@
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
-import { Page, Testata } from "../components/Layout.jsx";
+import { Page } from "../components/Layout.jsx";
 import Calendario from "../components/Calendario.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
@@ -90,14 +90,13 @@ export default function Archive({ archive, query, navigate, openItem }) {
   return (
     <>
       <Page>
-        <Testata
-          right={
-            <button type="button" className="tondo" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
-              <Settings className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
-            </button>
-          }
-        />
-        <h1 className={`gigante${titolo.length > 9 ? " lungo" : ""}`}>{titolo}</h1>
+        {/* Il titolo grande sta sulla stessa riga dell'icona Impostazioni. */}
+        <header className="testata !items-start !pb-0">
+          <h1 className="gigante !mb-4 min-w-0 flex-1" style={{ overflowWrap: "anywhere", hyphens: "auto" }}>{titolo}</h1>
+          <button type="button" className="tondo mt-1" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
+            <Settings className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
+          </button>
+        </header>
 
         <div role="search">
           <div className="min-w-0">

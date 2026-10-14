@@ -2,7 +2,7 @@
 // al Reel, al post o alla pagina da cui vengono.
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { formatEventDate, mapsUrl } from "../lib/spots.js";
+import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
 function SourceLinks({ items, onOpen }) {
@@ -32,12 +32,18 @@ function SourceLinks({ items, onOpen }) {
   );
 }
 
-// Indirizzo (o luogo) come link a Maps; senza indirizzo, "Cerca su Maps".
-function MapsLink({ name, where }) {
+// Link a Maps: con la via completa mostra la via; senza, "Cerca su Maps" (la
+// ricerca usa comunque nome e città). `plain`: il luogo di un evento si legge
+// comunque, anche senza via.
+function MapsLink({ name, where, plain = false }) {
+  const street = hasStreet(where);
   return (
-    <a href={mapsUrl(name, where)} target="_blank" rel="noopener noreferrer" className="micro mt-0.5 block text-[0.85rem] underline underline-offset-[3px]">
-      {where ? <>{where} <span aria-hidden="true">↗</span><span className="sr-only"> (apri su Maps)</span></> : <>Cerca su Maps <span aria-hidden="true">↗</span></>}
-    </a>
+    <>
+      {plain && where && !street && <p className="micro mt-0.5 text-[0.85rem]">{where}</p>}
+      <a href={mapsUrl(name, where)} target="_blank" rel="noopener noreferrer" className="micro mt-0.5 block text-[0.85rem] underline underline-offset-[3px]">
+        {street ? <>{where} <span aria-hidden="true">↗</span><span className="sr-only"> (apri su Maps)</span></> : <>Cerca su Maps <span aria-hidden="true">↗</span></>}
+      </a>
+    </>
   );
 }
 
@@ -56,8 +62,8 @@ export function RestaurantList({ restaurants, onOpen }) {
       {restaurants.map((r) => (
         <li key={r.key} className="py-3.5">
           <p className={NAME}>{r.name}</p>
-          <MapsLink name={r.name} where={r.address} />
           <SourceLinks items={r.items} onOpen={onOpen} />
+          <MapsLink name={r.name} where={r.address} />
         </li>
       ))}
     </ul>
@@ -72,8 +78,8 @@ function EventRows({ events, onOpen }) {
           <p className="num text-[0.9rem] font-extrabold leading-tight">{e.date ? formatEventDate(e.date, e.end_date) : "—"}</p>
           <div className="min-w-0">
             <p className={NAME}>{e.name}</p>
-            {e.place && <MapsLink name={e.name} where={e.place} />}
             <SourceLinks items={e.items} onOpen={onOpen} />
+            {e.place && <MapsLink name={e.name} where={e.place} plain />}
           </div>
         </li>
       ))}

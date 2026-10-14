@@ -14,6 +14,13 @@ export function mapsUrl(...parts) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }
 
+// Un indirizzo ha la via quando c'è un numero civico o un nome di strada;
+// "Roma" da sola è solo la città.
+const STREET = /\b\d{1,4}[a-z]?\b|\b(via|viale|v\.le|piazza|piazzale|p\.za|corso|largo|vicolo|vico|lungotevere|lungomare|lungarno|borgo|strada|salita|calata|campo|galleria|street|st\.|road|avenue|rue|calle)\b/i;
+export function hasStreet(address) {
+  return STREET.test(text(address));
+}
+
 // Oggi nel fuso del telefono, come AAAA-MM-GG.
 export function todayISO(now = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
