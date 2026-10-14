@@ -77,8 +77,11 @@ http
       req.on("end", () => {
         const body = JSON.parse(raw);
         if (req.headers["x-goog-api-key"] !== "fake-key") return send(res, 403, "application/json", "{}");
-        const out = fakeGemini(body.contents[0].parts[0].text);
-        send(res, 200, "application/json", JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] }));
+        const prompt = body.contents[0].parts[0].text;
+        const out = fakeGemini(prompt);
+        // Risposta lenta, per provare che non va persa cambiando schermata.
+        const slow = /<domanda>[^<]*palestra/i.test(prompt) ? 1500 : 0;
+        setTimeout(() => send(res, 200, "application/json", JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] })), slow);
       });
       return;
     }

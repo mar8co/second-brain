@@ -188,6 +188,29 @@ export function loopStart(text, window = 1200, maxPeriod = 300) {
 
 export const endsInLoop = (text) => loopStart(text) >= 0;
 
+// Valore di una stringa JSON anche se la risposta è stata interrotta a metà.
+export function partialJsonString(raw, key) {
+  const m = new RegExp(`"${key}"\\s*:\\s*"`).exec(String(raw || ""));
+  if (!m) return "";
+  let body = "";
+  for (let i = m.index + m[0].length; i < raw.length; i++) {
+    const c = raw[i];
+    if (c === "\\") {
+      // Sequenza di escape completa, altrimenti (troncata in fondo) ci si ferma.
+      const len = raw[i + 1] === "u" ? 6 : 2;
+      if (i + len > raw.length) break;
+      body += raw.slice(i, i + len);
+      i += len - 1;
+    } else if (c === '"') break;
+    else body += c;
+  }
+  try {
+    return JSON.parse(`"${body}"`);
+  } catch {
+    return body;
+  }
+}
+
 export class AiError extends Error {
   constructor(status, message) {
     super(message);
@@ -300,6 +323,8 @@ const ASK_SCHEMA = {
     },
   },
   required: ["answer", "sufficient", "sources"],
+  // Prima la risposta: se l'output si interrompe per la lunghezza, resta lei.
+  propertyOrdering: ["answer", "sufficient", "sources"],
 };
 
 const SELECT_SCHEMA = {
@@ -318,7 +343,7 @@ const MEMORY_CHARS = 240_000;
 const PROMPT_CHARS = 330_000;
 const DETAIL_TEXT = 12_000;
 const MAX_HISTORY = 4;
-const MAX_SOURCES = 20;
+const MAX_SOURCES = 12;
 const MAX_SELECT = 10;
 
 const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== "" && !(Array.isArray(v) && !v.length)));
@@ -365,8 +390,8 @@ function detailDoc(it, n) {
     salvato_il: str(it.created_at, 10),
     categorie: strArr(it.categories, 10, 40),
     tag: strArr(it.tags, 20, 40),
-    descrizione: str(it.description, 1500),
-    nota_utente: str(it.note, 1500),
+    descrizione: str(it.description, DETAIL_TEXT),
+    nota_utente: str(it.note, DETAIL_TEXT),
     posto: str(it.place?.name, 200) || null,
     sintesi_ai: str(ai.summary, 800),
     punti_ai: strArr(ai.points, 8, 300),
@@ -393,7 +418,7 @@ function historyTurns(history) {
   return (Array.isArray(history) ? history : [])
     .filter((t) => t && typeof t.q === "string" && t.q.trim())
     .slice(-MAX_HISTORY)
-    .map((t) => compact({ domanda: str(t.q, 500), risposta: tidy(str(t.a, 1500).replace(CITE, "")) }));
+    .map((t) => compact({ domanda: str(t.q, 500), risposta: tidy(str(t.a, 1500).replace(CITE, "").replace(LEFTOVER, "")) }));
 }
 
 const dateRule = (now) =>
@@ -407,12 +432,17 @@ export function prepareAsk(question, items, memory = [], { total = 0, now = new 
   const seen = new Set();
   const det = [];
   const mem = [];
+  // Elementi che non ci stanno per intero: restano come schede brevi.
+  const overflow = [];
   let size = 0;
   for (const it of items) {
     if (seen.has(it.id)) continue;
     const doc = detailDoc(it, refs.size + 1);
     const json = JSON.stringify(doc);
-    if (size + json.length > DETAILS_CHARS) break;
+    if (overflow.length || size + json.length > DETAILS_CHARS) {
+      overflow.push(it);
+      continue;
+    }
     size += json.length + 1;
     seen.add(it.id);
     refs.set(doc.n, { id: it.id, text: sourceText(doc) });
@@ -420,7 +450,7 @@ export function prepareAsk(question, items, memory = [], { total = 0, now = new 
   }
   const memBudget = Math.min(MEMORY_CHARS, PROMPT_CHARS - size);
   let memSize = 0;
-  for (const it of memory) {
+  for (const it of [...overflow, ...memory]) {
     if (seen.has(it.id)) continue;
     const doc = memoryDoc(it, refs.size + 1);
     const json = JSON.stringify(doc);
@@ -435,9 +465,9 @@ export function prepareAsk(question, items, memory = [], { total = 0, now = new 
   if (!mem.length && det.length >= all) {
     coverage.push("- <dettagli> contiene il contenuto completo (didascalia, trascrizione, testo) di TUTTI gli elementi salvati.");
   } else {
-    coverage.push("- <dettagli> contiene il contenuto completo (didascalia, trascrizione, testo) degli elementi più probabilmente pertinenti: quando c'è, è la fonte più affidabile.");
-    coverage.push("- <memoria> contiene una scheda breve degli altri elementi: sintesi e punti chiave scritti dall'AI, autore, parole chiave.");
-    if (refs.size < all) coverage.push(`- In tutto ricevi ${refs.size} elementi su ${all} salvati (prima quelli più vicini alla domanda, poi i più recenti). Se non trovi la risposta, può essere in un elemento non incluso: dillo.`);
+    coverage.push("- <dettagli> contiene il contenuto completo (didascalia, trascrizione, testo) di una parte degli elementi: quando c'è, è la fonte più affidabile.");
+    if (mem.length) coverage.push("- <memoria> contiene una scheda breve di altri elementi: sintesi e punti chiave scritti dall'AI, autore, parole chiave.");
+    if (refs.size < all) coverage.push(`- In tutto ricevi ${refs.size} elementi su ${all} salvati. Se non trovi la risposta, può essere in un elemento non incluso: dillo.`);
   }
   const turns = historyTurns(history);
   const prompt = [
@@ -447,7 +477,8 @@ export function prepareAsk(question, items, memory = [], { total = 0, now = new 
     "- Rispondi subito alla domanda, in modo diretto e preciso: nomi, profili (@nome), date, luoghi, prezzi, passaggi e quantità quando ci sono. Poi aggiungi i dettagli utili, anche come elenco puntato con \"- \". Niente premesse né giri di parole.",
     "- Se l'utente cerca un contenuto salvato (\"quel reel su…\", \"dove avevo salvato…\"), indica qual è: argomento o titolo, autore e quando l'ha salvato.",
     "- Cita le fonti nel testo con il loro numero tra parentesi quadre subito dopo l'informazione, ad esempio [3] oppure [2, 5]. Ogni informazione presa dai dati ha la sua citazione.",
-    "- In sources elenca ogni elemento citato: n e quote. quote è un breve passaggio (massimo 200 caratteri) copiato parola per parola da titolo, descrizione, nota, testo o trascrizione dell'elemento, che sostiene la risposta; mai da sintesi o punti dell'AI. Se non c'è un passaggio adatto, quote è una stringa vuota.",
+    `- Al massimo ${MAX_SOURCES} fonti diverse e circa 300 parole: se gli elementi pertinenti sono di più (ad esempio "cosa ho salvato su…"), raggruppali per argomento e cita i più utili, dicendo quanti sono in tutto. Non usare intervalli come [2-4]: scrivi [2, 3, 4].`,
+    "- In sources elenca ogni elemento citato: n e quote. quote è un breve passaggio (massimo 150 caratteri) copiato parola per parola da titolo, descrizione, nota, testo o trascrizione dell'elemento, che sostiene la risposta; mai da sintesi o punti dell'AI. Se non c'è un passaggio adatto, quote è una stringa vuota.",
     "- \"autore\" è chi ha pubblicato il post (profilo Instagram, TikTok, Facebook o canale YouTube). Se la domanda chiede chi ha detto, proposto o organizzato qualcosa, rispondi con l'autore o la persona citata, con il profilo (@nome) quando c'è.",
     "- sintesi, punti, sintesi_ai e punti_ai sono scritti dall'AI a partire dal contenuto: se c'è il testo completo, vale quello.",
     "- Non usare conoscenze esterne e non inventare: se i dati non contengono la risposta, dillo chiaramente, indica cosa c'è di più vicino se c'è, e imposta sufficient=false.",
@@ -508,8 +539,23 @@ export function sanitizeSelect(out, refs) {
 // Spazi rimasti dove c'era una citazione tolta ("Vedi anche [7]." → "Vedi anche.").
 const tidy = (s) => s.replace(/[ \t]+([.,;:!?)])/g, "$1").replace(/[ \t]{2,}/g, " ").trim();
 
-// Citazioni nel testo: [3], [2, 5], [2; 5].
-const CITE = /\[(\d{1,4}(?:\s*[,;]\s*\d{1,4})*)\]/g;
+// Citazioni nel testo: [3], [2, 5], [2; 5], [ 3 ], anche intervalli [2-4].
+const CITE = /\[\s*(\d{1,4}(?:\s*(?:[,;]|[-–—])\s*\d{1,4})*)\s*\]/g;
+// Gruppi di numeri tra parentesi rimasti (formati non riconosciuti): mai
+// mostrare i numeri del prompt, che non corrispondono alle fonti.
+const LEFTOVER = /\[[\d\s,;\-–—]*\d[\d\s,;\-–—]*\]/g;
+
+// "2, 4-6" → [2, 4, 5, 6] (intervalli limitati).
+function citeNumbers(list) {
+  const out = [];
+  for (const part of list.split(/[,;]/)) {
+    const [a, b] = part.split(/[-–—]/).map((x) => Number(x.trim()));
+    if (!Number.isFinite(a)) continue;
+    const end = Number.isFinite(b) && b >= a && b - a < 30 ? b : a;
+    for (let n = a; n <= end; n++) out.push(n);
+  }
+  return out;
+}
 
 function norm(s) {
   return String(s || "")
@@ -548,10 +594,12 @@ export function sanitizeAsk(out, refs) {
     return num.get(r.id);
   };
   const answer = tidy(
-    str(out?.answer, 4000).replace(CITE, (_, list) => {
-      const ns = [...new Set(list.split(/[,;]/).map((x) => use(Number(x.trim()))).filter(Boolean))].sort((a, b) => a - b);
-      return ns.length ? `[${ns.join(", ")}]` : "";
-    }),
+    str(out?.answer, 4000)
+      .replace(CITE, (_, list) => {
+        const ns = [...new Set(citeNumbers(list).map(use).filter(Boolean))].sort((a, b) => a - b);
+        return ns.length ? `[${ns.join(", ")}]` : "";
+      })
+      .replace(LEFTOVER, (m) => (/^\[\d+(?:, \d+)*\]$/.test(m) ? m : "")),
   );
   const quotes = new Map();
   for (const s of Array.isArray(out?.sources) ? out.sources.slice(0, MAX_SOURCES * 2) : []) {
@@ -602,16 +650,28 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
     const valid = (list, n) => (Array.isArray(list) ? list.filter((i) => i && typeof i === "object" && typeof i.id === "string").slice(0, n) : []);
     if (action === "ask") {
       const question = str(body?.question, 500).trim();
-      const items = valid(body?.items, MAX_DETAILS);
-      const memory = valid(body?.memory, MAX_MEMORY);
+      // Oltre il limite dei contenuti completi, gli altri elementi passano
+      // come schede brevi invece di essere persi.
+      const all = valid(body?.items, MAX_DETAILS + MAX_MEMORY);
+      const items = all.slice(0, MAX_DETAILS);
+      const memory = [...all.slice(MAX_DETAILS), ...valid(body?.memory, MAX_MEMORY)].slice(0, MAX_MEMORY);
       if (!question) return { status: 400, json: { error: "Domanda mancante." } };
       if (!items.length && !memory.length) {
         return { status: 200, json: { answer: "", sufficient: false, sources: [] } };
       }
       const total = Number.isInteger(body?.total) && body.total > 0 ? body.total : items.length + memory.length;
       const { prompt, refs, consulted } = prepareAsk(question, items, memory, { total, history: body?.history });
-      const { out, model } = await callGemini({ env, prompt, schema: ASK_SCHEMA, maxTokens: 4096, fetchImpl, deadline: Date.now() + ASK_MS });
-      return { status: 200, json: { ...sanitizeAsk(out, refs), consulted, model } };
+      try {
+        const { out, model } = await callGemini({ env, prompt, schema: ASK_SCHEMA, maxTokens: 8192, fetchImpl, deadline: Date.now() + ASK_MS });
+        return { status: 200, json: { ...sanitizeAsk(out, refs), consulted, model } };
+      } catch (e) {
+        // Risposta tagliata al limite: si tiene la parte scritta (la risposta
+        // viene prima delle fonti), con le citazioni che contiene.
+        const answer = e?.partial ? partialJsonString(e.partial, "answer").trim() : "";
+        if (!answer) throw e;
+        const r = sanitizeAsk({ answer, sufficient: true, sources: [] }, refs);
+        return { status: 200, json: { ...r, answer: r.answer ? `${r.answer} […]` : "", partial: true, consulted, model: e.model } };
+      }
     }
     if (action === "select") {
       const question = str(body?.question, 500).trim();
@@ -619,7 +679,7 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
       if (!question) return { status: 400, json: { error: "Domanda mancante." } };
       if (!memory.length) return { status: 200, json: { ids: [] } };
       const { prompt, refs } = prepareSelect(question, memory, { history: body?.history });
-      const { out } = await callGemini({ env, prompt, schema: SELECT_SCHEMA, maxTokens: 512, fetchImpl, deadline: Date.now() + SELECT_MS });
+      const { out } = await callGemini({ env, prompt, schema: SELECT_SCHEMA, maxTokens: 2048, fetchImpl, deadline: Date.now() + SELECT_MS });
       return { status: 200, json: sanitizeSelect(out, refs) };
     }
     return { status: 400, json: { error: "Azione non valida." } };

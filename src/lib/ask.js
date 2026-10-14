@@ -7,8 +7,10 @@
 import { retrieveForQuestion } from "./search.js";
 import { api } from "./api.js";
 
-// Tutto l'archivio per intero se ci sta (circa 65.000 token).
+// Tutto l'archivio per intero se ci sta (circa 65.000 token, al massimo 400
+// elementi come sul server).
 const FULL_CHARS = 240_000;
+const FULL_ITEMS = 400;
 const FULL_TEXT = 12_000;
 // Archivio più grande: contenuto completo di alcuni elementi, schede degli altri.
 const DETAILS = 10;
@@ -63,8 +65,8 @@ export function detailEntry(item, textChars = PART_TEXT) {
     site_name: item.site_name,
     published_at: item.published_at,
     created_at: item.created_at,
-    description: cut(item.description, 1500),
-    note: cut(item.note, 1500),
+    description: cut(item.description, Math.max(1500, textChars)),
+    note: cut(item.note, textChars),
     place: item.place?.name ? { name: item.place.name } : null,
     categories: item.categories,
     tags: item.tags,
@@ -127,7 +129,7 @@ export async function askArchive(items, question, { ai, history = [] }) {
   try {
     let details = items.map((it) => detailEntry(it, FULL_TEXT));
     let memory = [];
-    if (sizeOf(details) > FULL_CHARS) {
+    if (items.length > FULL_ITEMS || sizeOf(details) > FULL_CHARS) {
       // Archivio grande: l'AI sceglie dalle schede cosa leggere per intero,
       // insieme alle fonti della risposta precedente e agli elementi con le
       // parole della domanda (anche di quella precedente).
@@ -135,12 +137,14 @@ export async function askArchive(items, question, { ai, history = [] }) {
       memory = memoryFor(items, context);
       let picked = [];
       try {
-        picked = (await api.select(question, memory, turns)).ids || [];
+        const r = await api.select(question, memory, turns);
+        picked = (Array.isArray(r?.ids) ? r.ids : []).filter((id) => byId.has(id));
       } catch {
         /* scelta non riuscita: restano le parole della domanda */
       }
-      const prev = history.flatMap((t) => t.sources).slice(-4);
-      const chosen = [...new Set([...picked, ...prev, ...context.map((i) => i.id)])].filter((id) => byId.has(id)).slice(0, DETAILS);
+      // Le fonti più recenti della conversazione restano sempre tra quelle lette.
+      const prev = [...new Set([...history].reverse().flatMap((t) => t.sources))].filter((id) => byId.has(id)).slice(0, 4);
+      const chosen = [...new Set([...picked.slice(0, DETAILS - prev.length), ...prev, ...picked, ...context.map((i) => i.id)])].filter((id) => byId.has(id)).slice(0, DETAILS);
       details = chosen.map((id) => detailEntry(byId.get(id), PART_TEXT));
       const inDetails = new Set(chosen);
       memory = memory.filter((m) => !inDetails.has(m.id));

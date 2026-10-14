@@ -81,6 +81,37 @@ describe("domanda sull'archivio", () => {
     expect(r).toMatchObject({ kind: "insufficient", total: 42 });
   });
 
+  it("le fonti della conversazione restano tra i contenuti letti anche se l'AI ne sceglie molti", async () => {
+    const big = Array.from({ length: 40 }, (_, i) => ({ id: `b${i}`, type: "social", title: `Video ${i}`, extracted_text: "parole ".repeat(1500), created_at: "2026-09-01T10:00:00Z" }));
+    select.mockResolvedValueOnce({ ids: big.slice(0, 10).map((b) => b.id) });
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: false, sources: [] });
+    const history = [
+      { q: "vecchia", a: "a", sources: ["b30", "b31", "b32"] },
+      { q: "pasta?", a: "b", sources: ["p"] },
+      { q: "workshop?", a: "c", sources: ["w"] },
+    ];
+    await askArchive([...big, workshop, pasta], "e quando?", { ai: true, history });
+    const ids = ask.mock.calls.at(-1)[1].map((d) => d.id);
+    expect(ids).toHaveLength(10);
+    // Le fonti più recenti prima: "w" e "p" ci sono sempre.
+    expect(ids.slice(6)).toEqual(["w", "p", "b30", "b31"]);
+  });
+
+  it("più di 400 elementi: anche se corti, l'AI sceglie cosa leggere", async () => {
+    const many = Array.from({ length: 401 }, (_, i) => ({ id: `s${i}`, type: "note", note: `nota ${i}`, created_at: "2026-09-01T10:00:00Z" }));
+    select.mockResolvedValueOnce({ ids: ["s3"] });
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: false, sources: [] });
+    await askArchive(many, "nota", { ai: true });
+    expect(ask.mock.calls.at(-1)[1][0].id).toBe("s3");
+    expect(ask.mock.calls.at(-1)[1].length).toBeLessThanOrEqual(10);
+  });
+
+  it("note lunghe dell'utente inviate per intero", async () => {
+    ask.mockResolvedValueOnce({ answer: "x", sufficient: false, sources: [] });
+    await askArchive([{ ...recent, note: "n".repeat(5000) }], "idea?", { ai: true });
+    expect(ask.mock.calls.at(-1)[1][0].note).toHaveLength(5000);
+  });
+
   it("scelta dell'AI non riuscita: restano le parole della domanda", async () => {
     const big = Array.from({ length: 40 }, (_, i) => ({ id: `b${i}`, type: "social", title: `Video ${i}`, extracted_text: "parole ".repeat(1500), created_at: "2026-09-01T10:00:00Z" }));
     select.mockRejectedValueOnce(new Error("limite"));

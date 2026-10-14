@@ -51,7 +51,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
               <p>Non configurata{aiStatus.error ? ` (${aiStatus.error})` : ""}. L'archivio, la ricerca e i filtri funzionano lo stesso.</p>
             )}
             <p className="text-muted">
-              Quando la usi, il testo degli elementi da rielaborare e le immagini da leggere vengono inviati a Google. Ogni domanda nella
+              Quando la usi, il testo degli elementi da rielaborare e i file da leggere (immagini e PDF senza testo, come le scansioni) vengono inviati a Google. Ogni domanda nella
               chat invia il contenuto di tutti gli elementi salvati (titolo, autore, note, testo); se l'archivio è molto grande, il
               contenuto completo dei più pertinenti e una scheda breve degli altri. L'uso dell'API Gemini può avere costi o limiti secondo il tuo piano Google: non è un servizio gratuito garantito
               né illimitato.

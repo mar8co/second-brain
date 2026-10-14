@@ -8,7 +8,7 @@
 // funzione ufficiale dell'API per i video pubblici.
 // I file non vengono conservati: resta solo il testo, marcato come dell'AI.
 
-import { callGemini } from "./ai.js";
+import { callGemini, partialJsonString } from "./ai.js";
 
 // Limite delle function Vercel: 4,5 MB per richiesta (margine incluso).
 export const MAX_UPLOAD_BYTES = 4_400_000;
@@ -108,57 +108,53 @@ function prompt(kind) {
       "- slides: array vuoto.",
     ].join("\n");
   }
+  if (kind === "pages") {
+    // Un'unica stringa (non un elenco): se la risposta si interrompe per la
+    // lunghezza, le pagine già lette restano.
+    return [
+      "Queste sono le pagine di un PDF salvato dall'utente, in ordine (probabilmente una scansione).",
+      "Leggi tutto il testo di ogni pagina, nella lingua originale, rispettando l'ordine di lettura.",
+      ...common,
+      "- transcript: il testo di tutte le pagine, ognuna preceduta da \"Pagina N:\" su una riga a parte. Se una pagina è solo una foto o un disegno, descrivi in una o due frasi tra parentesi quadre cosa mostra.",
+      "- slides: array vuoto.",
+    ].join("\n");
+  }
   return [
-    kind === "pages"
-      ? "Queste sono le pagine di un PDF salvato dall'utente, in ordine (probabilmente una scansione)."
-      : "Queste immagini (o pagine del PDF) sono le slide di un carosello, nell'ordine in cui sono state inviate.",
-    `Leggi tutto il testo di ogni ${kind === "pages" ? "pagina" : "slide"}, nella lingua originale, rispettando l'ordine di lettura.`,
+    "Queste immagini (o pagine del PDF) sono le slide di un carosello, nell'ordine in cui sono state inviate.",
+    "Leggi tutto il testo di ogni slide, nella lingua originale, rispettando l'ordine di lettura.",
     ...common,
-    "- slides: un elemento per ogni immagine o pagina, con il suo testo (stringa vuota se non contiene testo). Se una slide o pagina è solo una foto, descrivi in una o due frasi tra parentesi quadre cosa mostra (soggetti, prodotti, luoghi).",
+    "- slides: un elemento per ogni immagine o pagina, con il suo testo (stringa vuota se non contiene testo). Se una slide è solo una foto, descrivi in una o due frasi tra parentesi quadre cosa mostra (soggetti, prodotti, luoghi).",
     "- transcript: stringa vuota.",
   ].join("\n");
 }
 
+// Tipi di lettura che scrivono tutto in "transcript".
+const IN_TRANSCRIPT = new Set(["video", "image", "pages"]);
+
 function toText(kind, out) {
-  if (kind === "video" || kind === "image") return String(out?.transcript || "").trim();
+  if (IN_TRANSCRIPT.has(kind)) return String(out?.transcript || "").trim();
   const slides = Array.isArray(out?.slides) ? out.slides.filter((s) => typeof s === "string") : [];
-  const label = kind === "pages" ? "Pagina" : "Slide";
-  return slides.map((s, i) => `${label} ${i + 1}: ${s.trim()}`).join("\n\n").trim();
+  return slides.map((s, i) => `Slide ${i + 1}: ${s.trim()}`).join("\n\n").trim();
 }
 
-// Valore di una stringa JSON anche se la risposta è stata interrotta a metà.
-export function partialJsonString(raw, key) {
-  const m = new RegExp(`"${key}"\\s*:\\s*"`).exec(String(raw || ""));
-  if (!m) return "";
-  let body = "";
-  for (let i = m.index + m[0].length; i < raw.length; i++) {
-    const c = raw[i];
-    if (c === "\\") {
-      // Sequenza di escape completa, altrimenti (troncata in fondo) ci si ferma.
-      const len = raw[i + 1] === "u" ? 6 : 2;
-      if (i + len > raw.length) break;
-      body += raw.slice(i, i + len);
-      i += len - 1;
-    } else if (c === '"') break;
-    else body += c;
-  }
-  try {
-    return JSON.parse(`"${body}"`);
-  } catch {
-    return body;
-  }
-}
+// Valore di una stringa JSON anche se la risposta è stata interrotta a metà
+// (in server/ai.js, serve anche alle domande).
+export { partialJsonString };
 
 async function readWithGemini({ env, kind, parts, fetchImpl, timeoutMs = 40_000, deadline }) {
   try {
     // Temperatura 1: quella consigliata da Google per Gemini 3; più bassa può
-    // far ripetere al modello la stessa frase all'infinito.
-    const { out, model } = await callGemini({ env, prompt: prompt(kind), parts, schema: SCHEMA, maxTokens: 8192, temperature: 1, fetchImpl, timeoutMs, deadline });
-    return { title: String(out?.title || "").trim().slice(0, 200), text: toText(kind, out).slice(0, MAX_TEXT), model };
+    // far ripetere al modello la stessa frase all'infinito. I PDF scansionati
+    // possono avere molte pagine: più spazio per la risposta.
+    const maxTokens = kind === "pages" ? 16384 : 8192;
+    const { out, model } = await callGemini({ env, prompt: prompt(kind), parts, schema: SCHEMA, maxTokens, temperature: 1, fetchImpl, timeoutMs, deadline });
+    const text = toText(kind, out);
+    // Testo più lungo di quanto si conserva: si tiene la prima parte, e la scheda lo dice.
+    return { title: String(out?.title || "").trim().slice(0, 200), text: text.slice(0, MAX_TEXT), model, ...(text.length > MAX_TEXT ? { truncated: true } : {}) };
   } catch (e) {
-    // Video lungo (risposta ferma al limite di token) o AI bloccata in un ciclo:
-    // si tiene la parte trascritta.
-    const text = kind === "video" && e.partial ? partialJsonString(e.partial, "transcript").trim() : "";
+    // Risposta ferma al limite di token (video lungo, PDF di molte pagine,
+    // immagine piena di testo) o AI bloccata in un ciclo: si tiene la parte letta.
+    const text = IN_TRANSCRIPT.has(kind) && e.partial ? partialJsonString(e.partial, "transcript").trim() : "";
     if (!text) throw e;
     return { title: partialJsonString(e.partial, "title").trim().slice(0, 200), text: text.slice(0, MAX_TEXT), model: e.model, truncated: true, looped: Boolean(e.looped) };
   }

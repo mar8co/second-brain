@@ -324,6 +324,42 @@ describe("AI", () => {
     expect(out.sufficient).toBe(true);
   });
 
+  it("citazioni: intervalli espansi, numeri non riconosciuti mai mostrati", () => {
+    const refs = new Map([1, 2, 3].map((n) => [n, { id: `i${n}`, text: "" }]));
+    const out = sanitizeAsk({ answer: "Tre corsi [1-3]. Uno [3 2]. Altro [99]. Fine [2–1].", sufficient: true, sources: [] }, refs);
+    expect(out.answer).toBe("Tre corsi [1, 2, 3]. Uno. Altro. Fine [2].");
+    expect(out.sources.map((s) => s.id)).toEqual(["i1", "i2", "i3"]);
+  });
+
+  it("ask: risposta tagliata al limite di token, resta la parte scritta con le sue fonti", async () => {
+    const raw = '{"answer":"Lo organizza Mario Rossi [2]. Il workshop è il 28 settembre e poi';
+    const fetchImpl = async () =>
+      new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: raw }] } }] }), { status: 200 });
+    const r = await handleAi({ body: { action: "ask", question: "chi?", items: [{ id: "a", title: "Pasta" }, { id: "b", title: "Workshop" }] }, env, fetchImpl });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ answer: "Lo organizza Mario Rossi [1]. Il workshop è il 28 settembre e poi […]", sufficient: true, partial: true, sources: [{ id: "b", quote: "" }] });
+  });
+
+  it("ask: oltre i 400 contenuti completi gli altri elementi passano come schede", async () => {
+    const seen = {};
+    const items = Array.from({ length: 405 }, (_, i) => ({ id: `e${i}`, title: `Elemento ${i}` }));
+    const r = await handleAi({ body: { action: "ask", question: "q", items }, env, fetchImpl: fakeGemini({ answer: "x [405]", sufficient: true, sources: [] }, seen) });
+    expect(r.json.consulted).toBe(405);
+    expect(r.json.sources).toEqual([{ id: "e404", quote: "" }]);
+    expect(seen.body.contents[0].parts[0].text).toContain("<memoria>");
+  });
+
+  it("contenuti che non stanno per intero nel prompt restano come schede brevi", () => {
+    const items = Array.from({ length: 30 }, (_, i) => ({ id: `t${i}`, title: `Video ${i}`, extracted_text: "parola ".repeat(2000) }));
+    const { prompt, refs } = prepareAsk("q", items, [], { total: 30 });
+    const det = JSON.parse(prompt.slice(prompt.lastIndexOf("<dettagli>") + 10, prompt.lastIndexOf("</dettagli>")));
+    const mem = JSON.parse(prompt.slice(prompt.lastIndexOf("<memoria>") + 9, prompt.lastIndexOf("</memoria>")));
+    expect(det.length).toBeGreaterThan(10);
+    expect(det.length + mem.length).toBe(30);
+    expect(refs.size).toBe(30);
+    expect(prompt).not.toMatch(/di TUTTI gli elementi/);
+  });
+
   it("estratti: maiuscole, spazi, apostrofi e puntini di sospensione tollerati; pezzi troppo corti no", () => {
     const text = "si cuoce la pasta e si condisce con scorza di limone, burro e parmigiano. l'acqua deve bollire.";
     expect(quoteIn("Si condisce con   scorza di limone … L’acqua deve bollire", text)).toBe(true);

@@ -8,31 +8,12 @@ import { ArrowUp, ExternalLink, Loader2, Settings } from "lucide-react";
 import { TopBar } from "../components/Layout.jsx";
 import { AiBadge, ErrorBox, TypeIcon } from "../components/ui.jsx";
 import { askArchive, recentTurns } from "../lib/ask.js";
+import { getChatLog, updateChatLog, useChatLog } from "../lib/chatlog.js";
 import { countBy } from "../lib/search.js";
 import { displayHost, detectType, extractUrl } from "../lib/detect.js";
 import { displayTitle } from "../lib/item.js";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { needsDigest } from "../lib/memory.js";
-
-const LOG_KEY = "sb-chat-v1";
-const MAX_LOG = 60;
-
-function loadLog() {
-  try {
-    const v = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
-    return Array.isArray(v) ? v.filter((m) => m && typeof m.q === "string" && m.at) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveLog(log) {
-  try {
-    localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(-MAX_LOG)));
-  } catch {
-    /* archiviazione locale non disponibile: la cronologia resta in memoria */
-  }
-}
 
 const dayKey = (iso) => new Date(iso).toDateString();
 
@@ -50,17 +31,18 @@ const timeOf = (iso) => new Date(iso).toLocaleTimeString("it-IT", { hour: "2-dig
 
 export default function Chat({ archive, query, navigate, openItem, toast, ai, syncMode }) {
   const { items, loading, error, reload } = archive;
-  const [log, setLog] = useState(loadLog);
+  const log = useChatLog();
   const [text, setText] = useState("");
   const endRef = useRef(null);
   const autoAsked = useRef(false);
 
   const byId = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
-  // Domande suggerite per cominciare: dalle categorie più usate.
+  // Domande suggerite per cominciare: dalle categorie più usate (le date le
+  // capisce solo l'AI).
   const suggestions = useMemo(() => {
     const top = countBy(items, "categories").slice(0, 3).map(([c]) => `Cosa ho salvato su ${c.toLowerCase()}?`);
-    return items.length ? ["Cosa ho salvato questa settimana?", ...top] : [];
-  }, [items]);
+    return items.length ? [...(ai ? ["Cosa ho salvato questa settimana?"] : []), ...top] : [];
+  }, [items, ai]);
   // Contenuti che l'AI sta ancora leggendo o rielaborando: le risposte non li comprendono del tutto.
   const pending = useMemo(() => (ai ? items.filter((it) => it.status === "processing" || needsDigest(it)).length : 0), [items, ai]);
 
@@ -71,20 +53,14 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     endRef.current?.scrollIntoView({ block: "end" });
   }, [log, loading]);
 
-  const updateLog = (fn) =>
-    setLog((cur) => {
-      const next = fn(cur);
-      saveLog(next);
-      return next;
-    });
-
   const ask = async (question) => {
     // I turni precedenti servono per le domande di seguito ("e quanto costa?").
-    const history = recentTurns(log);
+    const history = recentTurns(getChatLog());
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    updateLog((cur) => [...cur, { id, at: new Date().toISOString(), q: question, pending: true }]);
+    updateChatLog((cur) => [...cur, { id, at: new Date().toISOString(), q: question, pending: true }]);
+    // La risposta arriva anche se nel frattempo si è passati a un'altra schermata.
     const result = await askArchive(items, question, { ai, history });
-    updateLog((cur) => cur.map((m) => (m.id === id ? { ...m, pending: false, result } : m)));
+    updateChatLog((cur) => cur.map((m) => (m.id === id ? { ...m, pending: false, result } : m)));
   };
 
   // Domanda arrivata da un link (/?q=…): una sola volta, ad archivio caricato.
@@ -118,7 +94,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 
   const clearLog = () => {
     if (!window.confirm("Iniziare una nuova conversazione? Domande e risposte spariscono dalla chat; i contenuti salvati restano.")) return;
-    updateLog(() => []);
+    updateChatLog(() => []);
   };
 
   return (
@@ -183,7 +159,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
                     <span className="rounded-full bg-sunken px-3 py-1 text-xs font-medium text-muted">{dayLabel(msg.at)}</span>
                   </p>
                 )}
-                <QaBubbles msg={msg} byId={byId} onOpen={openItem} />
+                <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} />
               </li>
             ))}
           </ol>
@@ -220,7 +196,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 }
 
 // Domanda (a destra) e risposta di Second Brain (a sinistra), con le fonti.
-function QaBubbles({ msg, byId, onOpen }) {
+function QaBubbles({ msg, byId, archiveOk, onOpen }) {
   const r = msg.result;
   const answered = r && (r.kind === "answer" || r.kind === "insufficient");
   const sources = answered ? (r.sources || []).map((id) => ({ id, item: byId.get(id), quote: r.quotes?.[id] || "" })) : [];
@@ -263,7 +239,7 @@ function QaBubbles({ msg, byId, onOpen }) {
           {answered && r.total > r.consulted && (
             <p className="mt-1.5 text-xs text-muted">Ho consultato {r.consulted} contenuti su {r.total}: quelli più vicini alla domanda e i più recenti.</p>
           )}
-          {answered && <Sources sources={sources} onOpen={onOpen} />}
+          {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
           {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
         </div>
       </div>
@@ -309,7 +285,13 @@ export function AnswerText({ text, count, onCite }) {
 function Inline({ text, count, onCite }) {
   const parts = text.split(/(\*\*[^*]+\*\*|\[\d+(?:,\s*\d+)*\])/g);
   return parts.map((part, i) => {
-    if (/^\*\*[^*]+\*\*$/.test(part)) return <strong key={i}>{part.slice(2, -2)}</strong>;
+    if (/^\*\*[^*]+\*\*$/.test(part)) {
+      return (
+        <strong key={i}>
+          <Inline text={part.slice(2, -2)} count={count} onCite={onCite} />
+        </strong>
+      );
+    }
     const cite = /^\[(\d+(?:,\s*\d+)*)\]$/.exec(part);
     if (cite) {
       const ns = cite[1].split(",").map((n) => Number(n.trim())).filter((n) => n >= 1 && n <= count);
@@ -336,7 +318,7 @@ function Inline({ text, count, onCite }) {
 
 // Fonti numerate come nella risposta: titolo, chi l'ha pubblicato, quando, il
 // passaggio citato e il link all'originale.
-function Sources({ sources, onOpen }) {
+function Sources({ sources, archiveOk, onOpen }) {
   if (!sources.length) return null;
   return (
     <div className="mt-3 border-t border-line pt-2">
@@ -370,7 +352,7 @@ function Sources({ sources, onOpen }) {
                 )}
               </div>
             ) : (
-              <p className="text-sm text-muted">Contenuto non più nell'archivio.</p>
+              <p className="text-sm text-muted">{archiveOk ? "Contenuto non più nell'archivio." : "Fonte non disponibile ora: l'archivio non è stato caricato."}</p>
             )}
           </li>
         ))}

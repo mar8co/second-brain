@@ -179,9 +179,15 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await box.press("Enter");
   await expect(page.getByText(/c'è un primo piatto veloce/)).toBeVisible();
 
-  // Domanda senza riscontri nell'archivio
+  // Domanda senza riscontri nell'archivio. La risposta arriva anche se
+  // nel frattempo si passa all'Archivio.
   await box.fill("orari della palestra?");
   await page.getByRole("button", { name: "Invia" }).click();
+  await expect(page.getByText("Cerco nella tua memoria…")).toBeVisible();
+  const nav = page.getByRole("navigation", { name: "Navigazione principale" });
+  await nav.getByRole("link", { name: "Archivio" }).click();
+  await expect(page).toHaveURL(/\/archivio/);
+  await nav.getByRole("link", { name: "Chat" }).click();
   await expect(page.getByText(/I tuoi contenuti non bastano per rispondere/)).toBeVisible();
 
   // La cronologia resta dopo il ricaricamento; la citazione apre la fonte

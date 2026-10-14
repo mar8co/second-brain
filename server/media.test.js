@@ -278,12 +278,30 @@ describe("immagini e PDF salvati dall'app: letti dall'AI in background", () => {
   it("PDF scansionato: pagine lette; il titolo scelto dall'utente resta", async () => {
     const { handleRead } = await import("./read.js");
     const db = fileDb({ ...image, title: "Contratto affitto", file_mime: "application/pdf", status: "partial" });
-    const g = fakeGemini({ title: "Contratto", transcript: "", slides: ["Contratto di locazione", "Firme"] });
+    const g = fakeGemini({ title: "Contratto", transcript: "Pagina 1: Contratto di locazione\n\nPagina 2: Firme", slides: [] });
     await handleRead({ authHeader: jwt, body: { file: true, id: ID, ai: false, prev_status: "partial" }, env: envAuth, fetchImpl: g.fetchImpl, db });
-    expect(g.requests[0].contents[0].parts.at(-1).text).toMatch(/pagine di un PDF/);
+    expect(g.requests[0].contents[0].parts.at(-1).text).toMatch(/pagine di un PDF[\s\S]*Pagina N:/);
     expect(db.writes[0]).not.toHaveProperty("title");
     expect(db.writes[0]).toMatchObject({ extracted_text: "Pagina 1: Contratto di locazione\n\nPagina 2: Firme", text_source: "testo del PDF letto dall'AI", status: "analyzed" });
     expect(db.writes[0].ai).toBeUndefined();
+  });
+
+  it("PDF di molte pagine tagliato al limite dell'AI: restano le pagine lette", async () => {
+    const { handleRead } = await import("./read.js");
+    const db = fileDb({ ...image, title: null, file_mime: "application/pdf", status: "partial" });
+    const cut = '{"title": "Manuale", "transcript": "Pagina 1: Introduzione\\n\\nPagina 2: Montaggio del';
+    const fetchImpl = async () => new Response(JSON.stringify({ candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: cut }] } }] }), { status: 200 });
+    await handleRead({ authHeader: jwt, body: { file: true, id: ID, ai: false, prev_status: "partial" }, env: envAuth, fetchImpl, db });
+    expect(db.writes[0]).toMatchObject({ title: "Manuale", extracted_text: "Pagina 1: Introduzione\n\nPagina 2: Montaggio del", status: "partial", status_detail: expect.stringMatching(/^Letto in parte/) });
+  });
+
+  it("testo più lungo di quanto si conserva: la prima parte, e la scheda lo dice", async () => {
+    const { handleRead } = await import("./read.js");
+    const db = fileDb(image);
+    const g = fakeGemini({ title: "Menu", transcript: "piatto ".repeat(4000), slides: [] });
+    await handleRead({ authHeader: jwt, body: { file: true, id: ID, ai: false, prev_status: "saved" }, env: envAuth, fetchImpl: g.fetchImpl, db });
+    expect(db.writes[0].extracted_text).toHaveLength(20000);
+    expect(db.writes[0]).toMatchObject({ status: "partial", status_detail: expect.stringMatching(/^Letto in parte/) });
   });
 
   it("file non scaricabile: resta lo stato di prima con il motivo", async () => {
