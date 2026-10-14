@@ -296,12 +296,12 @@ function QaBubbles({ msg, byId, onOpen }) {
           ) : r.kind === "insufficient" ? (
             <p>I tuoi contenuti non bastano per rispondere.{r.answer ? ` ${r.answer}` : ""}</p>
           ) : r.kind === "error" ? (
-            <p>Risposta AI non disponibile ({r.error}). Ecco i contenuti più vicini:</p>
+            <p>Risposta AI non disponibile ({r.error}).{maybe.length ? " Ecco i contenuti più vicini:" : " Riprova tra poco."}</p>
           ) : (
             <p>Ecco i contenuti più vicini alla tua domanda:</p>
           )}
-          {r && !msg.pending && r.total > r.consulted && (
-            <p className="mt-1.5 text-xs text-muted">Ho consultato i {r.consulted} contenuti più pertinenti su {r.total}.</p>
+          {r && !msg.pending && (r.kind === "answer" || r.kind === "insufficient") && r.total > r.consulted && (
+            <p className="mt-1.5 text-xs text-muted">Ho consultato {r.consulted} contenuti su {r.total}: prima quelli con le parole della domanda, poi i più recenti.</p>
           )}
           {r && !msg.pending && (
             <SourceList

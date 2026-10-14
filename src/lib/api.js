@@ -52,5 +52,6 @@ export const api = {
   aiStatus: () => post("/api/ai", { action: "status" }, { timeoutMs: 10000 }),
   classify: (item, categories) => post("/api/ai", { action: "classify", item, categories }),
   // items: contenuto completo dei più pertinenti; memory: schede di tutto l'archivio.
-  ask: (question, items, memory = []) => post("/api/ai", { action: "ask", question, items, memory }, { timeoutMs: 45000 }),
+  // total: elementi nell'archivio (le schede inviate possono essere meno).
+  ask: (question, items, memory = [], total = memory.length) => post("/api/ai", { action: "ask", question, items, memory, total }, { timeoutMs: 45000 }),
 };

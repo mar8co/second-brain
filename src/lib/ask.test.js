@@ -22,9 +22,12 @@ const recent = { id: "n", type: "note", note: "Idea regalo", categories: [], tag
 describe("schede inviate all'AI", () => {
   it("scheda breve: niente testo completo se c'è già la scheda dell'AI", () => {
     const e = memoryEntry(workshop);
-    expect(e).toMatchObject({ id: "w", author: "Mario Rossi (@mario.ai)", ai: { summary: "Workshop gratuito sull'IA.", keywords: ["corso", "formazione"] } });
-    expect(e.extracted_text).toBeNull();
-    expect(memoryEntry({ ...workshop, ai: null }).extracted_text).toHaveLength(600);
+    expect(e).toMatchObject({ id: "w", author: "Mario Rossi (@mario.ai)", ai: { summary: "Workshop gratuito sull'IA.", entities: ["Mario Rossi"], keywords: ["corso", "formazione"] } });
+    expect(e).not.toHaveProperty("extracted_text");
+    expect(memoryEntry({ ...workshop, ai: null }).extracted_text).toHaveLength(300);
+    // Scheda corta anche con una scheda dell'AI al massimo: ci stanno centinaia di elementi.
+    const full = { ...workshop, title: "t".repeat(300), ai: { summary: "s".repeat(800), points: Array(8).fill("p".repeat(300)), entities: Array(12).fill({ name: "n".repeat(100), kind: "persona" }), keywords: Array(15).fill("k".repeat(60)) } };
+    expect(JSON.stringify(memoryEntry(full)).length).toBeLessThan(2000);
   });
   it("contenuto completo dei pertinenti: autore e testo fino a 5000 caratteri", () => {
     const d = detailEntry(workshop);
@@ -48,6 +51,7 @@ describe("domanda sull'archivio", () => {
     // "corsi" trova la parola chiave "corso" della scheda: il Reel è tra i pertinenti.
     expect(details.map((d) => d.id)).toContain("w");
     expect(r).toMatchObject({ kind: "answer", answer: "Mario Rossi (@mario.ai).", sources: ["w"], consulted: 3, total: 3 });
+    expect(ask.mock.calls.at(-1)[3]).toBe(3);
   });
   it("chi ha pubblicato è cercabile anche senza AI", async () => {
     const r = await askArchive([pasta, workshop], "mario rossi", { ai: false });
@@ -62,5 +66,7 @@ describe("domanda sull'archivio", () => {
     ask.mockRejectedValueOnce(new Error("Servizio AI sovraccarico"));
     const r = await askArchive([pasta, workshop], "workshop", { ai: true });
     expect(r).toMatchObject({ kind: "error", error: "Servizio AI sovraccarico", candidates: ["w"] });
+    // Nessuna scheda consultata: la chat non lo dichiara.
+    expect(r).not.toHaveProperty("consulted");
   });
 });

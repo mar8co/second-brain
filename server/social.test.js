@@ -137,7 +137,11 @@ describe("risultati di Apify → forma comune", () => {
         video_owner: { name: "CyberNews" },
       },
     });
-    expect(reel).toMatchObject({ kind: "video", caption: "You can play Doom on a pdf", author: "cybernewscom", videoUrl: "https://video.test/sd.mp4", cover: "https://cdn.test/thumb.jpg", subtitles: [] });
+    expect(reel).toMatchObject({ kind: "video", caption: "You can play Doom on a pdf", author: "CyberNews (@cybernewscom)", videoUrl: "https://video.test/sd.mp4", cover: "https://cdn.test/thumb.jpg", subtitles: [] });
+    // Nome mostrato della pagina, con il nome nell'indirizzo come profilo.
+    expect(normalizeFacebook({ text: "x", pageName: "nytimes", user: { name: "The New York Times" }, time: "2026-09-01T10:00:00.000Z" })).toMatchObject({
+      author: "The New York Times (@nytimes)", publishedAt: "2026-09-01T10:00:00.000Z",
+    });
 
     const watch = normalizeFacebook({
       __typename: "Video",
@@ -796,6 +800,21 @@ describe("lettura dall'app in background (modalità sincronizzata)", () => {
     const r = await handleRead({ authHeader: jwt(Date.now() + 120_000), body: { url: "https://www.instagram.com/reel/C9abc/", id: ID }, env: envAuth, fetchImpl: net.fetchImpl, db });
     expect(r).toMatchObject({ status: 200, json: { status: "analyzed", text: "Testo." } });
     expect(db.writes).toHaveLength(0);
+  });
+
+  it("rilettura automatica (apply=false): nuova scheda dell'AI, categorie e tag dell'utente invariati", async () => {
+    const db = fakeDb({ id: ID, url: "https://www.instagram.com/reel/C9abc/", categories: ["Mia"], tags: ["mio"], ai: { summary: "vecchia", categories: ["Altro"], tags: [] } });
+    const net = fakeNet({
+      apify: [{ type: "Video", caption: "Carbonara", videoUrl: "https://cdn.test/v.mp4" }],
+      media: { "https://cdn.test/v.mp4": bytes(10, "video/mp4") },
+      gemini: (body) => geminiReply(body.contents[0].parts.some((p) => p.inline_data) ? { title: "T", transcript: "Testo.", slides: [] } : { summary: "Ricetta.", categories: ["Ricette"], tags: ["pasta"] }),
+    });
+    await handleRead({ authHeader, body: { url: "https://www.instagram.com/reel/C9abc/", id: ID, ai: true, apply: false }, env: envAuth, fetchImpl: net.fetchImpl, db });
+    const patch = db.writes[0].patch;
+    expect(patch).not.toHaveProperty("categories");
+    expect(patch).not.toHaveProperty("tags");
+    expect(patch.ai).toMatchObject({ v: 2, summary: "Ricetta.", categories: ["Ricette"] });
+    expect(patch.ai.applied).toBeUndefined();
   });
 
   it("AI automatica disattivata: nessuna classificazione", async () => {

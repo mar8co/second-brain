@@ -3,7 +3,7 @@ import http from "node:http";
 import { isPrivateIp, safeFetch } from "./net.js";
 import { looksLikeLoginWall, parseHtml } from "./html.js";
 import { extractUrlInfo, handleExtract } from "./extract.js";
-import { buildAskPrompt, buildClassifyPrompt, callGemini, handleAi, sanitizeAsk, sanitizeClassify } from "./ai.js";
+import { buildAskPrompt, buildClassifyPrompt, callGemini, handleAi, sanitizeAsk, sanitizeClassify, todayInItaly } from "./ai.js";
 import { handleShare, itemFromShared } from "./share.js";
 
 const LONG = "Questa è una frase di prova sull'olio extravergine e la pasta al limone. ".repeat(20);
@@ -244,13 +244,25 @@ describe("AI", () => {
     ];
     const p = buildAskPrompt("chi organizza workshop?", [{ id: "d1", title: "Dettaglio", author: "Anna (@anna)", extracted_text: "x".repeat(6000) }], memory);
     const mem = JSON.parse(p.slice(p.lastIndexOf("<memoria>") + 9, p.lastIndexOf("</memoria>")));
-    expect(mem[0]).toMatchObject({ id: "m1", autore: "Mario Rossi (@mario.ai)", sintesi: "Workshop gratuito sull'IA.", punti: ["Il 28 settembre."], entita: ["Mario Rossi (persona)"], parole_chiave: ["corso"] });
+    expect(mem[0]).toMatchObject({ id: "m1", autore: "Mario Rossi (@mario.ai)", sintesi: "Workshop gratuito sull'IA.", punti: ["Il 28 settembre."], entita: ["Mario Rossi"], parole_chiave: ["corso"] });
     expect(mem[0].estratto).toBeUndefined();
     expect(mem[1].estratto).toBe("Didascalia del post … Trascrizione del video");
     const det = JSON.parse(p.slice(p.lastIndexOf("<dettagli>") + 10, p.lastIndexOf("</dettagli>")));
     expect(det[0]).toMatchObject({ id: "d1", autore: "Anna (@anna)" });
     expect(det[0].testo).toHaveLength(5000);
     expect(p).toMatch(/autore.*chi ha pubblicato il post/);
+    expect(p).toMatch(/una scheda breve per ogni elemento salvato/);
+    expect(p).toMatch(/Oggi è \d{4}-\d{2}-\d{2}\./);
+  });
+
+  it("archivio più grande delle schede inviate: il prompt lo dice", () => {
+    const p = buildAskPrompt("q", [], [{ id: "a", title: "x" }], { total: 300 });
+    expect(p).toMatch(/le schede brevi di 1 elementi su 300 salvati/);
+    expect(p).not.toMatch(/una scheda breve per ogni elemento salvato/);
+  });
+
+  it("data di oggi in Italia", () => {
+    expect(todayInItaly(new Date("2026-10-13T23:30:00Z"))).toBe("2026-10-14");
   });
 
   it("le fonti possono essere elementi della memoria o dei dettagli, non altri", () => {

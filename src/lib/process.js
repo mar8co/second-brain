@@ -21,8 +21,14 @@ export { aiPayload, extractionPatch };
 export async function classifyItem(item, { store, categories, apply = false, keepApplied = false, current }) {
   const r = await api.classify(aiPayload(item), categories);
   if (current) {
+    const sent = item;
     item = current();
     if (!item) return null;
+    // Cambiato durante la chiamata (nuova lettura in corso, testo diverso,
+    // scheda già rifatta): il risultato descrive il contenuto vecchio.
+    const same = (k) => (item[k] ?? null) === (sent[k] ?? null);
+    const changed = item.status === "processing" || !["title", "description", "note", "extracted_text", "author"].every(same) || (item.ai?.generated_at ?? null) !== (sent.ai?.generated_at ?? null);
+    if (changed) return item;
   }
   const patch = {};
   // L'avviso di un tentativo precedente non riuscito non serve più.
@@ -57,7 +63,9 @@ export async function waitForServer(id, { store, onUpdate, everyMs = 4000, maxMs
   return cur;
 }
 
-export async function processItem(item, { store, onUpdate, ai, categories = [], wait = waitForServer }) {
+// apply=false (riletture automatiche di elementi che hanno già una scheda):
+// categorie e tag dell'AI restano proposte, quelli dell'utente non cambiano.
+export async function processItem(item, { store, onUpdate, ai, categories = [], apply = true, wait = waitForServer }) {
   let cur = item;
   if (item.url && !item.file_path) {
     cur = await store.update(item.id, { status: "processing", status_detail: null });
@@ -66,7 +74,7 @@ export async function processItem(item, { store, onUpdate, ai, categories = [], 
     try {
       // Modalità sincronizzata: per i post social il server lavora in
       // background, scrive lui il risultato (AI compresa) e qui si aspetta.
-      const opts = store.mode === "sync" ? { id: item.id, ai: Boolean(ai), categories } : {};
+      const opts = store.mode === "sync" ? { id: item.id, ai: Boolean(ai), categories, ...(apply ? {} : { apply: false }) } : {};
       const r = await api.extract(item.url, opts);
       if (r?.background) {
         const done = await wait(item.id, { store, onUpdate });
@@ -95,7 +103,7 @@ export async function processItem(item, { store, onUpdate, ai, categories = [], 
   }
   if (ai && hasContent(cur)) {
     try {
-      cur = await classifyItem(cur, { store, categories, apply: true });
+      cur = await classifyItem(cur, { store, categories, apply });
       onUpdate(cur);
     } catch {
       /* le proposte AI sono facoltative: l'elemento resta valido senza */

@@ -77,7 +77,7 @@ Non impostare mai `EXTRACT_ALLOW_PRIVATE`, `GEMINI_API_BASE` né `APIFY_API_BASE
 
 Crea una chiave su [Google AI Studio](https://aistudio.google.com/apikey) e mettila in `GEMINI_API_KEY` su Vercel (o in `.env.local` in sviluppo). Viene usata per:
 
-- rielaborare ogni elemento in una **scheda di memoria** dopo il salvataggio (riassunto, punti chiave, persone e luoghi citati, parole chiave anche sinonime, categorie e tag; disattivabile in Impostazioni). Con l'app aperta, gli elementi senza scheda (AI non riuscita al salvataggio) o con una scheda di versione precedente vengono rielaborati da soli, uno alla volta (`src/lib/memory.js`);
+- rielaborare ogni elemento in una **scheda di memoria** dopo il salvataggio (riassunto, punti chiave, persone e luoghi citati, parole chiave anche sinonime, categorie e tag; disattivabile in Impostazioni). Con l'app aperta, gli elementi senza scheda (AI non riuscita al salvataggio) o con una scheda di versione precedente vengono rielaborati da soli, uno alla volta (`src/lib/memory.js`). Allo stesso modo vengono riletti i post rimasti "in elaborazione" da più di 10 minuti, quelli salvati prima della trascrizione dal link (solo didascalia) e quelli la cui lettura non è riuscita per un motivo momentaneo: al massimo 3 volte per elemento su ogni dispositivo, perché ogni lettura usa i crediti gratuiti di Apify. Nelle riletture di elementi che hanno già una scheda, categorie e tag dell'AI restano proposte;
 - rispondere alle domande in "Chiedi";
 - trascrivere i video e leggere le slide dei caroselli.
 

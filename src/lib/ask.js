@@ -8,34 +8,42 @@ import { retrieveForQuestion } from "./search.js";
 import { api } from "./api.js";
 
 const DETAILS = 8;
-// Dimensione massima delle schede inviate (circa 60.000 token): per archivi
-// più grandi si inviano prima le più pertinenti, poi le più recenti.
+// Dimensione massima delle schede inviate (circa 60.000 token, alcune
+// centinaia di elementi): per archivi più grandi si inviano prima quelle con
+// parole in comune con la domanda, poi le più recenti, e la chat lo dice.
 const MEMORY_CHARS = 220_000;
 
 const cut = (s, n) => (typeof s === "string" ? s.slice(0, n) : null);
 const byDateDesc = (a, b) => new Date(b.created_at) - new Date(a.created_at);
 
-// Scheda breve di un elemento.
+const strings = (v, n, each) => (Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, n).map((x) => x.slice(0, each)) : []);
+const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)));
+
+// Scheda breve di un elemento: corta, così ci stanno centinaia di elementi.
+// Il contenuto completo arriva solo per i più pertinenti (detailEntry).
 export function memoryEntry(item) {
   const ai = item.ai || {};
   const digested = Boolean(ai.summary || ai.points?.length);
-  return {
+  return compact({
     id: item.id,
     type: item.type,
     title: cut(item.title, 160),
-    author: item.author || null,
-    site_name: item.site_name || null,
-    published_at: item.published_at || null,
-    created_at: item.created_at,
-    ai: { summary: ai.summary, points: ai.points, entities: ai.entities, keywords: ai.keywords },
-    categories: item.categories,
-    tags: item.tags,
-    place: item.place?.name ? { name: item.place.name } : null,
-    note: cut(item.note, 400),
+    author: cut(item.author, 200),
+    site_name: cut(item.site_name, 60),
+    published_at: cut(item.published_at, 10),
+    created_at: cut(item.created_at, 10),
+    ai: compact({
+      summary: cut(ai.summary, 350),
+      points: strings(ai.points, 3, 160),
+      entities: strings((Array.isArray(ai.entities) ? ai.entities : []).map((e) => e?.name), 8, 50),
+      keywords: strings(ai.keywords, 12, 30),
+    }),
+    place: item.place?.name ? { name: cut(item.place.name, 120) } : null,
+    note: cut(item.note, 200),
     // Se l'AI non l'ha ancora rielaborato: l'inizio di didascalia e testo.
-    description: digested ? null : cut(item.description, 400),
-    extracted_text: digested ? null : cut(item.extracted_text, 600),
-  };
+    description: digested ? null : cut(item.description, 200),
+    extracted_text: digested ? null : cut(item.extracted_text, 300),
+  });
 }
 
 // Contenuto completo di un elemento pertinente.
@@ -88,11 +96,11 @@ export async function askArchive(items, question, { ai }) {
   const memory = memoryFor(items, ranked);
   const consulted = { consulted: memory.length, total: items.length };
   try {
-    const r = await api.ask(question, ranked.slice(0, DETAILS).map(detailEntry), memory);
+    const r = await api.ask(question, ranked.slice(0, DETAILS).map(detailEntry), memory, items.length);
     const known = new Set(items.map((i) => i.id));
     const sources = r.sources.filter((id) => known.has(id));
     return { kind: r.sufficient ? "answer" : "insufficient", answer: r.answer, sources, candidates: ids, ...consulted };
   } catch (e) {
-    return { kind: "error", error: e.message, sources: [], candidates: ids, ...consulted };
+    return { kind: "error", error: e.message, sources: [], candidates: ids };
   }
 }

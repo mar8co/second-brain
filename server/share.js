@@ -101,7 +101,7 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl, dea
 // caroselli letti slide per slide (server/social.js). Il tempo è limitato
 // dalla durata massima della funzione: resta margine per l'AI e il salvataggio.
 // `classify: false` quando l'utente ha disattivato l'AI automatica nell'app.
-export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000, classify = true }) {
+export async function enrichShared({ item, known = [], env, fetchImpl, deadline = Date.now() + 240_000, classify = true, apply = true }) {
   let patch = {};
   if (item.url) {
     try {
@@ -114,10 +114,11 @@ export async function enrichShared({ item, known = [], env, fetchImpl, deadline 
     }
   }
   // L'AI ha il tempo che resta prima della durata massima della funzione (300 s).
-  return classify ? withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000 }) : patch;
+  return classify ? withAi({ item, patch, known, env, fetchImpl, deadline: deadline + 50_000, apply }) : patch;
 }
 
-async function withAi({ item, patch, known, env, fetchImpl, deadline }) {
+// apply=false: la scheda dell'AI si aggiorna, categorie e tag restano proposte.
+async function withAi({ item, patch, known, env, fetchImpl, deadline, apply = true }) {
   const cur = { ...item, ...patch };
   if (aiConfigured(env) && hasContent(cur)) {
     try {
@@ -125,9 +126,11 @@ async function withAi({ item, patch, known, env, fetchImpl, deadline }) {
       // Scheda di memoria dell'AI (riassunto, punti chiave, persone, parole
       // chiave). Salvataggio senza app: le categorie e i tag dell'AI vengono
       // assegnati subito (resta traccia in `ai.applied`, la scheda lo dice).
-      patch.ai = aiFromDigest(r, { applied: true });
-      patch.categories = cleanList([...(cur.categories || []), ...r.categories], 10);
-      patch.tags = cleanList([...(cur.tags || []), ...r.tags]).map((t) => t.toLowerCase());
+      patch.ai = aiFromDigest(r, { applied: apply });
+      if (apply) {
+        patch.categories = cleanList([...(cur.categories || []), ...r.categories], 10);
+        patch.tags = cleanList([...(cur.tags || []), ...r.tags]).map((t) => t.toLowerCase());
+      }
     } catch (e) {
       patch.status_detail = [cur.status_detail, `AI non disponibile: ${e.message}`].filter(Boolean).join(" ");
     }

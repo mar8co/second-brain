@@ -69,7 +69,8 @@ export async function handleRead({ authHeader, body, env, fetchImpl, waitUntil, 
     }
     if (!item?.url) return { status: 404, json: { error: "Elemento non trovato." } };
     const known = cleanList(Array.isArray(body.categories) ? body.categories : [], 50);
-    const job = enrichShared({ item, known, env, fetchImpl, classify: body.ai === true })
+    // apply=false: categorie e tag dell'AI restano proposte (riletture automatiche).
+    const job = enrichShared({ item, known, env, fetchImpl, classify: body.ai === true, apply: body.apply !== false })
       .then(async (patch) => {
         // Le modifiche fatte dall'utente durante la lettura non si perdono.
         const fresh = await store.get(id).catch(() => item);

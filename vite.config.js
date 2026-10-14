@@ -2,7 +2,7 @@ import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { handleRead } from "./server/read.js";
-import { handleAi } from "./server/ai.js";
+import { AI_BODY_BYTES, handleAi } from "./server/ai.js";
 import { handleShare } from "./server/share.js";
 import { nodeHandler } from "./server/node-adapter.js";
 
@@ -43,7 +43,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       devApi("/api/extract", handleRead, apiEnv),
-      devApi("/api/ai", handleAi, apiEnv),
+      devApi("/api/ai", handleAi, apiEnv, { maxBody: AI_BODY_BYTES }),
       devApi("/api/share", handleShare, apiEnv, { allowFiles: true }),
       VitePWA({
         registerType: "autoUpdate",

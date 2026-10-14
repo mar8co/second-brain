@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { needsDigest, needsReread, runUpkeep, STALE_MS } from "./memory.js";
+import { MAX_AUTO_REREADS, needsDigest, needsReread, rereadLog, runUpkeep, STALE_MS } from "./memory.js";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const reel = { id: "r", type: "social", url: "https://www.instagram.com/reel/abc/", status: "analyzed", processed_at: "2026-10-13T13:15:05Z", extracted_text: "Ho preparato un workshop" };
@@ -52,8 +52,15 @@ describe("giro di manutenzione", () => {
       now: () => NOW,
       sleep: async (ms) => log.push(`sleep ${ms}`),
       digest: opts.digest || (async (it) => log.push(`digest ${it.id}`)),
-      reread: async (it) => log.push(`reread ${it.id}`),
+      reread:
+        opts.reread ||
+        (async (it, mark) => {
+          mark();
+          log.push(`reread ${it.id}`);
+          return null;
+        }),
       maxRereads: opts.maxRereads,
+      log: opts.log,
     });
     return p.then((how) => ({ how, log, tried }));
   };
@@ -106,5 +113,71 @@ describe("giro di manutenzione", () => {
     const items = Array.from({ length: 7 }, (_, i) => ({ ...reel, id: `o${i}`, extracted_text: null, processed_at: "2026-10-13T09:00:00Z" }));
     const { log } = await run(items);
     expect(log.filter((l) => l.startsWith("reread"))).toHaveLength(5);
+  });
+});
+
+describe("letture non riuscite e limiti delle riletture", () => {
+  const old = { ...reel, extracted_text: null, processed_at: "2026-10-14T09:00:00Z" };
+  it("lettura fallita per un motivo momentaneo: da rileggere; crediti di Apify esauriti: no", () => {
+    expect(needsReread({ ...old, status_detail: "Ho letto solo la didascalia, non il contenuto: trascrizione non riuscita (Limite gratuito del servizio AI raggiunto: riprova più tardi.)." }, NOW)).toBe(true);
+    expect(needsReread({ ...old, status_detail: "Apify non risponde: riprova dalla scheda." }, NOW)).toBe(true);
+    expect(needsReread({ ...old, status_detail: "Crediti gratuiti di Apify del mese esauriti: si ricaricano all'inizio del mese." }, NOW)).toBe(false);
+    expect(needsReread({ ...old, status_detail: "Ho letto solo la didascalia, non il contenuto: nel video non c'è né parlato né testo da trascrivere." }, NOW)).toBe(false);
+    // Solo la rielaborazione dell'AI non è riuscita: non serve rileggere il post.
+    expect(needsReread({ ...old, status_detail: "Ho letto solo la didascalia: il post non contiene video. AI non disponibile: Il servizio AI di Google è sovraccarico." }, NOW)).toBe(false);
+  });
+
+  it("rilettura ancora non riuscita due volte: ci si ferma", async () => {
+    const items = ["a", "b", "c"].map((id) => ({ ...old, id, status_detail: "Apify non risponde." }));
+    const seen = [];
+    const how = await runUpkeep({
+      getItems: () => items, isActive: () => true, tried: new Set(), now: () => NOW, sleep: async () => {}, digest: async () => {},
+      reread: async (it, mark) => (mark(), seen.push(it.id), it),
+    });
+    expect(how).toBe("failed");
+    expect(seen).toEqual(["a", "b"]);
+  });
+
+  it("al massimo 3 riletture automatiche per elemento, anche tra un'apertura e l'altra", async () => {
+    const mem = new Map();
+    const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+    const items = [{ ...old, id: "a", status_detail: "Apify non risponde." }];
+    let n = 0;
+    for (let i = 0; i < MAX_AUTO_REREADS + 2; i++) {
+      await runUpkeep({
+        getItems: () => items, isActive: () => true, tried: new Set(), log: rereadLog(storage), now: () => NOW, sleep: async () => {}, digest: async () => {},
+        reread: async (it, mark) => (mark(), (n += 1), null),
+      });
+    }
+    expect(n).toBe(MAX_AUTO_REREADS);
+  });
+
+  it("rilettura non necessaria (già finita sul server): non conta", async () => {
+    const mem = new Map();
+    const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+    const log = rereadLog(storage);
+    await runUpkeep({
+      getItems: () => [{ ...old, id: "a", status_detail: "Apify non risponde." }], isActive: () => true, tried: new Set(), log, now: () => NOW, sleep: async () => {}, digest: async () => {},
+      reread: async () => null,
+    });
+    expect(log.count("a")).toBe(0);
+  });
+
+  it("archivio del browser non disponibile: si conta lo stesso in memoria", () => {
+    const broken = { getItem: () => { throw new Error("no"); }, setItem: () => { throw new Error("no"); } };
+    const log = rereadLog(broken);
+    log.add("a");
+    expect(log.count("a")).toBe(1);
+  });
+
+  it("offline: l'elemento resta da rielaborare anche dopo 3 errori", async () => {
+    const tried = new Set();
+    const how = await runUpkeep({
+      getItems: () => [{ ...reel, id: "a" }], isActive: () => true, tried, now: () => NOW, sleep: async () => {},
+      digest: async () => { throw Object.assign(new Error("Sei offline."), { status: 0 }); },
+      reread: async () => null,
+    });
+    expect(how).toBe("failed");
+    expect(tried.has("a")).toBe(false);
   });
 });

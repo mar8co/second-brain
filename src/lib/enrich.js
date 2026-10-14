@@ -27,11 +27,11 @@ export function extractionPatch(item, r) {
   // Chi ha pubblicato il post e quando (Instagram, TikTok, Facebook, YouTube).
   if (r.author) patch.author = r.author;
   if (r.publishedAt) patch.published_at = r.publishedAt;
-  // Il posto scelto dall'utente resta; il nome del posto diventa il titolo
-  // solo se la fonte non ne ha uno (link delle mappe).
+  // Il posto scelto dall'utente resta. Il nome del posto diventa il titolo
+  // solo per i link delle mappe (con coordinate), non per il luogo di un post.
   if (r.place && !item.place) {
     patch.place = r.place;
-    if (!item.title && !r.title && r.place.name) patch.title = r.place.name;
+    if (!item.title && !r.title && r.place.name && typeof r.place.lat === "number") patch.title = r.place.name;
   }
   return patch;
 }

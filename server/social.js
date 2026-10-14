@@ -212,7 +212,11 @@ export function normalizeFacebook(it) {
     pv.browser_native_sd_url,
   ].find(isUrl);
   const caption = str(it.message?.text) || str(it.text) || str(it.previewDescription) || str(it.previewTitle) || str(it.message);
-  const author = formatAuthor(str(it.pageName) || str(reel.video_owner?.name) || str(it.user?.name) || str(it.owner?.name), null);
+  // pageName è il nome nell'indirizzo della pagina (es. "nytimes"); il nome
+  // mostrato è in user.name o, per i Reel, in video_owner.name.
+  const slug = str(it.pageName);
+  const handle = slug && /^[\w.-]+$/.test(slug) ? slug : null;
+  const author = formatAuthor(str(reel.video_owner?.name) || str(it.user?.name) || str(it.owner?.name) || (handle ? null : slug), handle);
   const extra = { publishedAt: postDate(it.time || it.timestamp), location: null };
   const cover = [pv.thumbnailImage?.uri, pv.preferred_thumbnail?.image?.uri, it.preferred_thumbnail?.image?.uri, reel.video?.first_frame_thumbnail, media.thumbnail].find(isUrl) || null;
   const captionsUrl = [pv.captions_url, it.captions_url, media.captions_url].find(isUrl);

@@ -1,7 +1,7 @@
 // Stato dell'archivio: elenco, operazioni e elaborazione in background.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classifyItem, processItem } from "../lib/process.js";
-import { runUpkeep } from "../lib/memory.js";
+import { needsReread, rereadLog, runUpkeep } from "../lib/memory.js";
 import { DEFAULT_CATEGORIES } from "../lib/constants.js";
 
 const byDate = (a, b) => new Date(b.created_at) - new Date(a.created_at);
@@ -77,12 +77,21 @@ export function useArchive(store, { ai }) {
     catRef.current = categories;
   }, [categories]);
 
+  // Elementi con un lavoro in corso in questa sessione: la manutenzione della
+  // memoria li salta (niente doppie chiamate all'AI).
+  const busy = useRef(new Set());
+
+  // apply=false: le categorie e i tag dell'AI restano proposte.
   const runProcess = useCallback(
-    (item) =>
-      processItem(item, { store, onUpdate: upsert, ai: aiRef.current, categories: catRef.current }).catch((e) => {
-        // L'elemento è comunque salvato: mostriamo l'errore nello stato.
-        console.warn("Elaborazione non riuscita", e);
-      }),
+    (item, { apply = true } = {}) => {
+      busy.current.add(item.id);
+      return processItem(item, { store, onUpdate: upsert, ai: aiRef.current, categories: catRef.current, apply })
+        .catch((e) => {
+          // L'elemento è comunque salvato: mostriamo l'errore nello stato.
+          console.warn("Elaborazione non riuscita", e);
+        })
+        .finally(() => busy.current.delete(item.id));
+    },
     [store, upsert],
   );
 
@@ -117,9 +126,14 @@ export function useArchive(store, { ai }) {
 
   const classify = useCallback(
     async (item, { apply = false } = {}) => {
-      const it = await classifyItem(item, { store, categories: catRef.current, apply });
-      upsert(it);
-      return it;
+      busy.current.add(item.id);
+      try {
+        const it = await classifyItem(item, { store, categories: catRef.current, apply });
+        upsert(it);
+        return it;
+      } finally {
+        busy.current.delete(item.id);
+      }
     },
     [store, upsert],
   );
@@ -132,7 +146,7 @@ export function useArchive(store, { ai }) {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
-  const upkeep = useRef({ running: false, tried: new Set(), pausedUntil: 0, store: null });
+  const upkeep = useRef({ running: false, tried: new Set(), pausedUntil: 0, store: null, log: rereadLog() });
   useEffect(() => {
     const u = upkeep.current;
     u.store = store;
@@ -145,16 +159,35 @@ export function useArchive(store, { ai }) {
     if (!ai || loading || !store || u.running || Date.now() < u.pausedUntil) return;
     u.running = true;
     runUpkeep({
-      getItems: () => itemsRef.current,
+      getItems: () => itemsRef.current.filter((x) => !busy.current.has(x.id)),
       isActive: () => u.store === store && Boolean(aiRef.current) && document.visibilityState === "visible",
       tried: u.tried,
+      log: u.log,
       digest: async (item) => {
         // Senza scheda: categorie e tag assegnati come per un nuovo salvataggio.
         const current = () => itemsRef.current.find((x) => x.id === item.id) || null;
-        const it = await classifyItem(item, { store, categories: catRef.current, apply: !item.ai, keepApplied: true, current });
-        if (it) upsert(it);
+        busy.current.add(item.id);
+        try {
+          const it = await classifyItem(item, { store, categories: catRef.current, apply: !item.ai, keepApplied: true, current });
+          if (it) upsert(it);
+        } finally {
+          busy.current.delete(item.id);
+        }
       },
-      reread: (item) => runProcess(item),
+      reread: async (item, markAttempt) => {
+        // La copia in memoria può essere vecchia: un salvataggio da Comandi
+        // Rapidi (o da un altro dispositivo) può essere già finito sul server.
+        let fresh = item;
+        if (store.get) {
+          fresh = await store.get(item.id).catch(() => null);
+          if (!fresh) return null;
+          upsert(fresh);
+        }
+        if (!needsReread(fresh)) return null;
+        markAttempt();
+        // Categorie e tag dell'AI assegnati solo se l'elemento non ne ha mai avuti.
+        return runProcess(fresh, { apply: !fresh.ai });
+      },
     })
       .then((how) => {
         if (how === "failed") u.pausedUntil = Date.now() + 5 * 60_000;

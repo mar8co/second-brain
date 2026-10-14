@@ -188,3 +188,48 @@ describe("endpoint con corpo Modulo", () => {
     expect(seen).toHaveLength(1);
   });
 });
+
+describe("corpo JSON delle richieste", () => {
+  let small;
+  let large;
+  const seen = [];
+  const listen = async (handler) => {
+    const server = http.createServer(handler);
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    return { server, url: `http://127.0.0.1:${server.address().port}/` };
+  };
+  const core = async ({ body, maxBody }) => {
+    seen.push({ size: JSON.stringify(body).length, maxBody });
+    return { status: 200, json: { ok: true } };
+  };
+  beforeAll(async () => {
+    small = await listen(nodeHandler(core, env));
+    large = await listen(nodeHandler(core, env, { maxBody: 2_100_000 }));
+  });
+  afterAll(() => {
+    small.server.close();
+    large.server.close();
+  });
+  const post = (url, size) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ memory: "x".repeat(size) }) });
+
+  it("oltre il limite: 413 con un messaggio JSON, la connessione resta aperta", async () => {
+    const r = await post(small.url, 400_000);
+    expect(r.status).toBe(413);
+    expect(await r.json()).toEqual({ error: "Richiesta troppo grande." });
+  });
+
+  it("le domande con le schede di tutto l'archivio passano con il limite di /api/ai", async () => {
+    const r = await post(large.url, 400_000);
+    expect(r.status).toBe(200);
+    // Il limite non arriva al core come argomento.
+    expect(seen.at(-1)).toEqual({ size: 400_000 + 13, maxBody: undefined });
+  });
+
+  it("caratteri accentati divisi tra due pezzi del corpo restano interi", async () => {
+    let got;
+    const { server, url } = await listen(nodeHandler(async ({ body }) => ((got = body.t), { status: 200, json: {} }), env));
+    await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ t: "è".repeat(100_000) }) });
+    server.close();
+    expect(got).toBe("è".repeat(100_000));
+  });
+});
