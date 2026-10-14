@@ -34,8 +34,14 @@ export const DEFAULT_CATEGORIES = [
   "Posti",
   "Tecnologia",
   "Acquisti",
+  "Finanza",
   "Lavoro",
+  "Formazione",
   "Salute",
+  "Sport",
+  "Casa",
+  "Cibo",
+  "Intrattenimento",
   "Ispirazione",
 ];
 
