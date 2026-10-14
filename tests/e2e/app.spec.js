@@ -1,3 +1,4 @@
+/* global window */
 import { expect, test } from "@playwright/test";
 
 const FIX = "http://127.0.0.1:4599";
@@ -11,18 +12,23 @@ async function addLink(page, url, note) {
   await page.getByRole("button", { name: "Salva", exact: true }).click();
 }
 
-test("chat vuota; barra con solo Chat e Archivio; ingranaggio → Impostazioni; Aggiungi manualmente in Archivio", async ({ page }) => {
+test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; ingranaggio → Impostazioni; Aggiungi in Archivio", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Second Brain" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "second-brain" })).toBeVisible();
   await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
   await expect(page.getByText("Modalità locale")).toBeVisible();
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
   await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
   await page.getByRole("button", { name: "Impostazioni" }).click();
   await expect(page).toHaveURL(/\/impostazioni$/);
-  await expect(page.getByRole("button", { name: "Aggiungi manualmente" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Aggiungi", exact: true })).toHaveCount(0);
   await page.goto("/archivio");
-  await page.getByRole("button", { name: "Aggiungi manualmente" }).click();
+  // Rianalizza a sinistra, Aggiungi al centro, Filtri a destra.
+  const xs = [];
+  for (const name of [/^Rianalizza/, /^Aggiungi$/, /^Filtri/]) xs.push((await page.getByRole("button", { name }).boundingBox()).x);
+  expect(xs[0]).toBeLessThan(xs[1]);
+  expect(xs[1]).toBeLessThan(xs[2]);
+  await page.getByRole("button", { name: "Aggiungi", exact: true }).click();
   await expect(page).toHaveURL(/\/aggiungi$/);
 });
 
@@ -31,7 +37,6 @@ test("link incollato nella chat: salvato nell'archivio, la chat resta per le dom
   await page.getByLabel("Chiedi alla tua memoria").fill(`${FIX}/ricetta`);
   await page.getByRole("button", { name: "Invia" }).click();
   await expect(page.getByText(/Salvato nell'archivio/)).toBeVisible();
-  await expect(page.getByText("Memoria: 1 contenuto")).toBeVisible();
   await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toHaveCount(0);
   // Navigazione dentro l'app (non un ricaricamento): la lettura in corso continua.
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
@@ -58,6 +63,29 @@ test("campo della chat: cresce con il testo; mentre si scrive la barra Chat / Ar
   await expect.poll(async () => (await box.boundingBox()).height).toBe(h1);
   await box.blur();
   await expect(nav).toBeVisible();
+});
+
+test("campo della chat sempre sopra la tastiera, anche scorrendo (iPhone)", async ({ page }) => {
+  // Finta tastiera: la parte visibile della pagina è alta 400 px e scorsa di 120.
+  await page.addInitScript(() => {
+    const vv = new EventTarget();
+    Object.assign(vv, { height: window.innerHeight, offsetTop: 0, width: window.innerWidth, scale: 1 });
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true });
+    window.__tastiera = (height, offsetTop) => {
+      Object.assign(vv, { height, offsetTop });
+      vv.dispatchEvent(new Event("resize"));
+      vv.dispatchEvent(new Event("scroll"));
+    };
+  });
+  await page.goto("/");
+  const form = page.locator("form.chat-composer");
+  const H = await page.evaluate(() => window.innerHeight);
+  await expect.poll(async () => Math.round((await form.boundingBox()).y + (await form.boundingBox()).height)).toBe(H);
+  await page.evaluate(() => window.__tastiera(400, 120));
+  // Il fondo del campo coincide con il fondo della parte visibile (120 + 400).
+  await expect.poll(async () => Math.round((await form.boundingBox()).y + (await form.boundingBox()).height)).toBe(520);
+  await page.evaluate((h) => window.__tastiera(h, 0), H);
+  await expect.poll(async () => Math.round((await form.boundingBox()).y + (await form.boundingBox()).height)).toBe(H);
 });
 
 test("nuova chat subito, con Annulla per ripensarci", async ({ page }) => {
@@ -101,7 +129,7 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
   await expect(page.getByRole("heading", { name: "Idea regalo per Giulia" })).toBeVisible();
   // La chat è solo per le domande: il contenuto è in Archivio.
   await page.goto("/");
-  await expect(page.getByText("Memoria: 1 contenuto")).toBeVisible();
+  await expect(page.getByText("Chiedimi qualsiasi cosa")).toBeVisible();
   await expect(page.getByText("Idea regalo per Giulia")).toHaveCount(0);
   await page.goto("/archivio");
   await page.getByText("Idea regalo per Giulia").click();
@@ -189,20 +217,57 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
 
-  // Filtri rapidi: categorie sempre visibili; il periodo si sceglie con le date Dal e Al
+  // Filtri rapidi: categorie sempre visibili
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Tutte", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Ultimi 7 giorni" })).toHaveCount(0);
 
   // Filtro per tipo
   await page.getByLabel("Cerca nell'archivio").fill("");
-  await page.getByRole("button", { name: /Filtri/ }).click();
-  // Scelte disegnate dall'app, niente menu a tendina del sistema.
+  await page.getByRole("button", { name: /^Filtri/ }).click();
+  // Scelte disegnate dall'app, niente menu a tendina del sistema; niente Tag e Stato.
   await expect(page.locator("#filters select")).toHaveCount(0);
+  await expect(page.locator("#filters input")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Tag/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Stato/ })).toHaveCount(0);
+  await expect(page.getByText("Nessun filtro attivo")).toBeVisible();
   await page.getByRole("button", { name: /^Tipo/ }).click();
   await page.getByRole("option", { name: "Nota" }).click();
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Trattoria Da Enzo")).toBeVisible();
+  // "Azzera filtri" in cima al riquadro dei filtri
+  await expect(page.getByText("1 filtro attivo")).toBeVisible();
+  await page.getByRole("button", { name: "Azzera filtri" }).click();
+  await expect(page.getByText("2 elementi")).toBeVisible();
+
+  // Periodo con il calendario dell'app: mese e anno dal titolo, poi primo e ultimo giorno
+  await page.getByRole("button", { name: /^Periodo/ }).click();
+  await expect(page.getByText("Tocca il primo giorno")).toBeVisible();
+  await page.getByRole("button", { name: /scegli mese e anno/ }).click();
+  const anno = Number(await page.locator(".scegli-mese .num").textContent());
+  for (let a = anno; a > 2025; a--) await page.getByRole("button", { name: "Anno prima" }).click();
+  await page.getByRole("button", { name: "gennaio 2025" }).click();
+  await page.getByRole("button", { name: /^mercoledì 1 gennaio 2025/ }).click();
+  await expect(page.getByText("Ora tocca l'ultimo giorno")).toBeVisible();
+  await page.getByRole("button", { name: /^venerdì 10 gennaio 2025/ }).click();
+  await expect(page.getByRole("button", { name: /^Periodo\s*1 – 10 gen 2025/ })).toBeVisible();
+  await expect(page.getByText("Nessun risultato")).toBeVisible();
+  await expect(page).toHaveURL(/from=2025-01-01&to=2025-01-10/);
+  // Mese dopo con la freccia; poi il periodo di oggi (stesso giorno due volte)
+  await page.getByRole("button", { name: "Mese dopo" }).click();
+  await expect(page.getByRole("button", { name: /^Febbraio 2025/ })).toBeVisible();
+  await page.getByRole("button", { name: "Togli date" }).click();
+  await page.getByRole("button", { name: /scegli mese e anno/ }).click();
+  for (let a = 2025; a < anno; a++) await page.getByRole("button", { name: "Anno dopo" }).click();
+  const oggi = new Date();
+  await page.getByRole("button", { name: oggi.toLocaleDateString("it-IT", { month: "long", year: "numeric" }) }).click();
+  await page.locator(".giorno.oggi").click();
+  await page.locator(".giorno.oggi").click();
+  await expect(page.getByText("2 elementi")).toBeVisible();
+  // Chiuso il riquadro, il periodo resta come pillola da togliere
+  await page.getByRole("button", { name: /^Filtri/ }).click();
+  await page.getByRole("button", { name: /^Rimuovi filtro/ }).click();
+  await expect(page).not.toHaveURL(/from=/);
 
   // Domanda nella chat: risposta con citazioni, fonti numerate e passaggio citato
   await page.goto("/");

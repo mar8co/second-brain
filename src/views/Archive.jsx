@@ -1,16 +1,18 @@
-// Archivio: ricerca testuale istantanea + filtri per tipo, categoria, tag, data.
+// Archivio: ricerca testuale istantanea + filtri per tipo, periodo, sito, autore, categoria.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
-import { Settings } from "lucide-react";
+import { Plus, RotateCw, Settings, SlidersHorizontal } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
+import Calendario from "../components/Calendario.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { ItemList } from "../components/ItemCard.jsx";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, searchItems } from "../lib/search.js";
-import { STATUSES, TYPES } from "../lib/constants.js";
+import { TYPES } from "../lib/constants.js";
+import { formatRange } from "../lib/calendar.js";
 
-const FILTER_KEYS = ["type", "category", "tag", "status", "author", "site", "from", "to"];
+const FILTER_KEYS = ["type", "category", "author", "site", "from", "to"];
 
 export default function Archive({ archive, query, navigate, openItem, toast, ai }) {
   const { items, loading, error, reload, reanalysis, reanalyzable, reanalyzeAll } = archive;
@@ -27,11 +29,23 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
     navigate(`/archivio${s ? `?${s}` : ""}`, { replace: true });
   };
 
-  const results = useMemo(() => searchItems(items, q, filters), [items, q, filters.type, filters.category, filters.tag, filters.status, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const results = useMemo(() => searchItems(items, q, filters), [items, q, filters.type, filters.category, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
   const cats = useMemo(() => countBy(items, "categories"), [items]);
-  const tags = useMemo(() => countBy(items, "tags"), [items]);
   const authors = useMemo(() => countValues(items, "author"), [items]);
   const sites = useMemo(() => countValues(items, "site_name"), [items]);
+  const clearAll = () => setParam(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])));
+  // Filtri attivi come pillole da togliere; Dal e Al insieme, come periodo.
+  const chips = [
+    ...active.filter((k) => k !== "from" && k !== "to").map((k) => ({ key: k, label: k === "type" ? TYPES[filters[k]]?.label || filters[k] : filters[k], clear: { [k]: "" } })),
+    ...(filters.from || filters.to ? [{ key: "periodo", label: formatRange(filters.from, filters.to), clear: { from: "", to: "" } }] : []),
+  ];
+  const reanalyze = async () => {
+    const r = await reanalyzeAll();
+    if (!r) return;
+    if (r.stopped === "limit") toast(`Fermo: limite gratuito dell'AI raggiunto (${r.done} su ${r.total})`);
+    else if (r.failed) toast(`Rianalizzati ${r.done - r.failed} su ${r.total}, ${r.failed} da riprovare`);
+    else toast(r.done === 1 ? "1 elemento rianalizzato" : `${r.done} elementi rianalizzati`);
+  };
 
   return (
     <>
@@ -76,60 +90,53 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
           </ul>
         )}
 
-        <div className="mt-2.5 flex items-center gap-2">
-          <button type="button" className={`pillola${open ? " attiva" : ""}`} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
-            Filtri{active.length ? <span className="num"> · {active.length}</span> : ""}
+        <div className="barra-azioni mt-3">
+          <button
+            type="button"
+            className="pillola"
+            disabled={!ai || Boolean(reanalysis) || reanalyzable.length === 0}
+            onClick={reanalyze}
+          >
+            <RotateCw className={`h-4 w-4${reanalysis ? " gira" : ""}`} strokeWidth={2.6} aria-hidden="true" />
+            {reanalysis ? <span className="num">{reanalysis.done}/{reanalysis.total}</span> : "Rianalizza"}
+            {!reanalysis && ai && reanalyzable.length > 0 && <span className="conta num">{reanalyzable.length}</span>}
           </button>
-          {ai && (
-            <button
-              type="button"
-              className="pillola"
-              disabled={Boolean(reanalysis) || reanalyzable.length === 0}
-              onClick={async () => {
-                const r = await reanalyzeAll();
-                if (!r) return;
-                if (r.stopped === "limit") toast(`Fermo: limite gratuito dell'AI raggiunto (${r.done} su ${r.total})`);
-                else if (r.failed) toast(`Rianalizzati ${r.done - r.failed} su ${r.total}, ${r.failed} da riprovare`);
-                else toast(r.done === 1 ? "1 elemento rianalizzato" : `${r.done} elementi rianalizzati`);
-              }}
-            >
-              {reanalysis ? <span className="num">Rianalizzo {reanalysis.done}/{reanalysis.total}…</span> : <>Rianalizza{reanalyzable.length ? <span className="num"> · {reanalyzable.length}</span> : ""}</>}
-            </button>
-          )}
-          <button type="button" className="tondo ml-auto text-[1.45rem]" aria-label="Aggiungi manualmente" onClick={() => navigate("/aggiungi")}>
-            <span aria-hidden="true" className="-mt-0.5">+</span>
+          <button type="button" className="pillola" onClick={() => navigate("/aggiungi")}>
+            <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" />
+            Aggiungi
+          </button>
+          <button type="button" className={`pillola${open ? " attiva" : ""}`} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
+            <SlidersHorizontal className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
+            Filtri
+            {active.length > 0 && <span className="conta num">{chips.length}</span>}
           </button>
         </div>
 
         {open && (
           <div id="filters" className="mt-4 border-t-[1.5px] border-inchiostro">
+            <div className="flex min-h-[44px] items-center justify-between gap-3 border-b border-riga">
+              <span className="micro font-semibold">
+                {chips.length === 0 ? "Nessun filtro attivo" : chips.length === 1 ? "1 filtro attivo" : `${chips.length} filtri attivi`}
+              </span>
+              <button type="button" className="link rosso text-[0.85rem]" disabled={!active.length} onClick={clearAll}>
+                Azzera filtri
+              </button>
+            </div>
             <Scelta label="Tipo" value={filters.type} onChange={(v) => setParam({ type: v })}
               options={Object.entries(TYPES).map(([k, t]) => [k, t.label])} />
-            <Scelta label="Stato" value={filters.status} onChange={(v) => setParam({ status: v })}
-              options={Object.entries(STATUSES).map(([k, s]) => [k, s.label])} />
-            <Scelta label="Categoria" value={filters.category} onChange={(v) => setParam({ category: v })} options={cats} />
-            <Scelta label="Tag" value={filters.tag} onChange={(v) => setParam({ tag: v })} options={tags} />
-            <Scelta label="Autore" value={filters.author} onChange={(v) => setParam({ author: v })} options={authors} />
+            <Periodo from={filters.from} to={filters.to} onChange={(v) => setParam(v)} />
             <Scelta label="Sito" value={filters.site} onChange={(v) => setParam({ site: v })} options={sites} />
-            <div className="grid grid-cols-2 gap-4 border-b-[1.5px] border-inchiostro py-2.5">
-              <div className="min-w-0">
-                <label htmlFor="f-from" className="etichetta">Dal</label>
-                <input id="f-from" type="date" className="campo piccolo min-w-0 max-w-full" value={filters.from} onChange={(e) => setParam({ from: e.target.value })} />
-              </div>
-              <div className="min-w-0">
-                <label htmlFor="f-to" className="etichetta">Al</label>
-                <input id="f-to" type="date" className="campo piccolo min-w-0 max-w-full" value={filters.to} onChange={(e) => setParam({ to: e.target.value })} />
-              </div>
-            </div>
+            <Scelta label="Autore" value={filters.author} onChange={(v) => setParam({ author: v })} options={authors} />
+            <Scelta label="Categoria" value={filters.category} onChange={(v) => setParam({ category: v })} options={cats} />
           </div>
         )}
 
-        {active.length > 0 && !open && (
+        {chips.length > 0 && !open && (
           <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Filtri attivi">
-            {active.map((k) => (
-              <li key={k}>
-                <button type="button" className="pillola attiva" onClick={() => setParam({ [k]: "" })} aria-label={`Rimuovi filtro ${filters[k]}`}>
-                  {k === "type" ? TYPES[filters[k]]?.label : k === "status" ? STATUSES[filters[k]]?.label : filters[k]}
+            {chips.map((c) => (
+              <li key={c.key}>
+                <button type="button" className="pillola attiva" onClick={() => setParam(c.clear)} aria-label={`Rimuovi filtro ${c.label}`}>
+                  {c.label}
                   <span aria-hidden="true">×</span>
                 </button>
               </li>
@@ -164,17 +171,12 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
           <>
             <h2 className="sezione">
               <span aria-live="polite" className="num">{results.length === 1 ? "1 elemento" : `${results.length} elementi`}</span>
-              {active.length > 0 && (
-                <button type="button" className="link rosso min-h-0 p-0 text-[0.78rem]" onClick={() => setParam(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))}>
-                  Azzera filtri
-                </button>
-              )}
             </h2>
             <ItemList items={results} onOpen={openItem} />
           </>
         )}
-        {!loading && results.length === 0 && active.length > 0 && (
-          <button type="button" className="link rosso mt-2" onClick={() => setParam(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])))}>
+        {!loading && results.length === 0 && active.length > 0 && !open && (
+          <button type="button" className="link rosso mt-2" onClick={clearAll}>
             Azzera filtri
           </button>
         )}
@@ -225,6 +227,33 @@ function Scelta({ label, value, onChange, options }) {
               {typeof l === "number" ? <>{k} <span className="num opacity-60">{l}</span></> : l}
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Periodo: una riga come le altre; si apre sul calendario dell'app, dove si
+// toccano il primo e l'ultimo giorno.
+function Periodo({ from, to, onChange }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-riga">
+      <button
+        type="button"
+        id="f-periodo"
+        className="grid w-full grid-cols-[6.2em_1fr_auto] items-center gap-2.5 py-3 text-left"
+        aria-expanded={open}
+        aria-controls="f-periodo-cal"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="micro font-semibold">Periodo</span>
+        <span className="truncate font-bold tracking-[-0.02em]">{from || to ? formatRange(from, to) : "Sempre"}</span>
+        <span aria-hidden="true" className="font-bold">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <div id="f-periodo-cal">
+          <Calendario from={from} to={to} onChange={onChange} />
         </div>
       )}
     </div>

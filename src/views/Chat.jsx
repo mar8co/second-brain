@@ -37,7 +37,9 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   const endRef = useRef(null);
   const boxRef = useRef(null);
   const autoAsked = useRef(false);
+  const formRef = useRef(null);
   usePageColor(PAGE.chat);
+  useSopraTastiera(formRef);
 
   // Il campo cresce con il testo (fino a circa 6 righe, poi scorre).
   useLayoutEffect(() => {
@@ -117,14 +119,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
       <main className="pagina !pb-[calc(160px+env(safe-area-inset-bottom))]" aria-label="Chat">
         {/* Intestazione sempre visibile, a tinta unita: la conversazione le scorre sotto. */}
         <header className="testata sticky top-0 z-20 -mx-4 bg-sfondo px-4 !pb-2.5">
-          {!loading && items.length > 0 ? (
-            <p className="micro font-semibold" role="status">
-              Memoria: <span className="num">{items.length}</span> {items.length === 1 ? "contenuto" : "contenuti"}
-              {pending > 0 && <> · <span className="num">{pending}</span> ancora da elaborare</>}
-            </p>
-          ) : (
-            <span />
-          )}
+          <h1 className="marchio">second-brain</h1>
           <div className="flex items-center gap-2">
             {log.length > 0 && (
               <button type="button" className="pillola" onClick={clearLog}>
@@ -136,7 +131,11 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
             </button>
           </div>
         </header>
-        <h1 className="gigante">Second Brain</h1>
+        {pending > 0 && (
+          <p className="micro mb-3 font-semibold" role="status">
+            <span className="num">{pending}</span> {pending === 1 ? "contenuto ancora da elaborare" : "contenuti ancora da elaborare"}
+          </p>
+        )}
         {!syncMode && (
           <p className="riquadro mb-4 text-[0.92rem] font-semibold">
             <strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser, senza sincronizzazione né backup.
@@ -180,7 +179,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
         <div ref={endRef} />
       </main>
 
-      <form onSubmit={send} className="chat-composer fixed inset-x-0 bottom-0 z-10">
+      <form ref={formRef} onSubmit={send} className="chat-composer fixed inset-x-0 bottom-0 z-10">
         <div className="mx-auto flex max-w-[528px] items-end gap-2">
           <label htmlFor="chat-q" className="sr-only">Chiedi alla tua memoria</label>
           <textarea
@@ -206,6 +205,37 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
       </form>
     </>
   );
+}
+
+// Su iPhone la tastiera copre la parte bassa della pagina e, se si scorre,
+// porta con sé gli elementi fissi in fondo: il campo finirebbe sotto la
+// tastiera. Si tiene il campo attaccato al bordo visibile (visualViewport).
+function useSopraTastiera(ref) {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      const el = ref.current;
+      if (!el) return;
+      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      el.style.transform = covered > 1 ? `translateY(${-covered}px)` : "";
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(place);
+    };
+    vv.addEventListener("resize", schedule);
+    vv.addEventListener("scroll", schedule);
+    window.addEventListener("scroll", schedule, { passive: true });
+    place();
+    return () => {
+      cancelAnimationFrame(frame);
+      vv.removeEventListener("resize", schedule);
+      vv.removeEventListener("scroll", schedule);
+      window.removeEventListener("scroll", schedule);
+    };
+  }, [ref]);
 }
 
 // Domanda (a destra, nera) e risposta di Second Brain (a sinistra, bianca),
