@@ -1,7 +1,8 @@
 // Stato dell'archivio: elenco, operazioni e elaborazione in background.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classifyItem, processItem } from "../lib/process.js";
-import { needsReread, rereadLog, runUpkeep } from "../lib/memory.js";
+import { AI_LIMIT, needsReread, reanalysisReason, rereadLog, runUpkeep } from "../lib/memory.js";
+import { withoutAiFailure } from "../lib/enrich.js";
 import { DEFAULT_CATEGORIES } from "../lib/constants.js";
 
 const byDate = (a, b) => new Date(b.created_at) - new Date(a.created_at);
@@ -202,5 +203,79 @@ export function useArchive(store, { ai }) {
       });
   }, [ai, loading, store, items, upsert, runProcess]);
 
-  return { items, loading, error, reload, add, update, remove, reprocess, classify, categories };
+  // Tasto "Rianalizza": rilegge e rielabora in un colpo solo gli elementi non
+  // analizzati pienamente o correttamente (vedi reanalysisReason). Uno alla
+  // volta, con una pausa, e si ferma al limite gratuito dell'AI.
+  const [reanalysis, setReanalysis] = useState(null);
+  const reanalyzable = useMemo(
+    () => (ai && store ? items.filter((it) => reanalysisReason(it) && !(it.file_path && store.mode !== "sync")) : []),
+    [items, ai, store],
+  );
+  const reanalyzeAll = useCallback(async () => {
+    const u = upkeep.current;
+    if (!aiRef.current || u.reanalyzing) return null;
+    const list = itemsRef.current.filter((it) => reanalysisReason(it) && !busy.current.has(it.id) && !(it.file_path && store.mode !== "sync"));
+    if (!list.length) return { done: 0, total: 0, stopped: null };
+    u.reanalyzing = true;
+    // La manutenzione automatica li salta: ci pensa questo giro.
+    for (const it of list) u.tried.add(it.id);
+    let done = 0;
+    let failed = 0;
+    let stopped = null;
+    setReanalysis({ done, total: list.length });
+    try {
+      for (const listed of list) {
+        if (!aiRef.current) {
+          stopped = "ai";
+          break;
+        }
+        let item = itemsRef.current.find((x) => x.id === listed.id) || listed;
+        if (store.get) {
+          item = (await store.get(item.id).catch(() => null)) || null;
+          if (!item) continue;
+          upsert(item);
+        }
+        const reason = reanalysisReason(item);
+        if (!reason || busy.current.has(item.id)) {
+          done += 1;
+          setReanalysis({ done, total: list.length });
+          continue;
+        }
+        let after = null;
+        try {
+          if (reason === "digest") {
+            busy.current.add(item.id);
+            try {
+              after = await classifyItem(item, { store, categories: catRef.current, apply: !item.ai, keepApplied: true });
+              if (after) upsert(after);
+            } finally {
+              busy.current.delete(item.id);
+            }
+          } else {
+            after = await runProcess(item, { apply: !item.ai });
+          }
+        } catch (e) {
+          if (e?.status === 429) {
+            stopped = "limit";
+            break;
+          }
+          failed += 1;
+        }
+        if (after && AI_LIMIT.test(withoutAiFailure(after.status_detail) || "")) {
+          stopped = "limit";
+          break;
+        }
+        if (after && reason !== "digest" && needsReread(after)) failed += 1;
+        done += 1;
+        setReanalysis({ done, total: list.length });
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    } finally {
+      u.reanalyzing = false;
+      setReanalysis(null);
+    }
+    return { done, total: list.length, failed, stopped };
+  }, [store, upsert, runProcess]);
+
+  return { items, loading, error, reload, add, update, remove, reprocess, classify, categories, reanalysis, reanalyzable, reanalyzeAll };
 }

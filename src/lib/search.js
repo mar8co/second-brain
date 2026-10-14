@@ -187,11 +187,3 @@ export function countValues(items, field) {
   for (const it of items) if (it[field]) m.set(it[field], (m.get(it[field]) || 0) + 1);
   return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "it"));
 }
-
-// Data locale di n giorni fa (AAAA-MM-GG), per i filtri "ultimi 7 giorni".
-export function daysAgo(n, now = new Date()) {
-  const d = new Date(now);
-  d.setDate(d.getDate() - n);
-  const p = (x) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}

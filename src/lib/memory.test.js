@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AI_LIMIT_PAUSE_MS, MAX_AUTO_REREADS, needsDigest, needsReread, rereadLimit, rereadLog, rereadReason, runUpkeep, STALE_MS } from "./memory.js";
+import { AI_LIMIT_PAUSE_MS, MAX_AUTO_REREADS, needsDigest, needsReread, reanalysisReason, rereadLimit, rereadLog, rereadReason, runUpkeep, STALE_MS } from "./memory.js";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
 const reel = { id: "r", type: "social", url: "https://www.instagram.com/reel/abc/", author: "@mario.ai", status: "analyzed", processed_at: "2026-10-13T13:15:05Z", extracted_text: "Ho preparato un workshop" };
@@ -281,5 +281,25 @@ describe("limite gratuito dell'AI durante le riletture", () => {
     const calls = [];
     await runUpkeep({ getItems: () => [item], isActive: () => true, tried: new Set(), log, now: () => NOW, sleep: async () => {}, digest: async (it) => calls.push(`digest ${it.id}`), reread: async () => calls.push("reread") });
     expect(calls).toEqual(["digest x"]);
+  });
+});
+
+describe("reanalysisReason: cosa tocca il tasto Rianalizza", () => {
+  const now = Date.parse("2026-10-14T12:00:00Z");
+  const base = { id: "a", type: "link", status: "analyzed", created_at: "2026-10-14T10:00:00Z", processed_at: "2026-10-14T10:01:00Z", ai: { v: 2, summary: "x" } };
+  it("niente da fare per un elemento letto bene", () => {
+    expect(reanalysisReason({ ...base, url: "https://esempio.it/x", extracted_text: "testo" }, now)).toBeNull();
+    expect(reanalysisReason({ ...base, type: "note", note: "idea" }, now)).toBeNull();
+  });
+  it("link mai letto, lettura non riuscita per poco, scheda mancante", () => {
+    expect(reanalysisReason({ ...base, url: "https://esempio.it/x", processed_at: null, status: "saved" }, now)).toBe("unread");
+    expect(reanalysisReason({ ...base, url: "https://esempio.it/x", status: "saved", status_detail: "Analisi non completata: puoi riprovare." }, now)).toBe("temporary");
+    expect(reanalysisReason({ ...base, type: "note", note: "idea", ai: null }, now)).toBe("digest");
+  });
+  it("post social, immagini e interrotti: i motivi della rilettura; i link con accesso richiesto no", () => {
+    expect(reanalysisReason({ ...base, url: "https://www.instagram.com/reel/x/", type: "social", status: "partial", extracted_text: null, processed_at: "2026-10-12T10:00:00Z" }, now)).toBe("old");
+    expect(reanalysisReason({ ...base, type: "image", file_path: "u/x.jpg", file_mime: "image/jpeg", ai: null }, now)).toBe("file");
+    expect(reanalysisReason({ ...base, url: "https://esempio.it/x", status: "processing", updated_at: "2026-10-14T11:00:00Z" }, now)).toBe("stale");
+    expect(reanalysisReason({ ...base, url: "https://esempio.it/x", status: "inaccessible", processed_at: null }, now)).toBeNull();
   });
 });

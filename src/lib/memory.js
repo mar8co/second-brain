@@ -74,6 +74,23 @@ export function needsDigest(item, now = Date.now(), canReread = () => true) {
   return !item.ai || !(Number(item.ai.v) >= DIGEST_VERSION);
 }
 
+// Perché il tasto "Rianalizza" tocca un elemento (senza i limiti della
+// manutenzione automatica): un motivo di rilettura, un link mai letto, una
+// lettura non riuscita per poco, una scheda di memoria mancante; altrimenti
+// null. "digest" = basta la rielaborazione dell'AI, senza rileggere il link.
+// I link che richiedono accesso ("inaccessible") non si rileggono.
+export function reanalysisReason(item, now = Date.now()) {
+  if (item.status === "processing") return rereadReason(item, now);
+  const reread = rereadReason(item, now);
+  if (reread) return reread;
+  if (item.file_path) return needsDigest(item, now, () => false) ? "digest" : null;
+  if (item.url && item.status !== "inaccessible") {
+    if (!item.processed_at) return "unread";
+    if (!item.extracted_text && TEMPORARY.test(withoutAiFailure(item.status_detail) || "")) return "temporary";
+  }
+  return needsDigest(item, now, () => false) ? "digest" : null;
+}
+
 const sleepFor = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const LOG_KEY = "second-brain-rereads";
@@ -82,7 +99,7 @@ const PAUSE_KEY = "second-brain-rereads-paused";
 // Limite gratuito dell'AI raggiunto (si azzera una volta al giorno): senza AI
 // una rilettura non trascrive nulla, quindi niente letture di Apify per ore.
 export const AI_LIMIT_PAUSE_MS = 6 * 60 * 60_000;
-const AI_LIMIT = /Limite gratuito/i;
+export const AI_LIMIT = /Limite gratuito/i;
 
 // Riletture fatte per elemento e pausa delle riletture, salvate nel browser.
 export function rereadLog(storage = globalThis.localStorage) {
