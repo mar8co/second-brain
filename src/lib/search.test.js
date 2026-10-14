@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countBy, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
+import { countBy, countValues, daysAgo, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
 
 const items = [
   { id: "1", type: "link", title: "Ricetta pasta al limone", tags: ["pasta"], categories: ["Ricette"], created_at: "2026-10-01T10:00:00Z" },
@@ -70,5 +70,20 @@ describe("ricerca nella scheda di memoria", () => {
   it("dati non validi nella scheda non bloccano la ricerca", () => {
     const bad = { ...reel, id: "b", ai: { keywords: [null, 3], entities: [null, { name: 5 }], points: "testo" } };
     expect(() => searchItems([bad], "corso")).not.toThrow();
+  });
+});
+
+describe("filtri per autore, sito e periodo", () => {
+  const post = { id: "x", type: "social", author: "Mario Rossi (@mario.ai)", site_name: "Instagram", created_at: "2026-10-10T10:00:00Z" };
+  it("autore e sito esatti", () => {
+    expect(matchesFilters(post, { author: "Mario Rossi (@mario.ai)" })).toBe(true);
+    expect(matchesFilters(post, { author: "Altro" })).toBe(false);
+    expect(matchesFilters(post, { site: "Instagram" })).toBe(true);
+    expect(matchesFilters(post, { site: "TikTok" })).toBe(false);
+  });
+  it("conteggi di un campo e data di n giorni fa", () => {
+    expect(countValues([post, post, { ...post, author: "Anna" }, { id: "y" }], "author")).toEqual([["Mario Rossi (@mario.ai)", 2], ["Anna", 1]]);
+    expect(daysAgo(7, new Date(2026, 9, 14, 12))).toBe("2026-10-07");
+    expect(daysAgo(30, new Date(2026, 9, 14, 12))).toBe("2026-09-14");
   });
 });

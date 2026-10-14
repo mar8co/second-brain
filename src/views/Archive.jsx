@@ -5,10 +5,14 @@ import { Plus, Search, Settings, SlidersHorizontal, X } from "lucide-react";
 import { Page, TopBar } from "../components/Layout.jsx";
 import { ItemList } from "../components/ItemCard.jsx";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
-import { countBy, searchItems } from "../lib/search.js";
+import { countBy, countValues, daysAgo, searchItems } from "../lib/search.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
 
-const FILTER_KEYS = ["type", "category", "tag", "status", "from", "to"];
+const FILTER_KEYS = ["type", "category", "tag", "status", "author", "site", "from", "to"];
+const PERIODS = [
+  [7, "Ultimi 7 giorni"],
+  [30, "Ultimi 30 giorni"],
+];
 
 export default function Archive({ archive, query, navigate, openItem }) {
   const { items, loading, error, reload } = archive;
@@ -24,9 +28,11 @@ export default function Archive({ archive, query, navigate, openItem }) {
     navigate(`/archivio${s ? `?${s}` : ""}`, { replace: true });
   };
 
-  const results = useMemo(() => searchItems(items, q, filters), [items, q, filters.type, filters.category, filters.tag, filters.status, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const results = useMemo(() => searchItems(items, q, filters), [items, q, filters.type, filters.category, filters.tag, filters.status, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
   const cats = useMemo(() => countBy(items, "categories"), [items]);
   const tags = useMemo(() => countBy(items, "tags"), [items]);
+  const authors = useMemo(() => countValues(items, "author"), [items]);
+  const sites = useMemo(() => countValues(items, "site_name"), [items]);
 
   return (
     <>
@@ -54,6 +60,36 @@ export default function Archive({ archive, query, navigate, openItem }) {
             />
           </div>
         </div>
+
+        {cats.length > 0 && (
+          <ul className="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1" aria-label="Categorie">
+            <li className="shrink-0">
+              <button type="button" className={filters.category ? "chip" : "chip-on"} aria-pressed={!filters.category} onClick={() => setParam({ category: "" })}>
+                Tutte
+              </button>
+            </li>
+            {cats.map(([c, n]) => (
+              <li key={c} className="shrink-0">
+                <button type="button" className={filters.category === c ? "chip-on" : "chip"} aria-pressed={filters.category === c} onClick={() => setParam({ category: filters.category === c ? "" : c })}>
+                  {c} <span className="opacity-70">{n}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Periodo">
+          {PERIODS.map(([n, label]) => {
+            const on = filters.from === daysAgo(n) && !filters.to;
+            return (
+              <li key={n}>
+                <button type="button" className={on ? "chip-on" : "chip"} aria-pressed={on} onClick={() => setParam({ from: on ? "" : daysAgo(n), to: "" })}>
+                  {label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
 
         <div className="mt-2 flex items-center gap-2">
           <button
@@ -87,6 +123,10 @@ export default function Archive({ archive, query, navigate, openItem }) {
               options={cats.map(([c, n]) => [c, `${c} (${n})`])} />
             <Select label="Tag" value={filters.tag} onChange={(v) => setParam({ tag: v })}
               options={tags.map(([c, n]) => [c, `${c} (${n})`])} />
+            <Select label="Autore" value={filters.author} onChange={(v) => setParam({ author: v })}
+              options={authors.map(([c, n]) => [c, `${c} (${n})`])} />
+            <Select label="Sito" value={filters.site} onChange={(v) => setParam({ site: v })}
+              options={sites.map(([c, n]) => [c, `${c} (${n})`])} />
             <div>
               <label htmlFor="f-from" className="label">Dal</label>
               <input id="f-from" type="date" className="input py-2" value={filters.from} onChange={(e) => setParam({ from: e.target.value })} />
