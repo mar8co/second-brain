@@ -3,9 +3,10 @@
 // salvati, con le fonti citate [1] [2] e il passaggio da cui viene. I
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
+import { Thumb } from "../components/ItemCard.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { askArchive, recentTurns } from "../lib/ask.js";
@@ -107,11 +108,11 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     ask(t);
   };
 
-  // Nuova chat subito, con "Annulla" per ripensarci.
+  // Pulisci chat subito, con "Annulla" per ripensarci.
   const clearLog = () => {
     const prev = getChatLog();
     updateChatLog(() => []);
-    toast("Chat svuotata", { action: { label: "Annulla", run: () => updateChatLog(() => prev) } });
+    toast("Chat pulita", { action: { label: "Annulla", run: () => updateChatLog(() => prev) } });
   };
 
   return (
@@ -123,7 +124,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
           <div className="flex items-center gap-2">
             {log.length > 0 && (
               <button type="button" className="pillola" onClick={clearLog}>
-                Nuova chat
+                Pulisci chat
               </button>
             )}
             <button type="button" className="tondo" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
@@ -360,47 +361,66 @@ function Inline({ text, count, onCite }) {
   });
 }
 
-// Fonti numerate come nella risposta: titolo, chi l'ha pubblicato, quando, il
-// passaggio citato e il link all'originale.
+// Fonti numerate come nella risposta, in un riquadro chiuso: si vede quante
+// sono, con le miniature; toccandolo si aprono titolo, chi l'ha pubblicato,
+// quando, il passaggio citato e il link all'originale.
 function Sources({ sources, archiveOk, onOpen }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
   if (!sources.length) return null;
   return (
-    <div className="mt-4">
-      <p className="mb-1 border-b-[1.5px] border-[#0a0a0a] pb-1.5 text-[0.78rem] font-semibold">Fonti</p>
-      <ol className="righe">
-        {sources.map(({ id, item, quote }, i) => (
-          <li key={id} className="flex gap-2.5 py-2.5">
-            <span className="num mt-0.5 inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#0a0a0a] px-1 text-[11px] font-extrabold text-white">{i + 1}</span>
-            {item ? (
-              <div className="min-w-0 flex-1">
-                <a
-                  href={`/elemento/${item.id}`}
-                  onClick={(ev) => {
-                    if (ev.metaKey || ev.ctrlKey) return;
-                    ev.preventDefault();
-                    onOpen(item);
-                  }}
-                  className="line-clamp-2 font-extrabold leading-tight tracking-[-0.02em] underline-offset-[3px] hover:underline"
-                >
-                  {displayTitle(item)}
-                </a>
-                <p className="micro mt-0.5 flex items-center gap-1">
-                  <TypeIcon type={item.type} className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{sourceLine(item)}</span>
-                </p>
-                {quote && <blockquote className="mt-1.5 border-l-2 border-[#0a0a0a] pl-2.5 text-[0.92rem] font-semibold leading-snug">«{quote}»</blockquote>}
-                {item.url && (
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[0.8rem] font-bold underline underline-offset-[3px]">
-                    Apri l'originale<span aria-hidden="true"> →</span>
-                  </a>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm font-medium text-tenue">{archiveOk ? "Contenuto non più nell'archivio." : "Fonte non disponibile ora: l'archivio non è stato caricato."}</p>
+    <div className="fonti mt-4">
+      <button type="button" className="fonti-testa" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+        <span className="text-[0.95rem] font-extrabold tracking-[-0.02em]">Fonti</span>
+        <span className="num text-[0.8rem] font-semibold opacity-70">{sources.length}</span>
+        {!open && (
+          <span className="ml-1 flex -space-x-2" aria-hidden="true">
+            {sources.slice(0, 4).map(({ id: sid, item }) =>
+              item ? <Thumb key={sid} item={item} size="h-7 w-7 !rounded-lg ring-2 ring-white" /> : null,
             )}
-          </li>
-        ))}
-      </ol>
+          </span>
+        )}
+        <span aria-hidden="true" className="ml-auto text-[1.15rem] font-bold">{open ? "−" : "+"}</span>
+      </button>
+      {open && (
+        <ol id={id} className="righe border-t-[1.5px] border-[#0a0a0a]">
+          {sources.map(({ id: sid, item, quote }, i) => (
+            <li key={sid} className="flex gap-3 py-3">
+              <span className="relative shrink-0 self-start">
+                {item ? <Thumb item={item} size="h-12 w-12" /> : <span className="block h-12 w-12 rounded-xl bg-[rgb(10_10_10/0.08)]" />}
+                <span className="num absolute -left-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0a0a0a] px-1 text-[11px] font-extrabold text-white ring-2 ring-white">{i + 1}</span>
+              </span>
+              {item ? (
+                <div className="min-w-0 flex-1">
+                  <a
+                    href={`/elemento/${item.id}`}
+                    onClick={(ev) => {
+                      if (ev.metaKey || ev.ctrlKey) return;
+                      ev.preventDefault();
+                      onOpen(item);
+                    }}
+                    className="line-clamp-2 font-extrabold leading-tight tracking-[-0.02em] underline-offset-[3px] hover:underline"
+                  >
+                    {displayTitle(item)}
+                  </a>
+                  <p className="micro mt-0.5 flex items-center gap-1">
+                    <TypeIcon type={item.type} className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{sourceLine(item)}</span>
+                  </p>
+                  {quote && <blockquote className="mt-1.5 border-l-2 border-[#0a0a0a] pl-2.5 text-[0.92rem] font-semibold leading-snug">«{quote}»</blockquote>}
+                  {item.url && (
+                    <a href={item.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[0.8rem] font-bold underline underline-offset-[3px]">
+                      Apri l'originale<span aria-hidden="true"> →</span>
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm font-medium text-tenue">{archiveOk ? "Contenuto non più nell'archivio." : "Fonte non disponibile ora: l'archivio non è stato caricato."}</p>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }

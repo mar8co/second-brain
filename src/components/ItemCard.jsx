@@ -1,5 +1,5 @@
 // Riga dell'elenco: copertina (o il colore dell'elemento con l'icona del tipo),
-// fonte e data in piccolo, titolo grande, categorie e stato.
+// fonte e data in piccolo, titolo grande, in basso categorie e stato.
 import { useState } from "react";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
@@ -59,15 +59,14 @@ export function ItemCard({ item, onOpen }) {
         </p>
         <h3 className="mt-0.5 line-clamp-2 text-[1.15rem] font-extrabold leading-[1.08] tracking-[-0.035em]">{title}</h3>
         {snippet && <p className="mt-1 line-clamp-2 text-[0.9rem] font-medium leading-snug text-tenue">{snippet}</p>}
-        {item.categories?.length > 0 && (
-          <p className="mt-1.5 flex flex-wrap gap-1">
-            {item.categories.slice(0, 3).map((c) => (
-              <span key={c} className="cartellino">{c}</span>
-            ))}
-          </p>
-        )}
+        {/* In basso: categorie e, alla loro destra, lo stato. */}
+        <p className="mt-1.5 flex flex-wrap items-center gap-1">
+          {(item.categories || []).slice(0, 3).map((c) => (
+            <span key={c} className="cartellino">{c}</span>
+          ))}
+          <StatusBadge status={item.status} compact />
+        </p>
       </div>
-      <StatusBadge status={item.status} compact />
     </a>
   );
 }
