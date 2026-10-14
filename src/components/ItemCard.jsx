@@ -1,8 +1,33 @@
 // Riga dell'elenco: tipo, titolo, fonte, data e stato.
+import { useState } from "react";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
 import { StatusBadge, TypeIcon } from "./ui.jsx";
 import { formatDate, typeLabel } from "../lib/format.js";
+
+// Copertina in piccolo (Reel, video, link con immagine); se manca o non si
+// carica più (i link delle copertine social scadono) resta l'icona del tipo.
+function Thumb({ item }) {
+  const [failed, setFailed] = useState(false);
+  const url = item.image_url;
+  if (url && !failed && /^https?:\/\//.test(url)) {
+    return (
+      <img
+        src={url}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="mt-0.5 h-10 w-10 shrink-0 rounded-xl border border-line bg-sunken object-cover"
+      />
+    );
+  }
+  return (
+    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
+      <TypeIcon type={item.type} />
+    </div>
+  );
+}
 
 export function ItemCard({ item, onOpen }) {
   const title = displayTitle(item);
@@ -20,9 +45,7 @@ export function ItemCard({ item, onOpen }) {
       }}
       className="card flex gap-3 p-3.5 transition active:bg-sunken"
     >
-      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-        <TypeIcon type={item.type} />
-      </div>
+      <Thumb item={item} />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-2">
           <h3 className="line-clamp-2 font-semibold leading-snug">{title}</h3>
