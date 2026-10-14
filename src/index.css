@@ -140,11 +140,6 @@ button { cursor: pointer; }
   /* Nome dell'app in alto a sinistra, come un marchio. */
   .marchio { font-size: 1.45rem; font-weight: 800; letter-spacing: -0.055em; line-height: 1; margin-left: -0.02em; }
 
-  /* Rianalizza (sinistra), Aggiungi (centro), Filtri (destra). */
-  .barra-azioni { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
-  .barra-azioni > :first-child { justify-self: start; }
-  .barra-azioni > :last-child { justify-self: end; }
-  .barra-azioni .pillola { position: relative; gap: 0.35rem; padding: 0.45rem 0.75rem; }
   .conta {
     position: absolute; top: -7px; right: -5px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
     display: grid; place-items: center; background: var(--inchiostro); color: var(--sfondo);
@@ -152,15 +147,6 @@ button { cursor: pointer; }
   }
   .pillola.attiva .conta { background: var(--sfondo); color: var(--inchiostro); box-shadow: 0 0 0 1.5px var(--inchiostro); }
   .gira { animation: gira 0.9s linear infinite; }
-
-  /* Mappa: cartina chiara con il filo d'inchiostro; un pallino per posto. */
-  .cartina { height: min(56vh, 460px); border: 1.5px solid #0a0a0a; border-radius: 26px; overflow: hidden; background: #f2f0eb; z-index: 0; }
-  .cartina .leaflet-control-attribution { font: 600 9px/1.3 inherit; background: rgb(255 255 255 / 0.85); border-radius: 999px 0 0 0; padding: 2px 8px; }
-  .cartina .leaflet-control-attribution a { color: #0a0a0a; }
-  .cartina .leaflet-tile-pane { filter: grayscale(0.85) contrast(1.03); }
-  .pin { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--c); border: 2.5px solid #0a0a0a; box-shadow: 0 2px 6px rgb(0 0 0 / 0.25); }
-  .pin.scelto { background: #0a0a0a; border-color: #fff; box-shadow: 0 0 0 2px #0a0a0a, 0 4px 12px rgb(0 0 0 / 0.3); }
-  .pin-io { display: block; width: 100%; height: 100%; border-radius: 50%; background: #e02a0d; border: 3px solid #fff; box-shadow: 0 0 0 1.5px #e02a0d; }
 
   /* Fonti di una risposta: riquadro che si apre. */
   .fonti { border: 1.5px solid #0a0a0a; border-radius: 18px; padding: 0 12px; }
@@ -225,7 +211,9 @@ button { cursor: pointer; }
     display: block; width: 100%; text-align: left; border-radius: 22px; padding: 10px 10px 12px; color: #0a0a0a;
     --tenue: rgb(10 10 10 / 0.7); box-shadow: inset 0 0 0 1.5px #0a0a0a;
   }
+  .scatola { height: 100%; }
   .scatola:active { opacity: 0.75; }
+  .scatola.nera { display: flex; flex-direction: column; background: #0a0a0a; color: #fff; --tenue: rgb(255 255 255 / 0.7); box-shadow: none; }
   .mosaico { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
   .mosaico .cella { display: block; aspect-ratio: 1; border-radius: 8px; background: rgb(10 10 10 / 0.07); overflow: hidden; }
   .sezione .pillola { min-height: 30px; padding: 0.2rem 0.65rem; font-size: 0.75rem; gap: 0.3rem; }

@@ -239,10 +239,18 @@ const CLASSIFY_SCHEMA = {
     tags: { type: "ARRAY", items: { type: "STRING" } },
     places: {
       type: "ARRAY",
-      items: { type: "OBJECT", properties: { name: { type: "STRING" }, address: { type: "STRING" } }, required: ["name", "address"] },
+      items: { type: "OBJECT", properties: { name: { type: "STRING" }, address: { type: "STRING" }, kind: { type: "STRING" } }, required: ["name", "address", "kind"] },
+    },
+    events: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: { name: { type: "STRING" }, date: { type: "STRING" }, end_date: { type: "STRING" }, place: { type: "STRING" } },
+        required: ["name", "date", "end_date", "place"],
+      },
     },
   },
-  required: ["summary", "points", "entities", "keywords", "categories", "tags", "places"],
+  required: ["summary", "points", "entities", "keywords", "categories", "tags", "places", "events"],
 };
 
 export function buildClassifyPrompt(item, knownCategories) {
@@ -271,7 +279,8 @@ export function buildClassifyPrompt(item, knownCategories) {
     "- keywords: da 5 a 15 parole o brevi espressioni minuscole per ritrovare l'elemento, compresi sinonimi e termini generali che nel testo non compaiono (es. per un corso di intelligenza artificiale: \"intelligenza artificiale\", \"ia\", \"ai\", \"corso\", \"formazione\").",
     `- categories: 1 o 2 categorie, scelte in base all'ARGOMENTO di cui parla il contenuto (es. tassi dei conti deposito, investimenti, mutui, tasse → Finanza), non a chi potrebbe trovarlo utile. "Lavoro" solo per carriera, offerte di lavoro, colloqui o attività professionale dell'utente. Preferisci le categorie esistenti: ${JSON.stringify(knownCategories.slice(0, 40))}. Se nessuna descrive bene l'argomento, creane una nuova (breve, iniziale maiuscola).`,
     "- tags: da 2 a 6 tag brevi, minuscoli, in italiano (nomi propri invariati), utili a ritrovare l'elemento.",
-    "- places: i posti fisici che si possono visitare e di cui il contenuto parla (ristoranti, bar, negozi, musei, hotel, spiagge, parchi, sedi di eventi), per metterli su una mappa: { name, address } con address = via, quartiere e città quando si ricavano dai dati (anche dal post o dal profilo dell'autore), altrimenti stringa vuota. Non mettere città, regioni o nazioni da sole, né posti online. Al massimo 8; lista vuota se non ce ne sono.",
+    `- places: i posti fisici che si possono visitare e di cui il contenuto parla (ristoranti, bar, negozi, musei, hotel, spiagge, parchi, sedi di eventi): { name, address, kind }. address = via, quartiere e città quando si ricavano dai dati (anche dal post o dal profilo dell'autore), altrimenti stringa vuota. kind = "ristorante" per i locali dove si mangia o si beve (ristoranti, trattorie, pizzerie, bar, caffetterie, pasticcerie, street food), altrimenti "altro". Non mettere città, regioni o nazioni da sole, né posti online. Al massimo 8; lista vuota se non ce ne sono.`,
+    "- events: gli eventi con una data di cui il contenuto parla (concerti, workshop, mostre, feste, corsi, fiere): { name, date, end_date, place }. date e end_date nel formato AAAA-MM-GG; end_date è stringa vuota se l'evento dura un giorno solo; date è stringa vuota se non si ricava un giorno preciso. Se la data non ha l'anno, usa l'anno di pubblicato_il (o di salvato_il) e, se così la data cadrebbe più di due mesi prima di quella di pubblicazione, l'anno dopo. place = dove si svolge (nome e città), stringa vuota se non c'è. Al massimo 8; lista vuota se non ce ne sono. Non inventare eventi né date.",
     "Il parlato in prima persona di un video è di norma dell'autore del post: in quel caso attribuisci a lui ciò che dice (es. \"Mario Rossi (@mario) organizza…\").",
     "Usa SOLO i dati forniti: niente fatti, date, prezzi o nomi che non ci sono.",
     `<elemento>${JSON.stringify(payload)}</elemento>`,
@@ -298,6 +307,7 @@ export function sanitizeClassify(out) {
     categories: strArr(out?.categories, 2, 40).map((s) => s.trim()).filter(Boolean),
     tags: [...new Set(strArr(out?.tags, 6, 40).map((s) => s.trim().toLowerCase()).filter(Boolean))],
     places: sanitizePlaces(out?.places),
+    events: sanitizeEvents(out?.events),
   };
 }
 
@@ -305,8 +315,41 @@ function sanitizePlaces(list) {
   const seen = new Set();
   return (Array.isArray(list) ? list : [])
     .filter((p) => p && typeof p.name === "string" && p.name.trim())
-    .map((p) => ({ name: p.name.replace(/\s+/g, " ").trim().slice(0, 120), address: str(p.address, 200).replace(/\s+/g, " ").trim() }))
+    .map((p) => ({
+      name: p.name.replace(/\s+/g, " ").trim().slice(0, 120),
+      address: str(p.address, 200).replace(/\s+/g, " ").trim(),
+      kind: String(p.kind || "").toLowerCase().trim() === "ristorante" ? "ristorante" : "altro",
+    }))
     .filter((p) => !seen.has(p.name.toLowerCase()) && seen.add(p.name.toLowerCase()))
+    .slice(0, 8);
+}
+
+// Giorno nel formato AAAA-MM-GG, se è una data vera; altrimenti stringa vuota.
+function isoDay(v) {
+  const t = typeof v === "string" ? v.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return "";
+  const d = new Date(`${t}T00:00:00Z`);
+  return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== t ? "" : t;
+}
+
+function sanitizeEvents(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .filter((e) => e && typeof e.name === "string" && e.name.trim())
+    .map((e) => {
+      const date = isoDay(e.date);
+      const end = isoDay(e.end_date);
+      return {
+        name: e.name.replace(/\s+/g, " ").trim().slice(0, 140),
+        date,
+        end_date: date && end > date ? end : "",
+        place: str(e.place, 150).replace(/\s+/g, " ").trim(),
+      };
+    })
+    .filter((e) => {
+      const k = `${e.name.toLowerCase()}|${e.date}`;
+      return !seen.has(k) && seen.add(k);
+    })
     .slice(0, 8);
 }
 

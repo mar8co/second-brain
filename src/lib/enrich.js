@@ -117,9 +117,9 @@ export function aiPayload(item) {
 }
 
 // Versione della rielaborazione dell'AI: gli elementi con una versione
-// precedente vengono rielaborati di nuovo (v2: scheda di memoria; v3: posti
-// per la Mappa).
-export const DIGEST_VERSION = 3;
+// precedente vengono rielaborati di nuovo (v2: scheda di memoria; v3: posti;
+// v4: tipo dei posti e eventi, per i box Ristoranti ed Eventi).
+export const DIGEST_VERSION = 4;
 
 // Risposta della rielaborazione (server/ai.js) → campo `ai` dell'elemento.
 export function aiFromDigest(r, { applied = false, now = new Date() } = {}) {
@@ -131,9 +131,10 @@ export function aiFromDigest(r, { applied = false, now = new Date() } = {}) {
     keywords: r.keywords || [],
     categories: r.categories || [],
     tags: r.tags || [],
-    // Posti visitabili citati ({ name, address }); la Mappa vi aggiunge la
-    // posizione trovata (geo).
+    // Posti visitabili citati ({ name, address, kind }) ed eventi con data
+    // ({ name, date, end_date, place }).
     places: r.places || [],
+    events: r.events || [],
     model: r.model || null,
     generated_at: now.toISOString(),
     ...(applied ? { applied: true } : {}),

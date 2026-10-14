@@ -5,7 +5,6 @@ export const PAGE = {
   chat: "var(--rosa)",
   archive: "#ffffff",
   settings: "var(--giallo)",
-  map: "var(--verde)",
   add: "var(--carta)",
 };
 
