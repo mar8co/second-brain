@@ -1,6 +1,6 @@
 // Mappa: i posti salvati (link delle mappe) e quelli citati nei contenuti
 // (ristoranti, bar, musei… di un Reel), con "Vicino a me" e le indicazioni.
-// La cartina è di OpenStreetMap (disegnata da CARTO), gratuita.
+// La cartina è di OpenStreetMap (tessere ufficiali, gratuite e senza chiave).
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -15,8 +15,8 @@ import { displayTitle } from "../lib/item.js";
 import { directionsUrl, distanceKm, formatDistance, geoPatch, geocodeQueue, mapPoints } from "../lib/places.js";
 
 const ITALIA = { center: [42.5, 12.5], zoom: 5 };
-const TILES = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
-const ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> · © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const ATTRIBUTION = '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
 
 export default function Mappa({ archive, navigate, openItem }) {
   const { items, loading } = archive;
@@ -155,7 +155,7 @@ function Cartina({ points, selected, onSelect, me }) {
 
   useEffect(() => {
     const m = L.map(box.current, { zoomControl: false, attributionControl: true, center: ITALIA.center, zoom: ITALIA.zoom });
-    L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19, subdomains: "abcd" }).addTo(m);
+    L.tileLayer(TILES, { attribution: ATTRIBUTION, maxZoom: 19 }).addTo(m);
     m.attributionControl.setPrefix(false);
     layer.current = L.layerGroup().addTo(m);
     map.current = m;

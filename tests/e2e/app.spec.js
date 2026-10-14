@@ -325,7 +325,7 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
 });
 
 test("mappa: posti citati in un contenuto, cercati una volta su OpenStreetMap, vicino a me e indicazioni", async ({ page, context, request }) => {
-  await page.route(/basemaps\.cartocdn\.com/, (r) => r.abort());
+  await page.route(/tile\.openstreetmap\.org/, (r) => r.abort());
   await context.grantPermissions(["geolocation"]);
   await context.setGeolocation({ latitude: 41.8895, longitude: 12.4700 });
   await addLink(page, `${FIX}/trastevere`);
