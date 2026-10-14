@@ -144,21 +144,21 @@ La grafica segue le linee guida comuni delle app di Marco (stile "manifesto sviz
 
 - carattere Inter Tight, titoli enormi a peso 800, inchiostro nero sui colori pieni;
 - **Archivio a box o in lista**: di partenza una scatola colorata per categoria, con le copertine dei contenuti dentro e quanti sono (un contenuto con più categorie sta in ognuna; chi non ne ha sta in "Senza categoria"); toccandola si vedono tutti i contenuti della categoria in griglia. Il pulsante Box / Lista cambia vista e la scelta resta sul telefono. Ricerca e filtri valgono in entrambe;
-- un colore per schermata, che colora anche la barra di stato: Chat rosa, Archivio bianco, Mappa verde, Impostazioni giallo. Ogni elemento ha il suo colore fisso, nella riga dell'Archivio e nella sua scheda;
+- un colore per schermata, che colora anche la barra di stato: Chat rosa, Archivio bianco, Impostazioni giallo. Ogni elemento ha il suo colore fisso, nella riga dell'Archivio e nella sua scheda;
 - barra in basso a pillola nera, righe sottili al posto delle scatole, pillole e cerchi;
 - niente sfumature né sfocature, niente finestre del sistema: le conferme sono schede dell'app e le eliminazioni si annullano dall'avviso "Annulla";
 - l'icona è un cervello nero su quadrato rosa (`public/icon.svg`; PNG con `npm run icons`).
 
 I token sono in `src/index.css` e `tailwind.config.js`, i colori delle pagine in `src/lib/colors.js`.
 
-### Mappa
+### Ristoranti ed Eventi
 
-La terza scheda mostra su una cartina i posti salvati:
+In Archivio, a box, i primi due box sono **Ristoranti** ed **Eventi**. Non sono categorie: li ricava l'AI nella scheda di memoria di ogni contenuto (`ai.places` con `kind: "ristorante"` per i locali dove si mangia o si beve, `ai.events` con nome, data, fine e posto), solo da ciò che il contenuto dice davvero.
 
-- i link di Google Maps o Apple Maps, con le coordinate lette dal link;
-- i posti citati nei contenuti (ristoranti, bar, musei… di un Reel), che l'AI elenca nella scheda di memoria (`ai.places`).
+- **Ristoranti**: elenco per nome, con via sotto e il link al Reel, al post o alla pagina da cui vengono (e alla scheda nell'app). Lo stesso locale citato in più contenuti compare una volta con più link.
+- **Eventi**: in ordine di data (prossimi, poi quelli senza data); quelli già passati stanno in fondo, in grigio.
 
-Per i posti senza coordinate la posizione si cerca dal nome e dall'indirizzo con OpenStreetMap (Nominatim, gratuito, senza chiave) tramite `/api/geo`, uno alla volta e al massimo uno al secondo, solo mentre la Mappa è aperta. Il risultato, anche "non trovato", si salva nell'elemento e non si cerca più. Queste posizioni sono approssimative e l'app lo dice. La cartina usa le tessere ufficiali di OpenStreetMap (gratuite, senza chiave, con l'attribuzione); CARTO non va usata perché ora chiede una chiave. "Vicino a me" usa la posizione del telefono solo nel browser, e "Indicazioni" apre Mappe di Apple su iPhone.
+Ricerca e filtri valgono anche qui. I contenuti salvati prima (scheda v3) vengono riletti dall'AI a poco a poco, con l'app aperta, e solo allora compaiono in questi box. La Mappa è stata tolta (era la PR #20, nella cronologia di git).
 
 ## Modello dei dati
 

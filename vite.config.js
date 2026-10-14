@@ -4,7 +4,6 @@ import { VitePWA } from "vite-plugin-pwa";
 import { handleRead } from "./server/read.js";
 import { AI_BODY_BYTES, handleAi } from "./server/ai.js";
 import { handleShare } from "./server/share.js";
-import { handleGeo } from "./server/geo.js";
 import { nodeHandler } from "./server/node-adapter.js";
 
 // In `npm run dev` gli endpoint /api/* sono serviti da un middleware che usa lo
@@ -47,7 +46,6 @@ export default defineConfig(({ mode }) => {
       devApi("/api/extract", handleRead, apiEnv),
       devApi("/api/ai", handleAi, apiEnv, { maxBody: AI_BODY_BYTES }),
       devApi("/api/share", handleShare, apiEnv, { allowFiles: true }),
-      devApi("/api/geo", handleGeo, apiEnv),
       VitePWA({
         registerType: "autoUpdate",
         injectRegister: "auto",

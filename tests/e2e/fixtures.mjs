@@ -18,6 +18,14 @@ const pages = {
   "/accounts/login": `<html><head><title>Accedi</title></head><body>Accedi per vedere</body></html>`,
 };
 
+// Giorno di oggi più n giorni, come AAAA-MM-GG (fuso locale, come l'app).
+function day(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  const p = (x) => String(x).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function send(res, status, type, body, headers = {}) {
   res.writeHead(status, { "content-type": type, ...headers });
   res.end(body);
@@ -69,9 +77,14 @@ function fakeGemini(prompt) {
       categories: ["Cibo"],
       tags: ["roma"],
       places: [
-        { name: "Da Enzo al 29", address: "Via dei Vascellari 29, Roma" },
-        { name: "Bar San Calisto", address: "Piazza di San Calisto, Roma" },
-        { name: "Posto che non esiste", address: "" },
+        { name: "Da Enzo al 29", address: "Via dei Vascellari 29, Roma", kind: "ristorante" },
+        { name: "Bar San Calisto", address: "Piazza di San Calisto, Roma", kind: "ristorante" },
+        { name: "Museo di Trastevere", address: "", kind: "altro" },
+      ],
+      events: [
+        { name: "Serata carbonara da Enzo", date: day(10), end_date: "", place: "Da Enzo al 29, Roma" },
+        { name: "Degustazione di primavera", date: day(-20), end_date: "", place: "Trastevere" },
+        { name: "Festa del quartiere", date: "", end_date: "", place: "" },
       ],
     };
   }
@@ -87,8 +100,6 @@ function fakeGemini(prompt) {
   }
   return { summary: "", points: [], entities: [], keywords: [], categories: [], tags: [] };
 }
-
-let geoCalls = 0;
 
 http
   .createServer((req, res) => {
@@ -106,14 +117,6 @@ http
       });
       return;
     }
-    // Finto OpenStreetMap (Nominatim): conta le richieste.
-    if (req.url.startsWith("/search?")) {
-      geoCalls += 1;
-      const q = new URL(req.url, "http://x").searchParams.get("q") || "";
-      const hit = /Da Enzo/.test(q) ? { lat: "41.8892", lon: "12.4743", display_name: "Da Enzo al 29, Via dei Vascellari, Roma" } : /San Calisto/.test(q) ? { lat: "41.8888", lon: "12.4697", display_name: "Bar San Calisto, Roma" } : null;
-      return send(res, 200, "application/json", JSON.stringify(hit ? [hit] : []));
-    }
-    if (req.url === "/geo-count") return send(res, 200, "application/json", JSON.stringify({ calls: geoCalls }));
     if (req.url === "/reel-privato") return send(res, 302, "text/html", "", { location: "/accounts/login" });
     if (pages[req.url]) return send(res, 200, "text/html; charset=utf-8", pages[req.url]);
     send(res, 404, "text/html", "<title>404</title>");

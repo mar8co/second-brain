@@ -1,13 +1,15 @@
 // Archivio: ricerca testuale istantanea + filtri per tipo, periodo, sito, autore, categoria.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
-import { ChevronLeft, LayoutGrid, List, Plus, RotateCw, Settings, SlidersHorizontal } from "lucide-react";
+import { CalendarDays, ChevronLeft, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import Calendario from "../components/Calendario.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
+import { EventList, RestaurantList } from "../components/Spots.jsx";
+import { eventsOf, restaurantsOf } from "../lib/spots.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
 import { TYPES } from "../lib/constants.js";
@@ -25,8 +27,8 @@ function readVista() {
   }
 }
 
-export default function Archive({ archive, query, navigate, openItem, toast, ai }) {
-  const { items, loading, error, reload, reanalysis, reanalyzable, reanalyzeAll } = archive;
+export default function Archive({ archive, query, navigate, openItem }) {
+  const { items, loading, error, reload } = archive;
   const q = query.get("q") || "";
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, query.get(k) || ""]));
   const active = FILTER_KEYS.filter((k) => filters[k]);
@@ -42,6 +44,9 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
   // A box la categoria si sceglie dal box: non conta come filtro da mostrare.
   const shown = active.filter((k) => !(vista === "box" && k === "category"));
   const [open, setOpen] = useState(shown.length > 0);
+  // Box fissi Ristoranti ed Eventi (solo a box): quale è aperto.
+  const sezioneParam = query.get("sezione");
+  const sezione = vista === "box" && (sezioneParam === "ristoranti" || sezioneParam === "eventi") ? sezioneParam : "";
   usePageColor(PAGE.archive);
 
   const setParam = (patch) => {
@@ -55,6 +60,13 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
   // Per i box: i risultati di ricerca e filtri, ma senza il filtro Categoria.
   const matches = useMemo(() => searchItems(items, q, { ...filters, category: "" }), [items, q, filters.type, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
   const boxes = useMemo(() => groupByCategory(matches), [matches]);
+  const restaurants = useMemo(() => restaurantsOf(matches), [matches]);
+  const events = useMemo(() => eventsOf(matches), [matches]);
+  const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
+  const special = [
+    { key: "ristoranti", name: "Ristoranti", Icon: Utensils, sub: restaurants.length ? `${restaurants.length} ${restaurants.length === 1 ? "locale" : "locali"}` : "Ancora nessuno" },
+    { key: "eventi", name: "Eventi", Icon: CalendarDays, sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : `${eventsTotal} ${eventsTotal === 1 ? "evento" : "eventi"}` },
+  ];
   const cats = useMemo(() => countBy(items, "categories"), [items]);
   const authors = useMemo(() => countValues(items, "author"), [items]);
   const sites = useMemo(() => countValues(items, "site_name"), [items]);
@@ -64,14 +76,6 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
     ...shown.filter((k) => k !== "from" && k !== "to").map((k) => ({ key: k, label: k === "type" ? TYPES[filters[k]]?.label || filters[k] : filters[k], clear: { [k]: "" } })),
     ...(filters.from || filters.to ? [{ key: "periodo", label: formatRange(filters.from, filters.to), clear: { from: "", to: "" } }] : []),
   ];
-  const reanalyze = async () => {
-    const r = await reanalyzeAll();
-    if (!r) return;
-    if (r.stopped === "limit") toast(`Fermo: limite gratuito dell'AI raggiunto (${r.done} su ${r.total})`);
-    else if (r.failed) toast(`Rianalizzati ${r.done - r.failed} su ${r.total}, ${r.failed} da riprovare`);
-    else toast(r.done === 1 ? "1 elemento rianalizzato" : `${r.done} elementi rianalizzati`);
-  };
-
   return (
     <>
       <Page>
@@ -84,18 +88,25 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
         />
         <h1 className="gigante">Archivio</h1>
 
-        <div role="search">
-          <label htmlFor="arch-q" className="sr-only">Cerca nell'archivio</label>
-          <input
-            id="arch-q"
-            type="search"
-            className="campo"
-            placeholder="Cerca per parole, tag, sito…"
-            value={q}
-            onChange={(e) => setParam({ q: e.target.value })}
-            enterKeyHint="search"
-            autoComplete="off"
-          />
+        <div role="search" className="flex items-end gap-3">
+          <div className="min-w-0 flex-1">
+            <label htmlFor="arch-q" className="sr-only">Cerca nell'archivio</label>
+            <input
+              id="arch-q"
+              type="search"
+              className="campo"
+              placeholder="Cerca per parole, tag, sito…"
+              value={q}
+              onChange={(e) => setParam({ q: e.target.value })}
+              enterKeyHint="search"
+              autoComplete="off"
+            />
+          </div>
+          <button type="button" className={`pillola relative mb-1.5${open ? " attiva" : ""}`} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
+            <SlidersHorizontal className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
+            Filtri
+            {chips.length > 0 && <span className="conta num">{chips.length}</span>}
+          </button>
         </div>
 
         {cats.length > 0 && vista === "lista" && (
@@ -114,28 +125,6 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
             ))}
           </ul>
         )}
-
-        <div className="barra-azioni mt-3">
-          <button
-            type="button"
-            className="pillola"
-            disabled={!ai || Boolean(reanalysis) || reanalyzable.length === 0}
-            onClick={reanalyze}
-          >
-            <RotateCw className={`h-4 w-4${reanalysis ? " gira" : ""}`} strokeWidth={2.6} aria-hidden="true" />
-            {reanalysis ? <span className="num">{reanalysis.done}/{reanalysis.total}</span> : "Rianalizza"}
-            {!reanalysis && ai && reanalyzable.length > 0 && <span className="conta num">{reanalyzable.length}</span>}
-          </button>
-          <button type="button" className="pillola" onClick={() => navigate("/aggiungi")}>
-            <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" />
-            Aggiungi
-          </button>
-          <button type="button" className={`pillola${open ? " attiva" : ""}`} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
-            <SlidersHorizontal className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
-            Filtri
-            {chips.length > 0 && <span className="conta num">{chips.length}</span>}
-          </button>
-        </div>
 
         {open && (
           <div id="filters" className="mt-4 border-t-[1.5px] border-inchiostro">
@@ -173,6 +162,24 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
 
         {loading ? (
           <Spinner />
+        ) : sezione ? (
+          <>
+            <p className="grande mt-5">{sezione === "ristoranti" ? "Ristoranti" : "Eventi"}</p>
+            <h2 className="sezione !mt-3">
+              <span className="flex min-w-0 items-center gap-2">
+                <button type="button" className="pillola" onClick={() => setParam({ sezione: "" })}>
+                  <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2.8} aria-hidden="true" />
+                  Categorie
+                </button>
+                <span aria-live="polite" className="num truncate">
+                  {sezione === "ristoranti"
+                    ? restaurants.length === 1 ? "1 locale" : `${restaurants.length} locali`
+                    : eventsTotal === 1 ? "1 evento" : `${eventsTotal} eventi`}
+                </span>
+              </span>
+            </h2>
+            {sezione === "ristoranti" ? <RestaurantList restaurants={restaurants} onOpen={openItem} /> : <EventList events={events} onOpen={openItem} />}
+          </>
         ) : results.length === 0 ? (
           items.length === 0 ? (
             <EmptyState title="Ancora niente qui" action={<button type="button" className="bottone" onClick={() => navigate("/aggiungi")}>+ Aggiungi qualcosa</button>}>
@@ -225,7 +232,7 @@ export default function Archive({ archive, query, navigate, openItem, toast, ai 
             ) : filters.category ? (
               <ItemGrid items={results} onOpen={openItem} />
             ) : (
-              <CategoryBoxes boxes={boxes} onOpen={(c) => setParam({ category: c })} />
+              <CategoryBoxes boxes={boxes} onOpen={(c) => setParam({ category: c })} special={special} onSpecial={(k) => setParam({ sezione: k })} />
             )}
           </>
         )}
