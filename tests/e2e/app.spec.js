@@ -42,6 +42,24 @@ test("link incollato nella chat: salvato nell'archivio, la chat resta per le dom
   await expect(page.getByRole("button", { name: "Cosa ho salvato su ricette?" })).toBeVisible();
 });
 
+test("campo della chat: cresce con il testo; mentre si scrive la barra Chat / Archivio sparisce", async ({ page }) => {
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  const nav = page.getByRole("navigation", { name: "Navigazione principale" });
+  const h1 = (await box.boundingBox()).height;
+  await box.click();
+  await expect(nav).toBeHidden();
+  await box.fill("Una domanda molto lunga sulla mia memoria che continua e continua ".repeat(4));
+  await expect.poll(async () => (await box.boundingBox()).height).toBeGreaterThan(h1 * 2);
+  // Testo lunghissimo: il campo si ferma a circa 6 righe e scorre.
+  await box.fill("parola ".repeat(300));
+  expect((await box.boundingBox()).height).toBeLessThanOrEqual(161);
+  await box.fill("");
+  await expect.poll(async () => (await box.boundingBox()).height).toBe(h1);
+  await box.blur();
+  await expect(nav).toBeVisible();
+});
+
 test("trascrizione incollata a mano su un link: salvata e mostrata come testo estratto", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();

@@ -60,6 +60,13 @@ body {
 .pt-safe { padding-top: max(env(safe-area-inset-top), 0.75rem); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
 .no-scrollbar { scrollbar-width: none; }
+
+/* Chat sul telefono: mentre si scrive la barra Chat / Archivio sparisce e il
+   campo scende sopra la tastiera. */
+@media (pointer: coarse) {
+  body:has(.chat-composer:focus-within) .bottom-nav { display: none; }
+  .chat-composer:focus-within { bottom: 0; }
+}
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 @layer components {
