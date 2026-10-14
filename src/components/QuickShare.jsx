@@ -2,15 +2,16 @@
 // il Comando Rapido invia a /api/share per salvare senza aprire l'app.
 // Il codice si vede una sola volta: nel database resta solo il suo hash.
 import { useEffect, useState } from "react";
-import { Copy, KeyRound } from "lucide-react";
 import { supabase } from "../lib/supabase.js";
 import { ErrorBox } from "./ui.jsx";
+import { Domanda } from "./Foglio.jsx";
 
 export default function QuickShare({ toast }) {
   const [info, setInfo] = useState({ loading: true, createdAt: null });
   const [token, setToken] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [ask, setAsk] = useState(null);
   const endpoint = `${window.location.origin}/api/share`;
 
   useEffect(() => {
@@ -30,7 +31,6 @@ export default function QuickShare({ toast }) {
   }, []);
 
   const create = async () => {
-    if (info.createdAt && !window.confirm("Il codice attuale smetterà di funzionare: dovrai aggiornare il Comando Rapido. Continuare?")) return;
     setBusy(true);
     setError(null);
     const { data, error: e } = await supabase.rpc("create_share_token");
@@ -41,7 +41,6 @@ export default function QuickShare({ toast }) {
   };
 
   const revoke = async () => {
-    if (!window.confirm("Disattivare il salvataggio rapido? Il Comando smetterà di funzionare.")) return;
     setBusy(true);
     const { error: e } = await supabase.rpc("revoke_share_token");
     setBusy(false);
@@ -60,54 +59,69 @@ export default function QuickShare({ toast }) {
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <p>
-        Con un Comando Rapido il link viene salvato <strong>senza aprire l'app</strong>: il server lo legge e l'AI assegna categorie e tag
+        Con un Comando Rapido il link viene salvato <strong className="font-extrabold">senza aprire l'app</strong>: il server lo legge e l'AI assegna categorie e tag
         in background. Ti serve un codice personale.
       </p>
       <p>
-        Reel, TikTok, video di Facebook, YouTube e Shorts vengono <strong>trascritti</strong> e i caroselli <strong>letti slide per
+        Reel, TikTok, video di Facebook, YouTube e Shorts vengono <strong className="font-extrabold">trascritti</strong> e i caroselli <strong className="font-extrabold">letti slide per
         slide</strong> a partire dal solo link (post pubblici). Può servire qualche minuto.
       </p>
       {error && <ErrorBox>{error}</ErrorBox>}
       {token ? (
-        <div className="rounded-xl border border-line bg-sunken p-3">
-          <p className="text-xs font-medium text-muted">Il tuo codice (si vede solo ora, trattalo come una password):</p>
-          <p className="mt-1 break-all font-mono text-xs">{token}</p>
-          <button type="button" className="btn-ghost mt-2" onClick={() => copy(token, "Codice")}>
-            <Copy className="h-4 w-4" aria-hidden="true" /> Copia codice
+        <div className="riquadro">
+          <p className="micro font-semibold">Il tuo codice (si vede solo ora, trattalo come una password)</p>
+          <p className="mt-1 select-all break-all text-[0.95rem] font-bold">{token}</p>
+          <button type="button" className="link" onClick={() => copy(token, "Codice")}>
+            Copia codice
           </button>
         </div>
       ) : info.loading ? (
-        <p className="text-muted">Verifico…</p>
+        <p className="text-tenue">Verifico…</p>
       ) : info.createdAt ? (
-        <p className="text-muted">Codice attivo, creato il {new Date(info.createdAt).toLocaleDateString("it-IT")}. Per vederlo di nuovo devi crearne uno nuovo.</p>
+        <p className="text-tenue">Codice attivo, creato il {new Date(info.createdAt).toLocaleDateString("it-IT")}. Per vederlo di nuovo devi crearne uno nuovo.</p>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn-ghost" onClick={create} disabled={busy || info.loading}>
-          <KeyRound className="h-4 w-4" aria-hidden="true" /> {info.createdAt ? "Crea un nuovo codice" : "Crea codice"}
+      <div className="bottoni !mt-1">
+        <button
+          type="button"
+          className="bottone"
+          onClick={() =>
+            info.createdAt
+              ? setAsk({ titolo: "Creare un nuovo codice?", testo: "Il codice attuale smetterà di funzionare: dovrai aggiornare il Comando Rapido.", si: "Crea", onSi: create })
+              : create()
+          }
+          disabled={busy || info.loading}
+        >
+          {busy ? "Un momento…" : info.createdAt ? "Crea un nuovo codice" : "Crea codice"}
         </button>
         {info.createdAt && (
-          <button type="button" className="btn-ghost text-bad" onClick={revoke} disabled={busy}>
+          <button
+            type="button"
+            className="bottone chiaro"
+            onClick={() => setAsk({ titolo: "Disattivare il salvataggio rapido?", testo: "Il Comando Rapido smetterà di funzionare finché non crei un nuovo codice.", si: "Disattiva", rosso: true, onSi: revoke })}
+            disabled={busy}
+          >
             Disattiva
           </button>
         )}
       </div>
-      <details className="text-sm">
-        <summary className="cursor-pointer font-medium">Come creare il Comando Rapido</summary>
+      {ask && <Domanda {...ask} color="#ffffff" onClose={() => setAsk(null)} />}
+      <details className="group border-t border-riga pb-1">
+        <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden"><span>Come creare il Comando Rapido</span><Segno /></summary>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5">
           <li>App Comandi → <strong>+</strong> → tocca ⓘ e attiva <strong>Mostra nel foglio di condivisione</strong> (tipi: URL e Testo).</li>
           <li>
             Aggiungi <strong>Ottieni contenuti di URL</strong>. URL:{" "}
-            <button type="button" className="break-all font-mono text-xs underline" onClick={() => copy(endpoint, "Indirizzo")}>{endpoint}</button>
+            <button type="button" className="break-all text-[0.85rem] font-bold underline" onClick={() => copy(endpoint, "Indirizzo")}>{endpoint}</button>
           </li>
           <li>Nella stessa azione tocca <strong>Mostra di più</strong>: Metodo <strong>POST</strong>, Corpo richiesta <strong>JSON</strong>.</li>
           <li>Aggiungi due campi di tipo Testo: <code>token</code> = il tuo codice; <code>text</code> = la variabile <strong>Input comando rapido</strong>.</li>
           <li>Aggiungi <strong>Mostra notifica</strong> con la variabile <strong>Contenuti dell'URL</strong>: ti dirà se il salvataggio è riuscito.</li>
         </ol>
       </details>
-      <details className="text-sm">
-        <summary className="cursor-pointer font-medium">Facoltativo: inviare il file di un video</summary>
+      <details className="group border-t border-riga pb-1">
+        <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden"><span>Facoltativo: inviare il file di un video</span><Segno /></summary>
         <p className="mt-2">
           Serve solo se un video non si riesce a leggere dal link (per esempio perché è privato). Scaricalo quando c'è l'opzione "Scarica",
           oppure fai una registrazione schermo, poi da Foto → Condividi → questo comando. Si invia solo l'audio, che l'AI trascrive in
@@ -123,8 +137,8 @@ export default function QuickShare({ toast }) {
           <li>Aggiungi <strong>Mostra notifica</strong> con <strong>Contenuti dell'URL</strong>.</li>
         </ol>
       </details>
-      <details className="text-sm">
-        <summary className="cursor-pointer font-medium">Facoltativo: inviare gli screenshot di un carosello</summary>
+      <details className="group border-t border-riga pb-1">
+        <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden"><span>Facoltativo: inviare gli screenshot di un carosello</span><Segno /></summary>
         <p className="mt-2">
           Serve solo se un carosello non si riesce a leggere dal link. Fai uno screenshot di ogni slide, selezionali in Foto nell'ordine e
           condividili con questo comando: l'AI legge il testo di ogni slide.
@@ -138,8 +152,18 @@ export default function QuickShare({ toast }) {
           </li>
           <li>Aggiungi <strong>Mostra notifica</strong> con <strong>Contenuti dell'URL</strong>.</li>
         </ol>
-        <p className="mt-2 text-muted">Limite: 4 MB per invio. Se il video è lungo, dividilo in due parti.</p>
+        <p className="mt-2 text-tenue">Limite: 4 MB per invio. Se il video è lungo, dividilo in due parti.</p>
       </details>
     </div>
+  );
+}
+
+// "+" quando è chiuso, "−" quando è aperto.
+function Segno() {
+  return (
+    <span aria-hidden="true" className="text-[1.3rem] font-bold leading-none">
+      <span className="group-open:hidden">+</span>
+      <span className="hidden group-open:inline">−</span>
+    </span>
   );
 }

@@ -1,13 +1,16 @@
-// Riga dell'elenco: tipo, titolo, fonte, data e stato.
+// Riga dell'elenco: copertina (o il colore dell'elemento con l'icona del tipo),
+// fonte e data in piccolo, titolo grande, categorie e stato.
 import { useState } from "react";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
+import { itemColor } from "../lib/colors.js";
 import { StatusBadge, TypeIcon } from "./ui.jsx";
 import { formatDate, typeLabel } from "../lib/format.js";
 
 // Copertina in piccolo (Reel, video, link con immagine); se manca o non si
-// carica più (i link delle copertine social scadono) resta l'icona del tipo.
-function Thumb({ item }) {
+// carica più (i link delle copertine social scadono) resta il quadrato del
+// colore dell'elemento con l'icona del tipo.
+export function Thumb({ item, size = "h-14 w-14" }) {
   const [failed, setFailed] = useState(false);
   const url = item.image_url;
   if (url && !failed && /^https?:\/\//.test(url)) {
@@ -18,13 +21,14 @@ function Thumb({ item }) {
         loading="lazy"
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-        className="mt-0.5 h-10 w-10 shrink-0 rounded-xl border border-line bg-sunken object-cover"
+        className={`${size} shrink-0 rounded-xl object-cover`}
+        style={{ background: itemColor(item) }}
       />
     );
   }
   return (
-    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent">
-      <TypeIcon type={item.type} />
+    <div className={`${size} flex shrink-0 items-center justify-center rounded-xl text-[#0a0a0a]`} style={{ background: itemColor(item), boxShadow: "inset 0 0 0 1.5px #0a0a0a" }}>
+      <TypeIcon type={item.type} className="h-6 w-6" />
     </div>
   );
 }
@@ -43,32 +47,34 @@ export function ItemCard({ item, onOpen }) {
         e.preventDefault();
         onOpen(item);
       }}
-      className="card flex gap-3 p-3.5 transition active:bg-sunken"
+      className="flex gap-3 py-3.5 active:opacity-70"
     >
       <Thumb item={item} />
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="line-clamp-2 font-semibold leading-snug">{title}</h3>
-          <StatusBadge status={item.status} compact />
-        </div>
-        {snippet && <p className="mt-0.5 line-clamp-2 text-sm text-muted">{snippet}</p>}
-        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-xs text-muted">
+        <p className="micro flex items-center gap-1.5">
           <span className="sr-only">{typeLabel(item.type)} · </span>
           <span className="truncate">{source}</span>
           <span aria-hidden="true">·</span>
-          <time dateTime={item.created_at}>{formatDate(item.created_at)}</time>
-          {(item.categories || []).slice(0, 2).map((c) => (
-            <span key={c} className="rounded-full bg-sunken px-2 py-0.5 text-ink/80">{c}</span>
-          ))}
+          <time className="num shrink-0" dateTime={item.created_at}>{formatDate(item.created_at)}</time>
         </p>
+        <h3 className="mt-0.5 line-clamp-2 text-[1.15rem] font-extrabold leading-[1.08] tracking-[-0.035em]">{title}</h3>
+        {snippet && <p className="mt-1 line-clamp-2 text-[0.9rem] font-medium leading-snug text-tenue">{snippet}</p>}
+        {item.categories?.length > 0 && (
+          <p className="mt-1.5 flex flex-wrap gap-1">
+            {item.categories.slice(0, 3).map((c) => (
+              <span key={c} className="cartellino">{c}</span>
+            ))}
+          </p>
+        )}
       </div>
+      <StatusBadge status={item.status} compact />
     </a>
   );
 }
 
 export function ItemList({ items, onOpen }) {
   return (
-    <ul className="space-y-2.5">
+    <ul className="righe">
       {items.map((it) => (
         <li key={it.id}>
           <ItemCard item={it} onOpen={onOpen} />

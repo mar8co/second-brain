@@ -2,20 +2,27 @@
 // l'account si crea dalla dashboard Supabase (vedi README).
 import { useState } from "react";
 import { ErrorBox } from "../components/ui.jsx";
+import { usePageColor } from "../hooks/usePageColor.js";
+import { PAGE } from "../lib/colors.js";
 
 export default function Login({ signIn }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  usePageColor(PAGE.chat);
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] max-w-sm flex-col justify-center px-6 pt-safe">
-      <img src="/favicon.svg" alt="" className="mb-5 h-14 w-14" />
-      <h1 className="font-serif text-3xl font-semibold">Second Brain</h1>
-      <p className="mt-1 text-muted">Accedi al tuo archivio.</p>
+    <main className="pagina flex min-h-[100dvh] flex-col justify-center !pb-[calc(24px+env(safe-area-inset-bottom))] pt-[calc(24px+env(safe-area-inset-top))]">
+      <img src="/favicon.svg" alt="" className="mb-6 h-16 w-16 rounded-[14px]" />
+      <h1 className="gigante">
+        Second
+        <br />
+        Brain
+      </h1>
+      <p className="-mt-2 font-semibold text-tenue">Accedi al tuo archivio.</p>
       <form
-        className="mt-6 space-y-4"
+        className="mt-6 space-y-5"
         onSubmit={async (e) => {
           e.preventDefault();
           setBusy(true);
@@ -29,16 +36,16 @@ export default function Login({ signIn }) {
         }}
       >
         <div>
-          <label htmlFor="li-email" className="label">Email</label>
-          <input id="li-email" type="email" autoComplete="username" className="input" value={email} onChange={(e) => setEmail(e.target.value)} required />
+          <label htmlFor="li-email" className="etichetta">Email</label>
+          <input id="li-email" type="email" autoComplete="username" className="campo" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </div>
         <div>
-          <label htmlFor="li-pw" className="label">Password</label>
-          <input id="li-pw" type="password" autoComplete="current-password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} required />
+          <label htmlFor="li-pw" className="etichetta">Password</label>
+          <input id="li-pw" type="password" autoComplete="current-password" className="campo" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
         {error && <ErrorBox>{error}</ErrorBox>}
-        <button type="submit" className="btn-primary w-full min-h-[50px]" disabled={busy}>
-          {busy ? "Accesso…" : "Accedi"}
+        <button type="submit" className="bottone grande-azione" disabled={busy}>
+          {busy ? "Accedo…" : "Accedi"}
         </button>
       </form>
     </main>

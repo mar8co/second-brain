@@ -13,6 +13,7 @@
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/inter-tight": "^5.3.0",
     "@mozilla/readability": "^0.6.0",
     "@supabase/supabase-js": "^2.117.3",
     "@vercel/functions": "^2.2.13",

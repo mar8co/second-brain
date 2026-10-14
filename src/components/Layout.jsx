@@ -1,57 +1,51 @@
-// Struttura della pagina: barra superiore, contenuto, navigazione in basso.
-import { Archive, ChevronLeft, MessageCircle } from "lucide-react";
+// Struttura della pagina: intestazione, contenuto, barra in basso.
+// Il titolo della pagina non sta nell'intestazione: è il primo elemento della
+// pagina, enorme.
 
-export function TopBar({ title, onBack, left, right }) {
+export function Testata({ onBack, left, right }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-line/60 bg-bg/90 pt-safe backdrop-blur">
-      <div className="mx-auto flex h-12 max-w-2xl items-center gap-2 px-3">
-        {onBack ? (
-          <button type="button" onClick={onBack} className="btn -ml-2 px-2 text-accent" aria-label="Indietro">
-            <ChevronLeft className="h-6 w-6" aria-hidden="true" />
-          </button>
-        ) : (
-          left || <span className="w-1" />
-        )}
-        <h1 className="flex-1 truncate text-[17px] font-semibold">{title}</h1>
-        {right}
-      </div>
+    <header className="testata">
+      {onBack ? (
+        <button type="button" onClick={onBack} className="tondo text-[1.7rem] font-semibold" aria-label="Indietro">
+          <span aria-hidden="true" className="-mt-1 -translate-x-px">‹</span>
+        </button>
+      ) : (
+        left || <span />
+      )}
+      {right && <div className="flex items-center gap-2">{right}</div>}
     </header>
   );
 }
 
 const TABS = [
-  ["/", "Chat", MessageCircle],
-  ["/archivio", "Archivio", Archive],
+  ["/", "Chat"],
+  ["/archivio", "Archivio"],
 ];
 
+// Pillola nera flottante con la scheda attiva accesa in chiaro. Solo parole.
 export function BottomNav({ path, navigate }) {
   return (
-    <nav aria-label="Navigazione principale" className="bottom-nav fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-safe backdrop-blur">
-      <ul className="mx-auto grid max-w-2xl grid-cols-2">
-        {TABS.map(([to, label, Icon]) => {
-          const active = to === "/" ? path === "/" : path.startsWith(to);
-          return (
-            <li key={to}>
-              <a
-                href={to}
-                onClick={(e) => {
-                  e.preventDefault();
-                  navigate(to);
-                }}
-                aria-current={active ? "page" : undefined}
-                className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${active ? "text-accent" : "text-muted"}`}
-              >
-                <Icon className="h-6 w-6" aria-hidden="true" />
-                <span>{label}</span>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
+    <nav aria-label="Navigazione principale" className="schede bottom-nav">
+      {TABS.map(([to, label]) => {
+        const active = to === "/" ? path === "/" || path === "/chiedi" : path.startsWith(to);
+        return (
+          <a
+            key={to}
+            href={to}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(to);
+            }}
+            aria-current={active ? "page" : undefined}
+          >
+            {label}
+          </a>
+        );
+      })}
     </nav>
   );
 }
 
 export function Page({ children }) {
-  return <main className="mx-auto max-w-2xl px-4 pb-28 pt-4">{children}</main>;
+  return <main className="pagina">{children}</main>;
 }

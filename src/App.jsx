@@ -33,12 +33,14 @@ function Shell({ auth }) {
   const [settings, setSettings] = useSettings();
   const archive = useArchive(store, { ai: Boolean(aiStatus.ai && settings.autoAi) });
 
+  // Avviso breve: 2,4 s, oppure 5 s se ha un'azione ("Annulla"). Un nuovo
+  // avviso sostituisce il precedente.
   const [toastMsg, setToastMsg] = useState(null);
   const timer = useRef(null);
-  const toast = useCallback((m) => {
-    setToastMsg(m);
+  const toast = useCallback((text, { action } = {}) => {
+    setToastMsg({ text, action, key: Date.now() });
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setToastMsg(null), 2200);
+    timer.current = setTimeout(() => setToastMsg(null), action ? 5000 : 2400);
   }, []);
 
   const openItem = useCallback((it) => navigate(`/elemento/${it.id}`), [navigate]);
@@ -57,13 +59,32 @@ function Shell({ auth }) {
   else view = <Chat key="chat" {...common} syncMode={isSyncMode} />;
 
   // Barra in basso solo sulle due schermate principali.
-  const main = path === "/" || path === "/chiedi" || path === "/archivio";
+  const chat = path === "/" || path === "/chiedi";
+  const main = chat || path === "/archivio";
+  // L'avviso sta appena sopra la barra (e sopra il campo della chat).
+  const toastBottom = chat ? "calc(150px + env(safe-area-inset-bottom))" : main ? "calc(84px + env(safe-area-inset-bottom))" : "calc(24px + env(safe-area-inset-bottom))";
   return (
     <>
       {view}
       {main && <BottomNav path={path} navigate={navigate} />}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 top-[calc(3.5rem+max(env(safe-area-inset-top),0.75rem))] z-40 flex justify-center px-4">
-        {toastMsg && <div className="rounded-full bg-ink px-4 py-2 text-sm font-medium text-bg shadow-lg">{toastMsg}</div>}
+      <div role="status" aria-live="polite">
+        {toastMsg && (
+          <div key={toastMsg.key} className="brindisi" style={{ bottom: toastBottom }}>
+            <span>{toastMsg.text}</span>
+            {toastMsg.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  clearTimeout(timer.current);
+                  setToastMsg(null);
+                  toastMsg.action.run();
+                }}
+              >
+                {toastMsg.action.label}
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
