@@ -148,12 +148,15 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
 
-  // Filtri rapidi: categorie sempre visibili, periodo
+  // Filtri rapidi: categorie sempre visibili; il periodo sta nel pannello Filtri
   await expect(page.getByRole("button", { name: "Tutte", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Ultimi 7 giorni" })).toHaveCount(0);
+  await page.getByRole("button", { name: /Filtri/ }).click();
   await page.getByRole("button", { name: "Ultimi 7 giorni" }).click();
   await expect(page).toHaveURL(/from=/);
   await page.getByRole("button", { name: "Ultimi 7 giorni" }).click();
   await expect(page).not.toHaveURL(/from=/);
+  await page.getByRole("button", { name: /Filtri/ }).click();
 
   // Filtro per tipo
   await page.getByLabel("Cerca nell'archivio").fill("");
