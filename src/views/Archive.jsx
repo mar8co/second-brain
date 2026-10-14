@@ -78,19 +78,6 @@ export default function Archive({ archive, query, navigate, openItem }) {
           </ul>
         )}
 
-        <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Periodo">
-          {PERIODS.map(([n, label]) => {
-            const on = filters.from === daysAgo(n) && !filters.to;
-            return (
-              <li key={n}>
-                <button type="button" className={on ? "chip-on" : "chip"} aria-pressed={on} onClick={() => setParam({ from: on ? "" : daysAgo(n), to: "" })}>
-                  {label}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-
         <div className="mt-2 flex items-center gap-2">
           <button
             type="button"
@@ -127,6 +114,21 @@ export default function Archive({ archive, query, navigate, openItem }) {
               options={authors.map(([c, n]) => [c, `${c} (${n})`])} />
             <Select label="Sito" value={filters.site} onChange={(v) => setParam({ site: v })}
               options={sites.map(([c, n]) => [c, `${c} (${n})`])} />
+            <div className="col-span-2">
+              <span className="label">Periodo</span>
+              <ul className="flex flex-wrap gap-1.5" aria-label="Periodo">
+                {PERIODS.map(([n, label]) => {
+                  const on = filters.from === daysAgo(n) && !filters.to;
+                  return (
+                    <li key={n}>
+                      <button type="button" className={on ? "chip-on" : "chip"} aria-pressed={on} onClick={() => setParam({ from: on ? "" : daysAgo(n), to: "" })}>
+                        {label}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
             <div>
               <label htmlFor="f-from" className="label">Dal</label>
               <input id="f-from" type="date" className="input py-2" value={filters.from} onChange={(e) => setParam({ from: e.target.value })} />
