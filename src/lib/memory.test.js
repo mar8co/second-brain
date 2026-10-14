@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { MAX_AUTO_REREADS, needsDigest, needsReread, rereadLog, runUpkeep, STALE_MS } from "./memory.js";
+import { AI_LIMIT_PAUSE_MS, MAX_AUTO_REREADS, needsDigest, needsReread, rereadLog, rereadReason, runUpkeep, STALE_MS } from "./memory.js";
 
 const NOW = Date.parse("2026-10-14T10:00:00Z");
-const reel = { id: "r", type: "social", url: "https://www.instagram.com/reel/abc/", status: "analyzed", processed_at: "2026-10-13T13:15:05Z", extracted_text: "Ho preparato un workshop" };
+const reel = { id: "r", type: "social", url: "https://www.instagram.com/reel/abc/", author: "@mario.ai", status: "analyzed", processed_at: "2026-10-13T13:15:05Z", extracted_text: "Ho preparato un workshop" };
 
 describe("quali elementi rielaborare", () => {
   it("senza scheda o con la scheda della versione precedente", () => {
@@ -179,5 +179,80 @@ describe("letture non riuscite e limiti delle riletture", () => {
     });
     expect(how).toBe("failed");
     expect(tried.has("a")).toBe(false);
+  });
+});
+
+describe("chi ha pubblicato i post già trascritti", () => {
+  const saved = { ...reel, id: "w", author: null, ai: null };
+  const memStorage = () => {
+    const mem = new Map();
+    return { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  };
+  it("post social senza autore: una rilettura lo aggiunge; non per i post non accessibili o i link normali", () => {
+    expect(rereadReason(saved, NOW)).toBe("author");
+    expect(rereadReason({ ...saved, status: "inaccessible" }, NOW)).toBeNull();
+    expect(rereadReason({ ...saved, url: "https://example.com/articolo" }, NOW)).toBeNull();
+  });
+  it("una sola rilettura per l'autore; se non basta, la scheda dell'AI si fa comunque", async () => {
+    const log = rereadLog(memStorage());
+    const calls = [];
+    const opts = { getItems: () => [saved], isActive: () => true, log, now: () => NOW, sleep: async () => {} };
+    // Prima apertura: rilettura (che comprende la scheda), niente scheda a parte.
+    await runUpkeep({ ...opts, tried: new Set(), digest: async (it) => calls.push(`digest ${it.id}`), reread: async (it, mark) => (mark(), calls.push(`reread ${it.id}`), null) });
+    expect(calls).toEqual(["reread w"]);
+    // Apertura successiva, autore ancora assente: niente altre letture, solo la scheda.
+    await runUpkeep({ ...opts, tried: new Set(), digest: async (it) => calls.push(`digest ${it.id}`), reread: async () => calls.push("reread di troppo") });
+    expect(calls).toEqual(["reread w", "digest w"]);
+  });
+});
+
+describe("limite gratuito dell'AI durante le riletture", () => {
+  const memStorage = () => {
+    const mem = new Map();
+    return { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  };
+  const unread = (id) => ({ ...reel, id, extracted_text: null, processed_at: "2026-10-13T09:00:00Z", ai: { v: 2, summary: "x" } });
+  const limited = (it) => ({ ...it, processed_at: "2026-10-14T09:59:00Z", status_detail: "Ho letto solo la didascalia, non il contenuto: trascrizione non riuscita (Limite gratuito del servizio AI raggiunto: riprova più tardi.)." });
+
+  it("trascrizione fallita per il limite: niente altre letture di Apify per ore, il tentativo non conta", async () => {
+    const storage = memStorage();
+    let reads = 0;
+    const items = [unread("a"), unread("b")];
+    const run = (now) =>
+      runUpkeep({
+        getItems: () => items, isActive: () => true, tried: new Set(), log: rereadLog(storage), now: () => now, sleep: async () => {}, digest: async () => {},
+        reread: async (it, mark) => (mark(), (reads += 1), limited(it)),
+      });
+    expect(await run(NOW)).toBe("done");
+    expect(reads).toBe(1);
+    expect(rereadLog(storage).count("a")).toBe(0);
+    // Riapertura poco dopo: ancora in pausa.
+    await run(NOW + 60 * 60_000);
+    expect(reads).toBe(1);
+    // Dopo la pausa si riprova.
+    await run(NOW + AI_LIMIT_PAUSE_MS + 60_000);
+    expect(reads).toBe(2);
+  });
+
+  it("limite raggiunto rielaborando: le riletture aspettano", async () => {
+    const storage = memStorage();
+    let reads = 0;
+    await runUpkeep({
+      getItems: () => [{ ...reel, id: "d", ai: null }, unread("o")], isActive: () => true, tried: new Set(), log: rereadLog(storage), now: () => NOW, sleep: async () => {},
+      digest: async () => { throw Object.assign(new Error("limite"), { status: 429 }); },
+      reread: async (it, mark) => (mark(), (reads += 1), null),
+    });
+    expect(reads).toBe(0);
+    expect(rereadLog(storage).pausedUntil()).toBeGreaterThan(NOW);
+  });
+
+  it("rilettura ormai impossibile (limite per elemento raggiunto): si fa la scheda dell'AI", async () => {
+    const storage = memStorage();
+    const log = rereadLog(storage);
+    const item = { ...unread("x"), ai: null, description: "didascalia", status_detail: "Apify non risponde." };
+    for (let i = 0; i < MAX_AUTO_REREADS; i++) log.add("x");
+    const calls = [];
+    await runUpkeep({ getItems: () => [item], isActive: () => true, tried: new Set(), log, now: () => NOW, sleep: async () => {}, digest: async (it) => calls.push(`digest ${it.id}`), reread: async () => calls.push("reread") });
+    expect(calls).toEqual(["digest x"]);
   });
 });

@@ -2,8 +2,9 @@
 //  - rielabora con l'AI gli elementi senza scheda di memoria (AI non riuscita
 //    al salvataggio) o con la scheda della versione precedente;
 //  - rilegge gli elementi rimasti "in elaborazione" (lavoro interrotto), i
-//    post social salvati prima della lettura completa (solo didascalia) e
-//    quelli la cui lettura non è riuscita per un motivo momentaneo.
+//    post social salvati prima della lettura completa (solo didascalia),
+//    quelli la cui lettura non è riuscita per un motivo momentaneo e quelli
+//    letti prima che si salvasse chi li ha pubblicati.
 // Un elemento alla volta, con una pausa, per restare nei limiti gratuiti.
 
 import { DIGEST_VERSION, hasContent, withoutAiFailure } from "./enrich.js";
@@ -32,20 +33,36 @@ const time = (v) => {
 // resta da rileggere. Non i crediti di Apify esauriti: tornano solo a fine mese.
 const TEMPORARY = /Limite gratuito|sovraccaric|Errore temporaneo|Impossibile contattare|Apify non risponde|Troppi link letti insieme|Troppe richieste|troppo lentamente|tempo esaurito|Analisi non completata|Analisi non riuscita|Analisi non eseguita/i;
 
-export function needsReread(item, now = Date.now()) {
-  if (!item.url || item.file_path) return false;
-  // Lavoro interrotto senza scrivere il risultato.
-  if (item.status === "processing") return now - time(item.updated_at) > STALE_MS;
-  // Post social senza trascrizione né testo delle slide.
-  if (item.extracted_text || !isSocialLink(item.url)) return false;
-  // L'avviso di una rielaborazione dell'AI non riuscita non conta qui.
-  if (TEMPORARY.test(withoutAiFailure(item.status_detail) || "")) return true;
-  // Letti prima della trascrizione dal link: c'era solo la didascalia.
-  return Boolean(item.processed_at) && time(item.processed_at) < time(FULL_READING_SINCE);
+// Perché rileggere un elemento: "stale" (lavoro interrotto), "temporary"
+// (lettura non riuscita per poco), "old" (solo didascalia, letto prima della
+// trascrizione), "author" (manca chi l'ha pubblicato); null se non serve.
+export function rereadReason(item, now = Date.now()) {
+  if (!item.url || item.file_path) return null;
+  if (item.status === "processing") return now - time(item.updated_at) > STALE_MS ? "stale" : null;
+  if (!isSocialLink(item.url) || !item.processed_at) return null;
+  if (!item.extracted_text) {
+    // L'avviso di una rielaborazione dell'AI non riuscita non conta qui.
+    if (TEMPORARY.test(withoutAiFailure(item.status_detail) || "")) return "temporary";
+    if (time(item.processed_at) < time(FULL_READING_SINCE)) return "old";
+  }
+  // Letti prima che si salvassero autore e data: una nuova lettura li aggiunge.
+  if (!item.author && item.status !== "inaccessible") return "author";
+  return null;
 }
 
-export function needsDigest(item, now = Date.now()) {
-  if (item.status === "processing" || !hasContent(item) || needsReread(item, now)) return false;
+export const needsReread = (item, now = Date.now()) => Boolean(rereadReason(item, now));
+
+// Ogni rilettura automatica usa una lettura di Apify (crediti gratuiti
+// limitati): al massimo 3 per elemento, contate su questo dispositivo; una
+// sola per aggiungere l'autore.
+export const MAX_AUTO_REREADS = 3;
+export const rereadLimit = (reason) => (reason === "author" ? 1 : MAX_AUTO_REREADS);
+
+// `canReread(item)`: la rilettura può ancora avvenire (limiti non raggiunti).
+export function needsDigest(item, now = Date.now(), canReread = () => true) {
+  if (item.status === "processing" || !hasContent(item)) return false;
+  // La rilettura comprende la rielaborazione: si aspetta lei, se ci sarà.
+  if (needsReread(item, now) && canReread(item)) return false;
   // Link non ancora letto: la rielaborazione arriva dopo la lettura.
   if (item.url && !item.file_path && !item.processed_at) return false;
   return !item.ai || !(Number(item.ai.v) >= DIGEST_VERSION);
@@ -53,28 +70,42 @@ export function needsDigest(item, now = Date.now()) {
 
 const sleepFor = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Ogni rilettura automatica usa una lettura di Apify (crediti gratuiti
-// limitati): al massimo 3 per elemento, contate su questo dispositivo.
-export const MAX_AUTO_REREADS = 3;
 const LOG_KEY = "second-brain-rereads";
+const PAUSE_KEY = "second-brain-rereads-paused";
 
+// Limite gratuito dell'AI raggiunto (si azzera una volta al giorno): senza AI
+// una rilettura non trascrive nulla, quindi niente letture di Apify per ore.
+export const AI_LIMIT_PAUSE_MS = 6 * 60 * 60_000;
+const AI_LIMIT = /Limite gratuito/i;
+
+// Riletture fatte per elemento e pausa delle riletture, salvate nel browser.
 export function rereadLog(storage = globalThis.localStorage) {
   let data = {};
+  let pausedUntil = 0;
   try {
     const parsed = JSON.parse(storage?.getItem(LOG_KEY) || "{}");
     if (parsed && typeof parsed === "object") data = parsed;
+    pausedUntil = Number(storage?.getItem(PAUSE_KEY)) || 0;
   } catch {
     /* archivio del browser non disponibile: si conta solo in questa sessione */
   }
+  const save = (key, value) => {
+    try {
+      storage?.setItem(key, value);
+    } catch {
+      /* come sopra */
+    }
+  };
   return {
     count: (id) => Number(data[id]) || 0,
-    add(id) {
-      data[id] = (Number(data[id]) || 0) + 1;
-      try {
-        storage?.setItem(LOG_KEY, JSON.stringify(data));
-      } catch {
-        /* come sopra */
-      }
+    add(id, n = 1) {
+      data[id] = Math.max(0, (Number(data[id]) || 0) + n);
+      save(LOG_KEY, JSON.stringify(data));
+    },
+    pausedUntil: () => pausedUntil,
+    pause(until) {
+      pausedUntil = until;
+      save(PAUSE_KEY, String(until));
     },
   };
 }
@@ -86,9 +117,19 @@ export function rereadLog(storage = globalThis.localStorage) {
 export async function runUpkeep({ getItems, digest, reread, isActive, tried, log = rereadLog(null), now = Date.now, sleep = sleepFor, gapMs = 6000, maxRereads = 5 }) {
   let failures = 0;
   let rereads = 0;
+  const canReread = (it) => {
+    const reason = rereadReason(it, now());
+    return Boolean(reason) && !tried.has(it.id) && log.count(it.id) < rereadLimit(reason);
+  };
+  const pauseRereads = (ms) => log.pause(Math.max(log.pausedUntil(), now() + ms));
   while (isActive()) {
     const items = getItems();
-    const next = items.find((it) => !tried.has(it.id) && needsDigest(it, now()));
+    // Riletture sospese dopo il limite dell'AI, anche tra un'apertura e l'altra
+    // (una pausa più lunga del massimo viene ignorata).
+    const until = log.pausedUntil();
+    const rereadsOn = rereads < maxRereads && !(until > now() && until - now() <= AI_LIMIT_PAUSE_MS);
+    const willReread = (it) => rereadsOn && canReread(it);
+    const next = items.find((it) => !tried.has(it.id) && needsDigest(it, now(), willReread));
     if (next) {
       tried.add(next.id);
       try {
@@ -102,13 +143,15 @@ export async function runUpkeep({ getItems, digest, reread, isActive, tried, log
         // rielaborare, anche dopo la pausa per errori ripetuti.
         const transient = e?.status === 0 || e?.status === 429 || e?.status === 503;
         if (transient) tried.delete(next.id);
+        // Limite dell'AI: anche le riletture aspettano (userebbero Apify per niente).
+        if (e?.status === 429) pauseRereads(60 * 60_000);
         if (failures >= 3) return "failed";
         if (transient) await sleep(60_000);
       }
       await sleep(gapMs);
       continue;
     }
-    const old = rereads < maxRereads && items.find((it) => !tried.has(it.id) && log.count(it.id) < MAX_AUTO_REREADS && needsReread(it, now()));
+    const old = rereadsOn && items.find(canReread);
     if (!old) return "done";
     tried.add(old.id);
     rereads += 1;
@@ -117,6 +160,13 @@ export async function runUpkeep({ getItems, digest, reread, isActive, tried, log
     // rileggere (Apify o AI non disponibili) si smette di spendere letture.
     const after = await reread(old, () => log.add(old.id)).catch(() => old);
     if (after && needsReread(after, now())) {
+      // Limite gratuito dell'AI: la lettura di Apify è andata sprecata. Il
+      // tentativo non conta per l'elemento e le riletture si fermano per ore.
+      if (after !== old && AI_LIMIT.test(withoutAiFailure(after.status_detail) || "")) {
+        log.add(old.id, -1);
+        pauseRereads(AI_LIMIT_PAUSE_MS);
+        continue;
+      }
       failures += 1;
       if (failures >= 2) return "failed";
     } else failures = 0;

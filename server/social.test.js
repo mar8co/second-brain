@@ -817,6 +817,20 @@ describe("lettura dall'app in background (modalità sincronizzata)", () => {
     expect(patch.ai.applied).toBeUndefined();
   });
 
+  it("rilettura automatica di un elemento con categorie assegnate dall'AI: il segno resta, nessuna nuova categoria", async () => {
+    const db = fakeDb({ id: ID, url: "https://www.instagram.com/reel/C9abc/", categories: ["Ricette"], tags: ["pasta"], ai: { summary: "vecchia", categories: ["Ricette"], tags: ["pasta"], applied: true, generated_at: "2026-10-12T10:00:00Z" } });
+    const net = fakeNet({
+      apify: [{ type: "Video", caption: "Carbonara", videoUrl: "https://cdn.test/v.mp4" }],
+      media: { "https://cdn.test/v.mp4": bytes(10, "video/mp4") },
+      gemini: (body) => geminiReply(body.contents[0].parts.some((p) => p.inline_data) ? { title: "T", transcript: "Testo.", slides: [] } : { summary: "Ricetta.", categories: ["Ricette", "Primi"], tags: ["carbonara"] }),
+    });
+    await handleRead({ authHeader, body: { url: "https://www.instagram.com/reel/C9abc/", id: ID, ai: true, apply: false }, env: envAuth, fetchImpl: net.fetchImpl, db });
+    const patch = db.writes[0].patch;
+    expect(patch.ai).toMatchObject({ v: 2, applied: true });
+    expect(patch).not.toHaveProperty("categories");
+    expect(patch).not.toHaveProperty("tags");
+  });
+
   it("AI automatica disattivata: nessuna classificazione", async () => {
     const db = fakeDb({ id: ID, url: "https://www.instagram.com/reel/C9abc/", categories: [], tags: [] });
     const net = fakeNet({ apify: [{ type: "Video", caption: "Carbonara", videoUrl: "https://cdn.test/v.mp4" }], media: { "https://cdn.test/v.mp4": bytes(10, "video/mp4") }, gemini: { title: "T", transcript: "Testo.", slides: [] } });

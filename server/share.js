@@ -126,7 +126,9 @@ async function withAi({ item, patch, known, env, fetchImpl, deadline, apply = tr
       // Scheda di memoria dell'AI (riassunto, punti chiave, persone, parole
       // chiave). Salvataggio senza app: le categorie e i tag dell'AI vengono
       // assegnati subito (resta traccia in `ai.applied`, la scheda lo dice).
-      patch.ai = aiFromDigest(r, { applied: apply });
+      // Riletture automatiche (apply=false): resta il segno "assegnati dall'AI"
+      // se le categorie e i tag attuali li aveva già scelti lei.
+      patch.ai = aiFromDigest(r, { applied: apply || Boolean(item.ai?.applied) });
       if (apply) {
         patch.categories = cleanList([...(cur.categories || []), ...r.categories], 10);
         patch.tags = cleanList([...(cur.tags || []), ...r.tags]).map((t) => t.toLowerCase());

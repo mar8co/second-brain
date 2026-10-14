@@ -186,7 +186,9 @@ export function useArchive(store, { ai }) {
         if (!needsReread(fresh)) return null;
         markAttempt();
         // Categorie e tag dell'AI assegnati solo se l'elemento non ne ha mai avuti.
-        return runProcess(fresh, { apply: !fresh.ai });
+        const out = await runProcess(fresh, { apply: !fresh.ai });
+        // Errore imprevisto: conta come rilettura non riuscita.
+        return out ?? item;
       },
     })
       .then((how) => {

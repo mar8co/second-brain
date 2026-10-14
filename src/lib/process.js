@@ -103,7 +103,7 @@ export async function processItem(item, { store, onUpdate, ai, categories = [], 
   }
   if (ai && hasContent(cur)) {
     try {
-      cur = await classifyItem(cur, { store, categories, apply });
+      cur = await classifyItem(cur, { store, categories, apply, keepApplied: true });
       onUpdate(cur);
     } catch {
       /* le proposte AI sono facoltative: l'elemento resta valido senza */

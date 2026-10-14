@@ -7,9 +7,9 @@ export const TRANSCRIPT_SOURCE = "trascrizione incollata da te";
 
 export function extractionPatch(item, r) {
   const patch = {
-    final_url: r.finalUrl || null,
-    site_name: r.siteName || null,
-    image_url: r.image || null,
+    final_url: r.finalUrl || item.final_url || null,
+    site_name: r.siteName || item.site_name || null,
+    image_url: r.image || item.image_url || null,
     extracted_text: r.text || null,
     text_source: r.textSource || null,
     status: r.status,
@@ -20,6 +20,13 @@ export function extractionPatch(item, r) {
   if (item.text_source === TRANSCRIPT_SOURCE) {
     delete patch.extracted_text;
     delete patch.text_source;
+  } else if (!r.text && item.extracted_text) {
+    // Nuova lettura senza testo (trascrizione non riuscita, post non più
+    // leggibile): resta il testo letto prima, e la scheda lo dice.
+    delete patch.extracted_text;
+    delete patch.text_source;
+    patch.status = "partial";
+    patch.status_detail = `Nuova lettura non completa, resta il testo letto in precedenza${r.detail ? `: ${r.detail}` : "."}`;
   }
   // Mai sovrascrivere titolo e descrizione inseriti a mano.
   if (!item.title && r.title) patch.title = r.title;
@@ -56,7 +63,8 @@ export function rebasePatch(fresh, before, patch) {
       delete out.ai;
       delete out.categories;
       delete out.tags;
-    } else if (out.ai.applied) {
+    } else if (out.ai.applied && "categories" in out) {
+      // Solo se la patch assegna categorie e tag (non nelle riletture automatiche).
       out.categories = cleanList([...(fresh.categories || []), ...(out.ai.categories || [])], 10);
       out.tags = cleanList([...(fresh.tags || []), ...(out.ai.tags || [])]).map((t) => t.toLowerCase());
     }

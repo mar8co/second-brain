@@ -161,7 +161,7 @@ Tabella `items` (vedi `supabase/schema.sql`; la modalità locale usa la stessa f
 ## Privacy e sicurezza
 
 - **Dove stanno i dati:** sul tuo progetto Supabase (database e file privati) oppure, in modalità locale, solo nel browser.
-- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; i link dei social (solo l'indirizzo del post) vanno ad Apify, se configurato; con l'AI attiva, titolo, note, estratti e i media da trascrivere vengono inviati a Google Gemini. Nient'altro.
+- **Cosa esce verso servizi esterni:** per leggere un link, il server Vercel apre quell'indirizzo; i link dei social (solo l'indirizzo del post) vanno ad Apify, se configurato; con l'AI attiva, titolo, note, estratti e i media da trascrivere vengono inviati a Google Gemini, e ogni domanda nella chat invia la scheda breve di tutti gli elementi salvati (compreso l'inizio delle note). Nient'altro.
 - **Chiavi:** nessuna chiave segreta nel client o nel repository. Nel bundle ci sono solo URL e chiave anon di Supabase, che senza login non danno accesso a nulla (RLS).
 - **Endpoint protetti:** `/api/extract` e `/api/ai` richiedono il token di sessione Supabase valido (401 altrimenti); facoltativamente solo per le email in `ALLOWED_EMAILS`.
 - **Lettura dei link sicura:** solo http/https su porte standard, nessun indirizzo privato o locale (controllato a ogni redirect), timeout di 8 secondi, massimo 2 MB letti. Limite noto: un dominio potrebbe cambiare IP tra il controllo e la connessione (DNS rebinding); con endpoint dietro login è un rischio accettabile per un'app personale.

@@ -156,6 +156,15 @@ describe("dati del post letti dalla fonte", () => {
     const r = { title: "Workshop IA", author: "Mario Rossi (@mario.ai)", publishedAt: "2026-09-10T08:00:00.000Z", place: { name: "Talent Garden", lat: null, lng: null }, status: "analyzed" };
     expect(extractionPatch({}, r)).toMatchObject({ title: "Workshop IA", author: "Mario Rossi (@mario.ai)", published_at: "2026-09-10T08:00:00.000Z", place: { name: "Talent Garden" } });
     expect(extractionPatch({ place: { name: "Mio posto" } }, r)).not.toHaveProperty("place");
+    // Nuova lettura senza testo: resta quello letto prima, con immagine e sito.
+    const kept = extractionPatch(
+      { extracted_text: "Trascrizione di prima", text_source: "trascrizione dell'AI (video)", image_url: "https://cdn.test/c.jpg", site_name: "Instagram" },
+      { text: null, status: "partial", detail: "Ho letto solo la didascalia, non il contenuto: trascrizione non riuscita (Apify non risponde)." },
+    );
+    expect(kept).not.toHaveProperty("extracted_text");
+    expect(kept).not.toHaveProperty("text_source");
+    expect(kept).toMatchObject({ status: "partial", image_url: "https://cdn.test/c.jpg", site_name: "Instagram" });
+    expect(kept.status_detail).toMatch(/^Nuova lettura non completa, resta il testo letto in precedenza: Ho letto solo/);
     // Luogo di un post senza titolo: non diventa il titolo (una nuova lettura potrà darne uno).
     expect(extractionPatch({}, { place: { name: "Talent Garden", lat: null, lng: null }, status: "partial" })).not.toHaveProperty("title");
     // Link delle mappe: il nome del posto resta il titolo.
@@ -190,5 +199,22 @@ describe("riletture automatiche e cambiamenti durante l'AI", () => {
       expect(out).toBe(now);
     }
     expect(store.updates).toEqual([]);
+  });
+});
+
+describe("rilettura automatica in modalità locale", () => {
+  it("categorie assegnate dall'AI: il segno resta, nessuna nuova categoria", async () => {
+    extract.mockResolvedValueOnce({ title: "Pagina", status: "analyzed", text: "testo" });
+    classify.mockResolvedValueOnce({ summary: "s", points: [], entities: [], keywords: [], categories: ["Nuova"], tags: ["nuovo"] });
+    const local = fakeStore("local", []);
+    const old = { ...item, categories: ["Mia"], ai: { summary: "vecchia", categories: ["Mia"], applied: true } };
+    local.update = async function (id, patch) {
+      this.updates.push(patch);
+      return { ...old, ...patch };
+    };
+    await processItem(old, { store: local, onUpdate: () => {}, ai: true, categories: [], apply: false });
+    const last = local.updates.at(-1);
+    expect(last).not.toHaveProperty("categories");
+    expect(last.ai).toMatchObject({ applied: true, categories: ["Nuova"] });
   });
 });
