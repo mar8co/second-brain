@@ -12,7 +12,7 @@
 // trucchi; le inferenze dell'AI restano nel campo `ai`, marcate come tali.
 
 import { createClient } from "@supabase/supabase-js";
-import { detectType, extractUrl } from "../src/lib/detect.js";
+import { detectType, extractUrl, extractUrls } from "../src/lib/detect.js";
 import { extractionPatch, hasContent, aiPayload, aiFromDigest, rebasePatch } from "../src/lib/enrich.js";
 import { cleanList, sanitizeItem } from "../src/lib/item.js";
 import { aiConfigured, classifyWithAi } from "./ai.js";
@@ -20,6 +20,9 @@ import { checkMedia, readStoredFile, transcribeFiles } from "./media.js";
 import { readLink, socialTarget } from "./social.js";
 
 const MAX_TEXT = 5000;
+// Molti link inoltrati insieme: oltre questo numero il resto si scarta (tempo della funzione).
+export const MAX_LINKS = 15;
+const MANY_TEXT = 20000;
 
 // Accesso al database tramite due funzioni SQL (supabase/schema.sql) che
 // verificano il token: la chiave pubblica basta, nessuna chiave di servizio.
@@ -192,6 +195,8 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
   if (!media && typeof raw === "string" && looksLikeFileName(raw)) {
     return { status: 400, json: { error: "Il Comando ha inviato solo il nome del file, non la foto o il video: non salvo nulla. Per foto, video e file apri l'app → Chat → tondo + → Foto, video o file." } };
   }
+  const urls = !media && typeof raw === "string" ? extractUrls(raw.slice(0, MANY_TEXT)) : [];
+  if (urls.length >= 2) return shareMany({ token, urls, env, waitUntil, db, fetchImpl });
   const item = media ? itemFromMedia(media.kind, typeof raw === "string" ? raw : "") : itemFromShared(typeof raw === "string" ? raw : "");
   if (!item) return { status: 400, json: { error: "Niente da salvare: il Comando non ha inviato testo o link." } };
 
@@ -204,6 +209,7 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
     return { status: 502, json: { error: "Salvataggio non riuscito: riprova." } };
   }
   const id = saved?.id;
+  if (saved?.duplicate) return { status: 200, json: { ok: true, id, duplicate: true, message: "Questo link era già in Second Brain: non l'ho salvato di nuovo." } };
   const known = Array.isArray(saved?.categories) ? saved.categories : [];
 
   // Scrive il risultato. Se intanto l'utente ha modificato l'elemento
@@ -244,4 +250,62 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
         : "Link salvato in Second Brain: lo analizzo in background."
       : "Nota salvata in Second Brain.";
   return { status: 200, json: { ok: true, id, message } };
+}
+
+// Più link nello stesso invio (es. "seleziona tutti" in WhatsApp): ognuno salvato
+// a parte, i doppioni (già nell'archivio o ripetuti) scartati. La lettura e l'AI
+// proseguono dopo la risposta, a gruppi di 3 per restare nei tempi della funzione.
+async function shareMany({ token, urls, env, waitUntil, db, fetchImpl }) {
+  const store = db || supabaseShareDb(env);
+  const list = urls.slice(0, MAX_LINKS);
+  const skipped = urls.length - list.length;
+  const created = [];
+  let duplicates = 0;
+  let failed = 0;
+  let known = [];
+  for (const url of list) {
+    const item = { type: detectType(url), url, note: null, status: "processing", status_detail: null };
+    try {
+      const saved = await store.save(token, item);
+      if (saved?.duplicate) duplicates += 1;
+      else {
+        created.push({ id: saved?.id, item });
+        if (Array.isArray(saved?.categories)) known = saved.categories;
+      }
+    } catch (e) {
+      if (e.invalidToken) return { status: 401, json: { error: "Codice non valido o revocato: creane uno nuovo in Impostazioni." } };
+      failed += 1;
+    }
+  }
+  const deadline = Date.now() + 250_000;
+  const run = async ({ id, item }) => {
+    const before = { ...item, description: null, categories: [], tags: [], ai: null };
+    try {
+      const patch = await enrichShared({ item, known, env, fetchImpl, deadline });
+      let fresh;
+      try {
+        fresh = store.get ? await store.get(token, id) : before;
+      } catch {
+        fresh = before;
+      }
+      const next = rebasePatch(fresh, before, patch);
+      if (next && Object.keys(next).length) await store.update(token, id, sanitizeItem(next));
+    } catch (e) {
+      console.warn("share: elaborazione non riuscita", e?.message);
+    }
+  };
+  const job = (async () => {
+    const queue = [...created];
+    await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
+      for (let it = queue.shift(); it; it = queue.shift()) await run(it);
+    }));
+  })();
+  if (waitUntil) waitUntil(job);
+  else await job;
+
+  const parts = [`${created.length} ${created.length === 1 ? "link salvato" : "link salvati"}`];
+  if (duplicates) parts.push(`${duplicates} già present${duplicates === 1 ? "e" : "i"}`);
+  if (skipped) parts.push(`${skipped} oltre il limite di ${MAX_LINKS}: reinviali dopo`);
+  if (failed) parts.push(`${failed} non salvat${failed === 1 ? "o" : "i"}: riprova`);
+  return { status: 200, json: { ok: true, saved: created.length, duplicates, skipped, failed, message: `${parts.join(", ")}. Li leggo in background.` } };
 }

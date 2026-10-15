@@ -511,6 +511,31 @@ describe("salvataggio da Comandi Rapidi (/api/share)", () => {
     expect(itemFromShared("   ")).toBeNull();
   });
 
+  it("più link nello stesso invio: salvati uno per uno, doppioni scartati", async () => {
+    const db = fakeDb();
+    const seen = new Set(["https://gia.it/presente"]);
+    db.save = async (token, item) => {
+      db.calls.save.push(item);
+      if (seen.has(item.url)) return { id: "dup", duplicate: true, categories: [] };
+      seen.add(item.url);
+      return { id: `id-${db.calls.save.length}`, categories: [] };
+    };
+    const text = "https://a.it/uno\nhttps://www.a.it/uno/\nhttps://gia.it/presente\nhttps://b.it/due";
+    const r = await handleShare({ body: { token: TOKEN, text, format: "json" }, env, db, fetchImpl: async () => new Response("<title>x</title>", { status: 200, headers: { "content-type": "text/html" } }) });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ saved: 2, duplicates: 1, skipped: 0 });
+    expect(db.calls.save.map((i) => i.url)).toEqual(["https://a.it/uno", "https://gia.it/presente", "https://b.it/due"]);
+    expect(r.json.message).toMatch(/2 link salvati, 1 già presente/);
+  });
+
+  it("un solo link già salvato → non lo duplica", async () => {
+    const db = fakeDb();
+    db.save = async () => ({ id: "dup", duplicate: true, categories: [] });
+    const r = await handleShare({ body: { token: TOKEN, text: "https://a.it/x", format: "json" }, env, db });
+    expect(r.json).toMatchObject({ duplicate: true });
+    expect(db.calls.update).toHaveLength(0);
+  });
+
   it("codice mancante o sbagliato → 401 con testo leggibile", async () => {
     const db = fakeDb();
     const r = await handleShare({ body: { text: "https://example.com" }, env, db });
