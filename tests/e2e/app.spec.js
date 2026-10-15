@@ -694,27 +694,31 @@ test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il cam
   expect(await composer.evaluate((el) => el.style.transform)).toBe("");
 });
 
-test("barra: il tondo + a destra apre un menu con Foto, File e Aggiungi manualmente; una foto si salva subito", async ({ page }) => {
-  await page.goto("/archivio");
-  const nav = await page.getByRole("navigation", { name: "Navigazione principale" }).boundingBox();
+test("chat: il tondo + accanto al campo apre Foto, File e Aggiungi manualmente; una foto si salva subito", async ({ page }) => {
+  await page.goto("/");
   const piu = page.getByRole("button", { name: "Foto, file o nota" });
+  const campo = await page.getByRole("textbox", { name: "Chiedi alla tua memoria" }).boundingBox();
   const pb = await piu.boundingBox();
-  expect(pb.x).toBeGreaterThan(nav.x + nav.width);
+  expect(pb.x + pb.width).toBeLessThanOrEqual(campo.x + 1);
+  // Non c'è più nella barra in basso.
+  await expect(page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("button")).toHaveCount(0);
   await piu.click();
   await expect(page.getByRole("menuitem")).toHaveText(["Foto", "File", "Aggiungi manualmente"]);
-  // Un tocco fuori chiude il menu senza attivare quello che sta sotto (la barra).
-  const chat = await page.getByRole("link", { name: "Chat", exact: true }).boundingBox();
-  await page.mouse.click(chat.x + chat.width / 2, chat.y + chat.height / 2);
+  // Un tocco fuori (anche sopra la barra) chiude il menu senza attivare quello che sta sotto.
+  const arch = await page.getByRole("link", { name: "Archivio", exact: true }).boundingBox();
+  await page.mouse.click(arch.x + arch.width / 2, arch.y + arch.height / 2);
   await expect(page.getByRole("menu")).toHaveCount(0);
-  await expect(page).toHaveURL(/\/archivio$/);
+  await expect(page).toHaveURL(/\/$/);
   // Foto: si sceglie dalla libreria e finisce nell'archivio.
   await piu.click();
   const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto" }).click()]);
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await chooser.setFiles({ name: "schermata.png", mimeType: "image/png", buffer: png });
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
+  await page.getByRole("link", { name: "Archivio", exact: true }).click();
   await expect(page.getByText("schermata.png").first()).toBeVisible();
   // Aggiungi manualmente porta alla pagina Aggiungi.
+  await page.goto("/");
   await piu.click();
   await page.getByRole("menuitem", { name: "Aggiungi manualmente" }).click();
   await expect(page).toHaveURL(/\/aggiungi$/);
