@@ -59,7 +59,7 @@ function Shell({ auth }) {
   const m = path.match(/^\/elemento\/([\w-]+)$/);
   if (m) view = <Detail key={m[1]} id={m[1]} store={store} {...common} />;
   else if (path === "/aggiungi") view = <Add {...common} />;
-  else if (path === "/archivio") view = <Archive {...common} />;
+  else if (path === "/archivio") view = <Archive store={store} {...common} />;
   else if (path === "/impostazioni")
     view = (
       <Settings {...common} syncMode={isSyncMode} session={auth.session} signOut={auth.signOut} aiStatus={aiStatus} settings={settings} setSettings={setSettings} />

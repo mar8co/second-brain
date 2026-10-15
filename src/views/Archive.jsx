@@ -1,7 +1,7 @@
 // Archivio: ricerca testuale istantanea + filtri per tipo, periodo, sito, autore, categoria.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
+import { CalendarDays, ChevronLeft, Images, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
 import { Page } from "../components/Layout.jsx";
 import Calendario from "../components/Calendario.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -9,7 +9,8 @@ import { PAGE } from "../lib/colors.js";
 import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, RestaurantList } from "../components/Spots.jsx";
-import { eventsOf, manualStreetPatches, restaurantsOf } from "../lib/spots.js";
+import Gallery from "../components/Gallery.jsx";
+import { eventsOf, manualStreetPatches, mediaOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
@@ -28,7 +29,7 @@ function readVista() {
   }
 }
 
-export default function Archive({ archive, query, navigate, openItem }) {
+export default function Archive({ archive, store, query, navigate, openItem }) {
   const { items, loading, error, reload } = archive;
   const q = query.get("q") || "";
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, query.get(k) || ""]));
@@ -47,7 +48,7 @@ export default function Archive({ archive, query, navigate, openItem }) {
   const [open, setOpen] = useState(shown.length > 0);
   // Box fissi Ristoranti ed Eventi (solo a box): quale è aperto.
   const sezioneParam = query.get("sezione");
-  const sezione = vista === "box" && (sezioneParam === "ristoranti" || sezioneParam === "eventi") ? sezioneParam : "";
+  const sezione = vista === "box" && (sezioneParam === "ristoranti" || sezioneParam === "eventi" || sezioneParam === "foto") ? sezioneParam : "";
   usePageColor(PAGE.archive);
   // Aperto il box Ristoranti, si cerca la via dei locali che hanno solo la città.
   useStreets(archive, sezione === "ristoranti");
@@ -86,10 +87,12 @@ export default function Archive({ archive, query, navigate, openItem }) {
   const boxes = useMemo(() => groupByCategory(matches), [matches]);
   const restaurants = useMemo(() => restaurantsOf(matches), [matches]);
   const events = useMemo(() => eventsOf(matches), [matches]);
+  const media = useMemo(() => mediaOf(matches), [matches]);
   const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
   const special = [
     { key: "ristoranti", name: "Ristoranti", Icon: Utensils, color: "var(--arancio)", sub: restaurants.length ? `${restaurants.length} ${restaurants.length === 1 ? "locale" : "locali"}` : "Ancora nessuno" },
     { key: "eventi", name: "Eventi", Icon: CalendarDays, color: "var(--verde)", sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : `${eventsTotal} ${eventsTotal === 1 ? "evento" : "eventi"}` },
+    { key: "foto", name: "Foto e video", Icon: Images, color: "var(--blu)", sub: media.length ? `${media.length} file` : "Ancora nessuno" },
   ];
   const cats = useMemo(() => countBy(items, "categories"), [items]);
   const authors = useMemo(() => countValues(items, "author"), [items]);
@@ -108,11 +111,13 @@ export default function Archive({ archive, query, navigate, openItem }) {
       {chips.length > 0 && <span className="conta num" aria-hidden="true">{chips.length}</span>}
     </button>
   );
-  const titolo = sezione ? (sezione === "ristoranti" ? "Ristoranti" : "Eventi") : dentro ? filters.category : "Archivio";
+  const titolo = sezione ? (sezione === "ristoranti" ? "Ristoranti" : sezione === "foto" ? "Foto e video" : "Eventi") : dentro ? filters.category : "Archivio";
   const indietro = sezione ? () => closeBox({ sezione: "" }) : dentro ? () => closeBox({ category: "" }) : null;
   const conteggio = sezione
     ? sezione === "ristoranti"
       ? restaurants.length === 1 ? "1 locale" : `${restaurants.length} locali`
+      : sezione === "foto"
+      ? media.length === 1 ? "1 file" : `${media.length} file`
       : eventsTotal === 1 ? "1 evento" : `${eventsTotal} eventi`
     : vista === "box" && !filters.category
       ? boxes.length === 1 ? "1 categoria" : `${boxes.length} categorie`
@@ -227,7 +232,13 @@ export default function Archive({ archive, query, navigate, openItem }) {
           <Spinner />
         ) : sezione ? (
           <>
-            {sezione === "ristoranti" ? <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} /> : <EventList events={events} onOpen={openItem} />}
+            {sezione === "ristoranti" ? (
+              <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} />
+            ) : sezione === "foto" ? (
+              <FotoBox items={media} store={store} onOpen={openItem} />
+            ) : (
+              <EventList events={events} onOpen={openItem} />
+            )}
           </>
         ) : results.length === 0 ? (
           items.length === 0 ? (
@@ -341,5 +352,32 @@ function Periodo({ from, to, onChange }) {
         </div>
       )}
     </div>
+  );
+}
+
+// Box Foto e video: galleria, con le categorie dell'AI come filtro rapido.
+function FotoBox({ items, store, onOpen }) {
+  const [cat, setCat] = useState("");
+  const cats = countBy(items, "categories");
+  const list = cat ? items.filter((it) => (it.categories || []).includes(cat)) : items;
+  if (!items.length) return <EmptyState title="Ancora nessuna foto">Dal tondo + nella Chat salvi foto, screenshot e video: li trovi qui.</EmptyState>;
+  return (
+    <>
+      {cats.length > 1 && (
+        <ul className="fila-chip mt-3.5" aria-label="Categorie delle foto">
+          <li className="shrink-0">
+            <button type="button" className={`pillola${cat ? "" : " attiva"}`} aria-pressed={!cat} onClick={() => setCat("")}>Tutte</button>
+          </li>
+          {cats.map(([c, n]) => (
+            <li key={c} className="shrink-0">
+              <button type="button" className={`pillola${cat === c ? " attiva" : ""}`} aria-pressed={cat === c} onClick={() => setCat(cat === c ? "" : c)}>
+                {c} <span className="num opacity-60">{n}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Gallery items={list} store={store} onOpen={onOpen} />
+    </>
   );
 }

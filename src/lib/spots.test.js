@@ -183,3 +183,16 @@ describe("via scritta a mano", () => {
     expect(carryStreets([{ name: "Nuovo", kind: "ristorante" }], manual)[0]).toEqual({ name: "Nuovo", kind: "ristorante" });
   });
 });
+
+import { mediaOf } from "./spots.js";
+describe("mediaOf", () => {
+  it("tiene solo foto e video salvati come file", () => {
+    const items = [
+      { id: 1, file_path: "a", file_mime: "image/jpeg" },
+      { id: 2, file_path: "b", file_mime: "video/mp4" },
+      { id: 3, file_path: "c", file_mime: "application/pdf" },
+      { id: 4, image_url: "https://x/y.jpg" },
+    ];
+    expect(mediaOf(items).map((i) => i.id)).toEqual([1, 2]);
+  });
+});
