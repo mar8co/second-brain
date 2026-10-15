@@ -41,7 +41,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
-  usePageColor(PAGE.add, { pieno: false });
+  usePageColor(PAGE.add);
 
   const cleanUrl = extractUrl(url);
   const autoType =

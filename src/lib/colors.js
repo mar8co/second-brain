@@ -5,7 +5,7 @@ export const PAGE = {
   chat: "var(--rosa)",
   archive: "#ffffff",
   settings: "var(--giallo)",
-  add: "var(--carta)",
+  add: "#efede8", // grigio chiaro fisso, anche col tema scuro del telefono
 };
 
 export const ITEM_COLORS = ["var(--giallo)", "var(--grigio)", "var(--verde)", "#ffffff", "var(--arancio)", "var(--sabbia)", "var(--rosa)"];
