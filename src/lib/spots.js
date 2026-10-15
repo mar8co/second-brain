@@ -162,7 +162,7 @@ export function formatEventDate(date, end, today = todayISO()) {
   return end ? `${one(date)} – ${one(end)}` : one(date);
 }
 
-// Foto e video salvati come file (le copertine dei link restano nelle categorie).
-export function mediaOf(items) {
-  return (items || []).filter((it) => it.file_path && /^(image|video)\//.test(it.file_mime || ""));
+// Repository: tutto ciò che è stato caricato come file (foto, video, documenti).
+export function filesOf(items) {
+  return (items || []).filter((it) => it.file_path);
 }
