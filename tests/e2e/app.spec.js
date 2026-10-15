@@ -869,8 +869,11 @@ test("chat: salendo compare la freccetta per tornare in basso", async ({ page })
     await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
   }
   const freccia = page.getByRole("button", { name: "Vai all'ultimo messaggio" });
+  // Si aspetta che i riposizionamenti automatici dopo l'invio siano finiti.
+  await page.waitForTimeout(1000);
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(freccia).toBeVisible();
-  await freccia.click();
+  await freccia.dispatchEvent("click");
   await expect(freccia).toBeHidden();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.scrollY - window.innerHeight)).toBeLessThan(60);
 });
