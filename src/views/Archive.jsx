@@ -10,6 +10,7 @@ import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, RestaurantList } from "../components/Spots.jsx";
 import { eventsOf, restaurantsOf } from "../lib/spots.js";
+import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
 import { TYPES } from "../lib/constants.js";
@@ -48,6 +49,8 @@ export default function Archive({ archive, query, navigate, openItem }) {
   const sezioneParam = query.get("sezione");
   const sezione = vista === "box" && (sezioneParam === "ristoranti" || sezioneParam === "eventi") ? sezioneParam : "";
   usePageColor(PAGE.archive);
+  // Aperto il box Ristoranti, si cerca la via dei locali che hanno solo la città.
+  useStreets(archive, sezione === "ristoranti");
 
   const setParam = (patch) => {
     const p = new URLSearchParams(query);
@@ -55,6 +58,17 @@ export default function Archive({ archive, query, navigate, openItem }) {
     const s = p.toString();
     navigate(`/archivio${s ? `?${s}` : ""}`, { replace: true });
   };
+
+  // Entrare in un box (categoria, Ristoranti, Eventi) aggiunge una pagina alla
+  // cronologia: lo swipe indietro dell'iPhone torna alle categorie, non esce
+  // dall'Archivio. "Categorie" fa lo stesso passo indietro.
+  const openBox = (patch) => {
+    const p = new URLSearchParams(query);
+    for (const [k, v] of Object.entries(patch)) (v ? p.set(k, v) : p.delete(k));
+    const qs = p.toString();
+    navigate(`/archivio${qs ? `?${qs}` : ""}`, { state: { box: true } });
+  };
+  const closeBox = (patch) => (window.history.state?.box ? window.history.back() : setParam(patch));
 
   const results = useMemo(() => searchItems(items, q, filters), [items, q, filters.type, filters.category, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
   // Per i box: i risultati di ricerca e filtri, ma senza il filtro Categoria.
@@ -79,7 +93,7 @@ export default function Archive({ archive, query, navigate, openItem }) {
   // Dentro un box il titolo della pagina è il nome del box.
   const dentro = vista === "box" && filters.category;
   const titolo = sezione ? (sezione === "ristoranti" ? "Ristoranti" : "Eventi") : dentro ? filters.category : "Archivio";
-  const indietro = sezione ? () => setParam({ sezione: "" }) : dentro ? () => setParam({ category: "" }) : null;
+  const indietro = sezione ? () => closeBox({ sezione: "" }) : dentro ? () => closeBox({ category: "" }) : null;
   const conteggio = sezione
     ? sezione === "ristoranti"
       ? restaurants.length === 1 ? "1 locale" : `${restaurants.length} locali`
@@ -227,7 +241,7 @@ export default function Archive({ archive, query, navigate, openItem }) {
             ) : filters.category ? (
               <ItemGrid items={results} onOpen={openItem} />
             ) : (
-              <CategoryBoxes boxes={boxes} onOpen={(c) => setParam({ category: c })} special={special} onSpecial={(k) => setParam({ sezione: k })} />
+              <CategoryBoxes boxes={boxes} onOpen={(c) => openBox({ category: c })} special={special} onSpecial={(k) => openBox({ sezione: k })} />
             )}
           </>
         )}

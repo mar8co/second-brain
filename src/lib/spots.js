@@ -21,6 +21,33 @@ export function hasStreet(address) {
   return STREET.test(text(address));
 }
 
+// Locali di cui cercare la via: quelli senza via nell'indirizzo, mai cercati.
+// [{ name, address, targets: [{ id, index }] }]; lo stesso locale citato in più
+// contenuti si cerca una volta e il risultato va a tutti.
+export function streetQueue(items) {
+  const m = new Map();
+  for (const item of items) {
+    const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
+    places.forEach((p, index) => {
+      if (!p || p.kind !== "ristorante" || !text(p.name) || hasStreet(p.address) || text(p.street) || p.geo_at) return;
+      const key = normalize(p.name);
+      const e = m.get(key) || { name: text(p.name), address: text(p.address), targets: [] };
+      e.targets.push({ id: item.id, index, name: text(p.name) });
+      m.set(key, e);
+    });
+  }
+  return [...m.values()];
+}
+
+// Modifica da salvare nell'elemento con il risultato (found = { street } o null):
+// il locale è segnato come già cercato, così non si chiede di nuovo.
+export function streetPatch(item, index, name, found, now = new Date()) {
+  const places = item.ai?.places;
+  if (!Array.isArray(places) || text(places[index]?.name) !== name) return null;
+  const next = places.map((p, i) => (i === index ? { ...p, ...(found?.street ? { street: found.street } : {}), geo_at: now.toISOString() } : p));
+  return { ai: { ...item.ai, places: next } };
+}
+
 // Oggi nel fuso del telefono, come AAAA-MM-GG.
 export function todayISO(now = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
@@ -42,7 +69,8 @@ export function restaurantsOf(items) {
     const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
     for (const p of places) {
       if (!p || p.kind !== "ristorante" || !text(p.name)) continue;
-      add(m, normalize(p.name), { name: text(p.name), address: text(p.address) }, item);
+      // La via trovata con OpenStreetMap (street) vale più di un indirizzo generico.
+      add(m, normalize(p.name), { name: text(p.name), address: text(p.street) || text(p.address) }, item);
     }
   }
   return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, "it"));

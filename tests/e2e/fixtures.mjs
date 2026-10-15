@@ -125,6 +125,14 @@ http
       });
       return;
     }
+    // Finto OpenStreetMap (Nominatim): trova solo il Bar San Calisto.
+    if (req.url.startsWith("/search?")) {
+      const q = new URL(req.url, "http://x").searchParams.get("q") || "";
+      const hit = /San Calisto/.test(q)
+        ? [{ category: "amenity", type: "cafe", name: "Bar San Calisto", display_name: "Bar San Calisto, Piazza di San Calisto, Roma", address: { road: "Piazza di San Calisto", house_number: "3", city: "Roma" } }]
+        : [];
+      return send(res, 200, "application/json", JSON.stringify(hit));
+    }
     if (req.url === "/reel-privato") return send(res, 302, "text/html", "", { location: "/accounts/login" });
     if (pages[req.url]) return send(res, 200, "text/html; charset=utf-8", pages[req.url]);
     send(res, 404, "text/html", "<title>404</title>");

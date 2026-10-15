@@ -111,6 +111,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
               : "In questo browser (IndexedDB), senza sincronizzazione né backup."}
           </p>
           <p>Per leggere un link, il suo indirizzo viene aperto dal server dell'app (Vercel), che legge solo dati pubblici.</p>
+          <p>Per trovare la via di un locale nel box Ristoranti, nome e città del locale vengono inviati a OpenStreetMap (gratuito, senza account), una sola volta per locale.</p>
           <p>
             <strong className="font-extrabold">AI (Google Gemini).</strong>{" "}
             {aiStatus.ai ? `Attiva sul server (modello ${aiStatus.model}): la chiave non è mai inviata all'app.` : `Non configurata${aiStatus.error ? ` (${aiStatus.error})` : ""}.`}{" "}
