@@ -59,3 +59,15 @@ describe("extractUrl: casi limite", () => {
     expect(extractUrl("vedi youtu.be/abc")).toBe("https://youtu.be/abc");
   });
 });
+
+import { mapTileUrl } from "./detect.js";
+describe("mapTileUrl", () => {
+  it("calcola la tessera OpenStreetMap delle coordinate", () => {
+    // Roma (Colosseo) a zoom 16
+    expect(mapTileUrl({ lat: 41.8902, lng: 12.4922 })).toBe("https://tile.openstreetmap.org/16/35042/24354.png");
+  });
+  it("senza coordinate non c'è copertina", () => {
+    expect(mapTileUrl({ name: "Bar" })).toBe(null);
+    expect(mapTileUrl(null)).toBe(null);
+  });
+});

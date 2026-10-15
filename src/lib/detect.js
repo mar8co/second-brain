@@ -125,3 +125,16 @@ export function parsePlaceFromUrl(url) {
   if (!name && lat === null) return null;
   return { name: name ? name.trim() : null, lat, lng };
 }
+
+// Copertina di un posto: la tessera della mappa di OpenStreetMap (gratuita, senza
+// chiave) che contiene le sue coordinate. Solo se si conoscono.
+export function mapTileUrl(place, zoom = 16) {
+  const lat = place?.lat;
+  const lng = place?.lng;
+  if (typeof lat !== "number" || typeof lng !== "number" || Math.abs(lat) > 85 || Math.abs(lng) > 180) return null;
+  const n = 2 ** zoom;
+  const x = Math.floor(((lng + 180) / 360) * n);
+  const rad = (lat * Math.PI) / 180;
+  const y = Math.floor(((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n);
+  return `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+}
