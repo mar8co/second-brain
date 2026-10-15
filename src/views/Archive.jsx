@@ -102,6 +102,12 @@ export default function Archive({ archive, query, navigate, openItem }) {
   ];
   // Dentro un box il titolo della pagina è il nome del box.
   const dentro = vista === "box" && filters.category;
+  const filtriBtn = (
+    <button type="button" className={`pillola relative${open ? " attiva" : ""}`} aria-label={chips.length ? `Filtri, ${chips.length} attivi` : "Filtri"} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
+      <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+      {chips.length > 0 && <span className="conta num" aria-hidden="true">{chips.length}</span>}
+    </button>
+  );
   const titolo = sezione ? (sezione === "ristoranti" ? "Ristoranti" : "Eventi") : dentro ? filters.category : "Archivio";
   const indietro = sezione ? () => closeBox({ sezione: "" }) : dentro ? () => closeBox({ category: "" }) : null;
   const conteggio = sezione
@@ -164,12 +170,10 @@ export default function Archive({ archive, query, navigate, openItem }) {
                   Categorie
                 </button>
               )}
-              <button type="button" className={`pillola relative${open ? " attiva" : ""}`} aria-label={chips.length ? `Filtri, ${chips.length} attivi` : "Filtri"} aria-expanded={open} aria-controls="filters" onClick={() => setOpen((o) => !o)}>
-                <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
-                {chips.length > 0 && <span className="conta num" aria-hidden="true">{chips.length}</span>}
-              </button>
+              {!sezione && filtriBtn}
               <span aria-live="polite" className="sr-only">{conteggio}</span>
             </span>
+            {sezione && filtriBtn}
             {!sezione && items.length > 0 && (
               <span className="flex shrink-0 gap-1.5" role="group" aria-label="Vista">
                 <button type="button" className={`pillola${vista === "box" ? " attiva" : ""}`} aria-pressed={vista === "box"} onClick={() => setVista("box")}>
@@ -298,7 +302,7 @@ function Scelta({ label, value, onChange, options }) {
               type="button"
               role="option"
               aria-selected={value === k}
-              className={`pillola${value === k ? " attiva" : ""}`}
+              className={`pillola scelta${value === k ? " attiva" : ""}`}
               onClick={() => {
                 onChange(k);
                 setOpen(false);

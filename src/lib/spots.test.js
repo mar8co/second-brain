@@ -130,6 +130,7 @@ describe("via dei locali", () => {
 });
 
 describe("via scritta a mano", () => {
+  const c2 = () => ({ id: "z", ai: { v: 5, places: [{ name: "Da Enzo", address: "Roma", kind: "ristorante" }] } });
   const a = { id: "a", ai: { v: 5, places: [{ name: "Da Enzo", address: "Roma", kind: "ristorante" }, { name: "Museo", address: "Roma", kind: "altro" }] } };
   const b = { id: "b", ai: { v: 5, places: [{ name: "da  enzo", address: "Roma", kind: "ristorante", street: "Via vecchia 1, Roma", geo_at: "2026-10-14T00:00:00Z" }] } };
   const c = { id: "c", ai: { v: 5, places: [{ name: "Altro", address: "Roma", kind: "ristorante" }] } };
@@ -138,17 +139,38 @@ describe("via scritta a mano", () => {
   it("si salva in ogni contenuto che cita il locale e vale più di quella trovata", () => {
     const patches = manualStreetPatches([a, b, c], "Da Enzo", "  Via Prova   5, Roma ", NOW);
     expect(patches.map((p) => p.id)).toEqual(["a", "b"]);
-    expect(patches[0].patch.ai.places[0]).toMatchObject({ street: "Via Prova 5, Roma", manual: true, geo_at: NOW.toISOString() });
+    expect(patches[0].patch.ai.places[0]).toMatchObject({ street: "Via Prova 5, Roma", sedi: ["Via Prova 5, Roma"], manual: true, geo_at: NOW.toISOString() });
     expect(patches[0].patch.ai.places[1]).toEqual(a.ai.places[1]);
     expect(patches[1].patch.ai.places[0].street).toBe("Via Prova 5, Roma");
     const after = { ...a, ai: patches[0].patch.ai };
-    expect(restaurantsOf([after])[0]).toMatchObject({ address: "Via Prova 5, Roma", manual: true });
+    expect(restaurantsOf([after])[0]).toMatchObject({ address: "Via Prova 5, Roma", streets: ["Via Prova 5, Roma"], manual: true });
     expect(streetQueue([after])).toEqual([]);
+  });
+
+  it("più sedi: tutte salvate, senza doppioni, e mostrate tutte", () => {
+    const [p] = manualStreetPatches([a], "Da Enzo", ["Via A 1, Roma", " ", "Via B 2, Milano", "Via A 1, Roma"], NOW);
+    expect(p.patch.ai.places[0]).toMatchObject({ street: "Via A 1, Roma", sedi: ["Via A 1, Roma", "Via B 2, Milano"], manual: true });
+    const r = restaurantsOf([{ ...a, ai: p.patch.ai }])[0];
+    expect(r.addresses).toEqual(["Via A 1, Roma", "Via B 2, Milano"]);
+    expect(r.streets).toEqual(r.addresses);
+  });
+
+  it("a mano vince anche se un altro contenuto cita il locale con la sola città", () => {
+    const manuale = { ...a, ai: manualStreetPatches([a], "Da Enzo", "Via A 1, Roma", NOW)[0].patch.ai };
+    const r = restaurantsOf([c2(), manuale])[0];
+    expect(r.manual).toBe(true);
+    expect(r.streets).toEqual(["Via A 1, Roma"]);
+    // Una sede scritta a mano senza numero civico conta comunque come via.
+    const libera = { ...a, ai: manualStreetPatches([a], "Da Enzo", "Zona Pigneto", NOW)[0].patch.ai };
+    expect(restaurantsOf([libera])[0].streets).toEqual(["Zona Pigneto"]);
+    // Senza sedi a mano, una città sola non è una via.
+    expect(restaurantsOf([a])[0].streets).toEqual([]);
   });
 
   it("vuota, toglie la via e il locale torna a essere cercato", () => {
     const [p] = manualStreetPatches([b], "Da Enzo", "  ", NOW);
     expect(p.patch.ai.places[0]).toEqual({ name: "da  enzo", address: "Roma", kind: "ristorante" });
+    expect(restaurantsOf([{ ...b, ai: p.patch.ai }])[0]).toMatchObject({ addresses: ["Roma"], streets: [] });
   });
 
   it("resta quando l'AI rifà la scheda; un locale a mano che l'AI non cita più si tiene", () => {

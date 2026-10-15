@@ -1,4 +1,4 @@
-/* global window */
+/* global window, indexedDB, document */
 import { expect, test } from "@playwright/test";
 
 const FIX = "http://127.0.0.1:4599";
@@ -503,6 +503,11 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   // Ristoranti: nome, via e sotto il link al contenuto; i posti che non sono locali no.
   await ristoranti.click();
   await expect(page).toHaveURL(/sezione=ristoranti/);
+  // Filtri sta a destra, sulla stessa riga di "Categorie".
+  const cat = await page.getByRole("button", { name: "Categorie", exact: true }).boundingBox();
+  const fil = await page.getByRole("button", { name: "Filtri" }).boundingBox();
+  expect(Math.abs(fil.y - cat.y)).toBeLessThan(4);
+  expect(fil.x + fil.width).toBeGreaterThan(page.viewportSize().width - 30);
   const righe = page.locator("ul.righe > li");
   await expect(righe).toHaveCount(2);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ristoranti");
@@ -524,14 +529,32 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
   await page.reload();
   await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
-  // La via si può scrivere a mano; vale più di quella trovata (qui il Bar) e resta dopo il ricaricamento.
-  await bar.getByRole("button", { name: "Modifica la via" }).click();
-  await bar.getByLabel("Via di Bar San Calisto").fill("Via Prova 5, Roma");
+  // Le sedi si scrivono a mano dall'icona tonda accanto al nome (anche più di una);
+  // valgono più di quella trovata (qui il Bar) e restano dopo il ricaricamento.
+  await expect(bar.getByRole("button", { name: /Scrivi la via|Modifica la via/ })).toHaveCount(0);
+  const icona = bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" });
+  const nomeBar = await bar.getByText("Bar San Calisto", { exact: true }).boundingBox();
+  const ic = await icona.boundingBox();
+  expect(ic.x).toBeGreaterThan(nomeBar.x + nomeBar.width);
+  expect(ic.y).toBeLessThan(nomeBar.y + nomeBar.height);
+  await icona.click();
+  await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Piazza di San Calisto 3, Roma");
+  await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Prova 5, Roma");
+  await bar.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
+  await bar.getByRole("textbox", { name: "Indirizzo 2 di Bar San Calisto" }).fill("Via Seconda 7, Milano");
   await bar.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByRole("link", { name: /Via Prova 5, Roma/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Via%20Prova%205%2C%20Roma$/);
+  await expect(bar.getByRole("link", { name: /Via Seconda 7, Milano/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Via%20Seconda%207%2C%20Milano$/);
   await page.reload();
   await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
+  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Via Seconda 7, Milano/ })).toBeVisible();
   await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto/ })).toHaveCount(0);
+  // Togliendo una sede resta l'altra.
+  await page.locator("ul.righe > li").first().getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
+  await page.getByRole("button", { name: "Togli l'indirizzo 2 di Bar San Calisto" }).click();
+  await page.getByRole("button", { name: "Salva" }).click();
+  await expect(page.getByRole("link", { name: /Via Seconda 7, Milano/ })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
   await expect(enzo.getByRole("link", { name: /Apri su Guida di prova/ })).toHaveAttribute("href", `${FIX}/trastevere`);
   await expect(enzo.getByRole("link", { name: "Scheda" })).toBeVisible();
   // Prima "Apri su …" e Scheda, sotto la via con il link a Maps.
@@ -564,4 +587,37 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Lista" }).click();
   await expect(page.getByRole("button", { name: /^Ristoranti,/ })).toHaveCount(0);
   await expect(page.locator("ul.righe li")).toHaveCount(1);
+});
+
+test("filtro Autore: i nomi lunghi restano nella larghezza e la pagina non scorre di lato", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  // Un autore con un nome lunghissimo, come quelli dei profili Instagram.
+  await page.evaluate(
+    () =>
+      new Promise((resolve, reject) => {
+        const open = indexedDB.open("second-brain");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction("items", "readwrite");
+          const st = tx.objectStore("items");
+          st.getAll().onsuccess = (e) => {
+            for (const it of e.target.result) st.put({ ...it, author: "Un nome di profilo davvero molto lungo | Investitore Efficace e Consulente Finanziario (@investitore.efficace.consulente)" });
+          };
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+      }),
+  );
+  await page.goto("/archivio");
+  await page.getByRole("button", { name: "Filtri" }).click();
+  await page.getByRole("button", { name: /^Autore/ }).click();
+  const scelta = page.getByRole("option", { name: /Investitore Efficace/ });
+  await expect(scelta).toBeVisible();
+  const w = page.viewportSize().width;
+  const b = await scelta.boundingBox();
+  expect(b.x).toBeGreaterThanOrEqual(0);
+  expect(b.x + b.width).toBeLessThanOrEqual(w);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

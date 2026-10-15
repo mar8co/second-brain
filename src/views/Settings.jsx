@@ -1,6 +1,6 @@
 // Impostazioni: archivio (rianalizza, aggiungi), AI, salvataggio rapido da iPhone, dati e
 // account; il resto (privacy, installazione) in "Informazioni e privacy", chiuso.
-import { Plus, RotateCw } from "lucide-react";
+import { LogOut, Plus, RotateCw } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import QuickShare from "../components/QuickShare.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -38,6 +38,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
     <Page>
       <Testata onBack={() => back("/")} />
       <h1 className="titolo-home">Impostazioni</h1>
+      {syncMode && session?.user?.email && <p className="micro -mt-2 text-[0.9rem] font-semibold">{session.user.email}</p>}
 
       <Section title="Archivio">
         <div className="flex flex-wrap gap-2.5">
@@ -50,6 +51,12 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
             <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" />
             Aggiungi
           </button>
+          {syncMode && (
+            <button type="button" className="pillola !border-[#e02a0d] !bg-[#e02a0d] !text-white" onClick={signOut}>
+              <LogOut className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
+              Esci
+            </button>
+          )}
         </div>
         <p className="micro text-[0.8rem]">Rianalizza rilegge con l'AI i contenuti non ancora analizzati bene.</p>
       </Section>
@@ -83,14 +90,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
         <button type="button" className="bottone chiaro" onClick={exportJson} disabled={!archive.items.length}>
           Esporta archivio <span className="num">({archive.items.length})</span>
         </button>
-        {syncMode ? (
-          <>
-            <p className="micro text-[0.8rem]">Accesso come {session?.user?.email}</p>
-            <button type="button" className="bottone rosso" onClick={signOut}>
-              Esci
-            </button>
-          </>
-        ) : (
+        {!syncMode && (
           <p className="text-tenue"><strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser: se cancelli i dati del sito li perdi. Esporta spesso.</p>
         )}
       </Section>

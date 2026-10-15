@@ -13,14 +13,7 @@ import { displayHost } from "../lib/detect.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
 import { isImage } from "../lib/files.js";
 import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
-import { hasStreet, mapsUrl, restaurantsOf } from "../lib/spots.js";
-
-function mapsLink(place) {
-  const p = new URLSearchParams();
-  if (place.name) p.set("q", place.name);
-  if (typeof place.lat === "number" && typeof place.lng === "number") p.set("ll", `${place.lat},${place.lng}`);
-  return `https://maps.apple.com/?${p}`;
-}
+import { mapsUrl, restaurantsOf } from "../lib/spots.js";
 
 export default function Detail({ id, archive, store, ai, back, navigate, toast }) {
   const item = archive.items.find((x) => x.id === id);
@@ -40,6 +33,8 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
       alive = false;
     };
   }, [item?.id, item?.file_path, store]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const luoghi = item ? restaurantsOf([item]).flatMap((r) => r.streets.map((a) => ({ r, a }))).slice(0, 12) : [];
 
   if (!item) {
     return (
@@ -163,19 +158,22 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
               Apri {item.file_name}
             </a>
           )}
-          {/* Solo posti precisi: un link a Maps salvato, o un locale con la via. La
-              località generica di un Reel ("Rome, Italy") non porta alla pagina del locale. */}
-          {item.place && (item.type === "place" || typeof item.place.lat === "number") && (
-            <a href={mapsLink(item.place)} target="_blank" rel="noopener noreferrer" className="bottone chiaro largo">
-              {item.place.name ? `${item.place.name} · ` : ""}Apri in Mappe <span aria-hidden="true">→</span>
-            </a>
-          )}
-          {restaurantsOf([item]).filter((r) => hasStreet(r.address)).slice(0, 5).map((r) => (
-            <a key={r.key} href={mapsUrl(r.name, r.address)} target="_blank" rel="noopener noreferrer" className="bottone chiaro largo">
-              {r.name} · {r.address} <span aria-hidden="true">→</span>
-            </a>
-          ))}
         </div>
+
+        {/* I locali citati con la via, uno per riga: nome · via, link a Maps. La
+            località generica di un Reel ("Rome, Italy") non si mostra. */}
+        {luoghi.length > 0 && (
+          <ul className="righe mt-2 text-left text-[0.9rem] leading-snug">
+            {luoghi.map(({ r, a }) => (
+              <li key={`${r.key}|${a}`}>
+                <a href={mapsUrl(r.name, a)} target="_blank" rel="noopener noreferrer" className="flex items-start justify-between gap-3 py-2.5">
+                  <span><b className="font-extrabold">{r.name}</b> · {a}</span>
+                  <span aria-hidden="true" className="shrink-0 font-bold">↗</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
 
         {item.note && (
           <section>
