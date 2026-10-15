@@ -1,7 +1,7 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useEffect, useState } from "react";
-import { CalendarPlus, Ellipsis, X } from "lucide-react";
+import { CalendarPlus, Ellipsis, MapPin, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -39,18 +39,20 @@ function SourceLinks({ items, onOpen }) {
 // Link a Maps: con la via completa mostra la via; senza, "Cerca su Maps" (la
 // ricerca usa comunque nome e città). `plain`: il luogo di un evento si legge
 // comunque, anche senza via.
-function MapsLink({ name, where, plain = false, isStreet = false }) {
+function MapsLink({ name, where, plain = false, isStreet = false, pin = false }) {
   const street = isStreet || hasStreet(where);
   return (
     <>
       {plain && where && !street && <p className="micro mt-0.5 text-[0.85rem]">{where}</p>}
       <a href={mapsUrl(name, where)} target="_blank" rel="noopener noreferrer" className="micro mt-0.5 block text-[0.85rem] underline underline-offset-[3px]">
+        {pin && <MapPin className="mr-1 inline h-[0.95em] w-[0.95em] align-[-0.12em]" strokeWidth={2.6} aria-hidden="true" />}
         {street ? <>{where} <span aria-hidden="true">↗</span><span className="sr-only"> (apri su Maps)</span></> : <>Cerca su Maps <span aria-hidden="true">↗</span></>}
       </a>
     </>
   );
 }
 
+const NAME_BIG = "text-[1.5rem] font-extrabold leading-[1.02] tracking-[-0.04em]";
 const NAME = "text-[1.2rem] font-extrabold leading-[1.05] tracking-[-0.035em]";
 
 // Indirizzi del locale (anche più sedi): un campo per sede, con Aggiungi sede,
@@ -127,9 +129,10 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
     <ul className="righe">
       {restaurants.map((r) => (
-        <li key={r.key} className="py-3.5">
+        <li key={r.key} className="flex gap-3 py-4">
+          <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
-            <p className={NAME}>{r.name}</p>
+            <p className={NAME_BIG}>{r.name}</p>
             {onStreet && (
               <div className={`relative ${menu === r.key ? "z-[60]" : ""} -mb-3 -mr-2 -mt-2.5 shrink-0`}>
                 <button
@@ -158,7 +161,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
             )}
           </div>
           <SourceLinks items={r.items} onOpen={onOpen} />
-          {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet />) : <MapsLink name={r.name} where={r.address} />}
+          {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
           {onStreet && editing?.key === r.key && (
             <AddressForm
               key={editing.mode}
@@ -171,6 +174,15 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
               }}
             />
           )}
+          </div>
+          {(() => {
+            const cover = r.items.find((it) => it.image_url || it.file_path);
+            return cover ? (
+              <div className="shrink-0 self-center">
+                <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" />
+              </div>
+            ) : null;
+          })()}
         </li>
       ))}
     </ul>
