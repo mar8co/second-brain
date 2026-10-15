@@ -78,7 +78,11 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     if (!log.length) return;
     const last = log[log.length - 1];
     const answer = last.result && !last.pending ? listRef.current?.querySelector("li:last-child [data-risposta]") : null;
+    // In attesa: la domanda e sotto la risposta che si sta preparando, sotto la
+    // testata (non il fondo della lista, che finirebbe dietro al campo di testo).
+    const waiting = last.pending ? listRef.current?.lastElementChild : null;
     if (answer) answer.scrollIntoView({ block: "start" });
+    else if (waiting) waiting.scrollIntoView({ block: "start" });
     else endRef.current?.scrollIntoView({ block: "end" });
   }, [log, loading]);
 
@@ -181,7 +185,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
         ) : (
           <ol ref={listRef} className="space-y-4">
             {conversation.map(({ msg, newDay }) => (
-              <li key={msg.id}>
+              <li key={msg.id} className="scroll-mt-24">
                 {newDay && (
                   <p className="my-4 text-center">
                     <span className="cartellino">{dayLabel(msg.at)}</span>

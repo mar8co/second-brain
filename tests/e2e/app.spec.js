@@ -798,3 +798,27 @@ test("lista: lo swipe su una riga scopre Elimina, con Annulla", async ({ page })
   await page.getByRole("button", { name: "Annulla" }).click();
   await expect(page.getByRole("link", { name: /Prova da togliere/ }).first()).toBeVisible();
 });
+
+test("chat: appena invii, si vede la risposta in preparazione sopra il campo, non solo la tua domanda", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  for (const q of ["Cosa ho salvato sul limone?", "Raccontami la ricetta lunga con il limone"]) {
+    await box.fill(q);
+    await box.press("Enter");
+    await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
+  }
+  await page.route("**/api/ai", async (route) => {
+    await new Promise((r) => setTimeout(r, 3000));
+    await route.continue();
+  });
+  await box.fill("Un'altra domanda sul limone");
+  await box.press("Enter");
+  const attesa = page.getByText("Cerco nella tua memoria…");
+  await expect(attesa).toBeVisible();
+  const form = await page.locator("form.chat-composer").boundingBox();
+  await expect.poll(async () => { const b = await attesa.boundingBox(); return b.y + b.height <= form.y + 2 && b.y > 50; }).toBe(true);
+  await expect(page.getByText("Un'altra domanda sul limone")).toBeInViewport();
+});
