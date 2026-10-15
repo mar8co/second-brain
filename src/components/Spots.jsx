@@ -194,6 +194,12 @@ function EventRows({ events, onOpen }) {
               <p className={NAME}>{e.name}</p>
               <SourceLinks items={e.items} onOpen={onOpen} />
               {e.place && <MapsLink name={e.name} where={e.place} plain />}
+              {e.date && (
+                <button type="button" className="pillola mt-2 !min-h-[34px] !px-3 !text-[0.8rem]" onClick={() => downloadIcs([e], "second-brain.ics")}>
+                  <CalendarPlus className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
+                  Aggiungi al calendario
+                </button>
+              )}
             </div>
             {cover && (cover.image_url || cover.file_path) && <Thumb item={cover} size="h-16 w-16" rounded="rounded-lg" />}
           </li>
@@ -203,11 +209,11 @@ function EventRows({ events, onOpen }) {
   );
 }
 
-function downloadIcs(all) {
+function downloadIcs(all, file = "second-brain.ics") {
   const blob = new Blob([buildIcs(all)], { type: "text/calendar;charset=utf-8" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "second-brain.ics";
+  a.download = file;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
@@ -221,15 +227,8 @@ export function EventList({ events, onOpen }) {
       </EmptyState>
     );
   }
-  const dated = [...upcoming, ...past];
   return (
     <>
-      {dated.length > 0 && (
-        <button type="button" className="pillola mt-3" onClick={() => downloadIcs(dated)}>
-          <CalendarPlus className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
-          Calendario .ics
-        </button>
-      )}
       {upcoming.length > 0 && <EventRows events={upcoming} onOpen={onOpen} />}
       {undated.length > 0 && (
         <>

@@ -608,12 +608,12 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page.locator("[data-passati]")).toHaveCSS("opacity", "0.5");
   await expect(page.getByText("Serata carbonara da Enzo").locator("xpath=ancestor::li[1]").getByRole("link", { name: /Apri su Guida di prova/ })).toBeVisible();
   // Calendario .ics: file "second-brain.ics" con gli eventi datati, tutto il giorno.
-  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Calendario .ics" }).click()]);
+  const [dl] = await Promise.all([page.waitForEvent("download"), page.getByText("Serata carbonara da Enzo").locator("xpath=ancestor::li[1]").getByRole("button", { name: "Aggiungi al calendario" }).click()]);
   expect(dl.suggestedFilename()).toBe("second-brain.ics");
   const ics = readFileSync(await dl.path(), "utf8");
   expect(ics).toContain("X-WR-CALNAME:second-brain");
   expect(ics).toContain("X-APPLE-CALENDAR-COLOR:#ffb5d0");
-  expect(ics).toContain("SUMMARY:Serata carbonara da Enzo");
+  expect(ics).toContain("SUMMARY:🎟️ Serata carbonara da Enzo");
   expect(ics).not.toContain("Festa del quartiere");
 
   // Passando a lista le due sezioni non ci sono: resta la lista di sempre.
