@@ -48,13 +48,27 @@ export function streetPatch(item, index, name, found, now = new Date()) {
   return { ai: { ...item.ai, places: next } };
 }
 
-// Via scritta a mano per un locale: [{ id, patch }] per ogni contenuto che lo
-// cita. La via a mano (manual) vale più di quella dell'AI o di OpenStreetMap e
-// resta anche se l'AI rifà la scheda; vuota, toglie la via e il locale torna a
-// essere cercato su OpenStreetMap.
-export function manualStreetPatches(items, name, street, now = new Date()) {
+// Indirizzi di un locale: le sedi scritte a mano (sedi), altrimenti la via
+// trovata o l'indirizzo letto dall'AI.
+export function placeAddresses(p) {
+  const sedi = Array.isArray(p?.sedi) ? p.sedi.map(text).filter(Boolean) : [];
+  if (sedi.length) return sedi;
+  const one = text(p?.street) || text(p?.address);
+  return one ? [one] : [];
+}
+
+// Sedi scritte a mano per un locale (una stringa o un elenco): [{ id, patch }]
+// per ogni contenuto che lo cita. Valgono più di quelle dell'AI o di
+// OpenStreetMap e restano anche se l'AI rifà la scheda; l'elenco vuoto toglie
+// tutto e il locale torna a essere cercato su OpenStreetMap.
+export function manualStreetPatches(items, name, streets, now = new Date()) {
   const key = normalize(name);
-  const value = text(street).replace(/\s+/g, " ").slice(0, 200);
+  const list = [];
+  for (const v of Array.isArray(streets) ? streets : [streets]) {
+    const t = text(v).replace(/\s+/g, " ").slice(0, 200);
+    if (t && !list.includes(t)) list.push(t);
+  }
+  list.splice(10);
   const out = [];
   for (const item of items) {
     const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
@@ -62,10 +76,8 @@ export function manualStreetPatches(items, name, street, now = new Date()) {
     const next = places.map((p) => {
       if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
       const rest = { ...p };
-      delete rest.street;
-      delete rest.manual;
-      delete rest.geo_at;
-      return value ? { ...rest, street: value, manual: true, geo_at: now.toISOString() } : rest;
+      for (const f of ["street", "sedi", "manual", "geo_at"]) delete rest[f];
+      return list.length ? { ...rest, street: list[0], sedi: list, manual: true, geo_at: now.toISOString() } : rest;
     });
     out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
   }
@@ -86,18 +98,34 @@ function add(map, key, base, item) {
   return map;
 }
 
-// [{ key, name, address, items }] in ordine alfabetico.
+// [{ key, name, address, addresses, streets, manual, items }] in ordine
+// alfabetico. `addresses`: le sedi note; `streets`: quelle con una via vera (le
+// sedi scritte a mano contano sempre); `address`: la prima, per la ricerca.
 export function restaurantsOf(items) {
   const m = new Map();
   for (const item of items) {
     const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
     for (const p of places) {
       if (!p || p.kind !== "ristorante" || !text(p.name)) continue;
-      // La via trovata con OpenStreetMap (street) vale più di un indirizzo generico.
-      add(m, normalize(p.name), { name: text(p.name), address: text(p.street) || text(p.address), manual: p.manual === true }, item);
+      const key = normalize(p.name);
+      const addresses = placeAddresses(p);
+      const manual = p.manual === true && addresses.length > 0;
+      const e = m.get(key);
+      if (!e) {
+        m.set(key, { key, name: text(p.name), addresses, manual, items: [item] });
+        continue;
+      }
+      if (!e.items.includes(item)) e.items.push(item);
+      // Le sedi scritte a mano vincono; poi un indirizzo con la via su uno solo con la città.
+      if ((manual && !e.manual) || (!e.manual && !manual && !e.addresses.some(hasStreet) && addresses.some(hasStreet))) {
+        e.addresses = addresses;
+        e.manual = manual;
+      }
     }
   }
-  return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, "it"));
+  return [...m.values()]
+    .map((r) => ({ ...r, address: r.addresses[0] || "", streets: r.manual ? r.addresses : r.addresses.filter(hasStreet) }))
+    .sort((a, b) => a.name.localeCompare(b.name, "it"));
 }
 
 // { upcoming, undated, past }: prossimi per data, poi quelli senza data, e in

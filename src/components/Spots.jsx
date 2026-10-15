@@ -1,6 +1,7 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useState } from "react";
+import { CircleEllipsis, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -36,8 +37,8 @@ function SourceLinks({ items, onOpen }) {
 // Link a Maps: con la via completa mostra la via; senza, "Cerca su Maps" (la
 // ricerca usa comunque nome e città). `plain`: il luogo di un evento si legge
 // comunque, anche senza via.
-function MapsLink({ name, where, plain = false }) {
-  const street = hasStreet(where);
+function MapsLink({ name, where, plain = false, isStreet = false }) {
+  const street = isStreet || hasStreet(where);
   return (
     <>
       {plain && where && !street && <p className="micro mt-0.5 text-[0.85rem]">{where}</p>}
@@ -50,30 +51,42 @@ function MapsLink({ name, where, plain = false }) {
 
 const NAME = "text-[1.2rem] font-extrabold leading-[1.05] tracking-[-0.035em]";
 
-// Via scritta a mano: un campo sotto il locale, con Salva e Annulla. Vuoto e
-// salvato, toglie la via scritta e il locale torna a essere cercato.
-function StreetForm({ name, start, onSave, onCancel }) {
-  const [value, setValue] = useState(start);
+// Indirizzi del locale (anche più sedi): un campo per sede, con Aggiungi sede,
+// Salva e Annulla. Nessun indirizzo salvato = si toglie tutto e il locale torna
+// a essere cercato.
+function AddressForm({ name, start, onSave, onCancel }) {
+  const [rows, setRows] = useState(start.length ? start : [""]);
+  const set = (i, v) => setRows((r) => r.map((x, j) => (j === i ? v : x)));
   return (
     <form
       className="mt-2"
       onSubmit={(e) => {
         e.preventDefault();
-        onSave(value);
+        onSave(rows);
       }}
     >
-      <label className="sr-only" htmlFor={`via-${name}`}>Via di {name}</label>
-      <input
-        id={`via-${name}`}
-        className="campo piccolo"
-        value={value}
-        autoFocus
-        autoComplete="off"
-        autoCapitalize="words"
-        placeholder="Via e numero, città"
-        onChange={(e) => setValue(e.target.value)}
-      />
-      <div className="mt-1.5 flex gap-4 text-[0.88rem]">
+      {rows.map((v, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <label className="sr-only" htmlFor={`via-${name}-${i}`}>Indirizzo {i + 1} di {name}</label>
+          <input
+            id={`via-${name}-${i}`}
+            className="campo piccolo min-w-0 flex-1"
+            value={v}
+            autoFocus={i === rows.length - 1}
+            autoComplete="off"
+            autoCapitalize="words"
+            placeholder="Via e numero, città"
+            onChange={(e) => set(i, e.target.value)}
+          />
+          <button type="button" className="tondo shrink-0" aria-label={`Togli l'indirizzo ${i + 1} di ${name}`} onClick={() => setRows((r) => (r.length > 1 ? r.filter((_, j) => j !== i) : [""]))}>
+            <X className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+      <button type="button" className="link mt-1 text-[0.88rem]" onClick={() => setRows((r) => [...r, ""])}>
+        + Aggiungi un'altra sede
+      </button>
+      <div className="flex gap-4 text-[0.88rem]">
         <button type="submit" className="link">Salva</button>
         <button type="button" className="link text-tenue" onClick={onCancel}>Annulla</button>
       </div>
@@ -94,25 +107,32 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
     <ul className="righe">
       {restaurants.map((r) => (
         <li key={r.key} className="py-3.5">
-          <p className={NAME}>{r.name}</p>
+          <div className="flex items-start justify-between gap-3">
+            <p className={NAME}>{r.name}</p>
+            {onStreet && (
+              <button
+                type="button"
+                className="-mb-3 -mr-1.5 -mt-2.5 grid h-11 w-11 shrink-0 place-items-center"
+                aria-label={`Indirizzi di ${r.name}`}
+                aria-expanded={editing === r.key}
+                onClick={() => setEditing(editing === r.key ? null : r.key)}
+              >
+                <CircleEllipsis className="h-[1.7rem] w-[1.7rem]" strokeWidth={1.8} aria-hidden="true" />
+              </button>
+            )}
+          </div>
           <SourceLinks items={r.items} onOpen={onOpen} />
-          <MapsLink name={r.name} where={r.address} />
-          {onStreet && editing === r.key ? (
-            <StreetForm
+          {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet />) : <MapsLink name={r.name} where={r.address} />}
+          {onStreet && editing === r.key && (
+            <AddressForm
               name={r.name}
-              start={r.manual || hasStreet(r.address) ? r.address : ""}
+              start={r.streets}
               onCancel={() => setEditing(null)}
               onSave={(v) => {
                 setEditing(null);
                 onStreet(r.name, v);
               }}
             />
-          ) : (
-            onStreet && (
-              <button type="button" className="link mt-0.5 text-[0.85rem] text-tenue" onClick={() => setEditing(r.key)}>
-                {hasStreet(r.address) ? "Modifica la via" : "Scrivi la via"}
-              </button>
-            )
           )}
         </li>
       ))}
