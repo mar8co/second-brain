@@ -227,7 +227,9 @@ function useSopraTastiera(ref) {
       frame = 0;
       const el = ref.current;
       if (!el) return;
-      const covered = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      // Nel rimbalzo in cima alla pagina offsetTop diventa negativo: senza il
+      // Math.max il campo verrebbe sollevato di tanto quanto si è tirato.
+      const covered = Math.max(0, window.innerHeight - vv.height - Math.max(0, vv.offsetTop));
       el.style.transform = covered > 1 ? `translateY(${-covered}px)` : "";
     };
     const schedule = () => {
