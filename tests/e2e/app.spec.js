@@ -28,9 +28,9 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
   await page.getByRole("button", { name: "Impostazioni" }).click();
   await expect(page).toHaveURL(/\/impostazioni$/);
-  // Rianalizza e Aggiungi stanno in cima alle Impostazioni.
+  // Rianalizza e Fai il Backup stanno in cima alle Impostazioni.
   const rian = await page.getByRole("button", { name: /^Rianalizza/ }).boundingBox();
-  const agg = await page.getByRole("button", { name: "Aggiungi", exact: true }).boundingBox();
+  const agg = await page.getByRole("button", { name: "Fai il Backup" }).boundingBox();
   const titolo = await page.getByRole("heading", { name: "Impostazioni" }).boundingBox();
   expect(rian.x).toBeLessThan(agg.x);
   expect(rian.y).toBeLessThan(titolo.y + 300);
@@ -62,10 +62,9 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   await expect(page.locator("h2.sezione").filter({ has: filtri })).toHaveCSS("border-bottom-width", "0px");
   expect((await filtri.innerText()).trim()).toBe("");
   await expect(page.getByText("Filtri", { exact: true })).toHaveCount(0);
-  // Aggiungi dalle Impostazioni.
+  // Aggiungi non sta più nelle Impostazioni.
   await page.goto("/impostazioni");
-  await page.getByRole("button", { name: "Aggiungi", exact: true }).click();
-  await expect(page).toHaveURL(/\/aggiungi$/);
+  await expect(page.getByRole("button", { name: "Aggiungi", exact: true })).toHaveCount(0);
 });
 
 test("link incollato nella chat: salvato nell'archivio, la chat resta per le domande", async ({ page }) => {
@@ -870,10 +869,13 @@ test("chat: salendo compare la freccetta per tornare in basso", async ({ page })
     await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
   }
   const freccia = page.getByRole("button", { name: "Vai all'ultimo messaggio" });
+  // Si aspetta che i riposizionamenti automatici dopo l'invio siano finiti.
+  await page.waitForTimeout(1000);
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(freccia).toBeVisible();
-  await freccia.click();
+  await freccia.dispatchEvent("click");
   await expect(freccia).toBeHidden();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.scrollY - window.innerHeight)).toBeLessThan(60);
 });
 
 test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni saltati", async ({ page }) => {
