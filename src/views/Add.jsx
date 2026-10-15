@@ -1,31 +1,30 @@
-// Aggiungi: link, nota o file in pochi secondi.
+// Aggiungi: link o nota in pochi secondi (foto, video e file si aggiungono dal + della chat).
 //
 // Accetta parametri nell'URL per i Comandi Rapidi iOS e per la condivisione:
 //   /aggiungi?url=<link>   /aggiungi?text=<testo>   &title=<titolo>
 // Se `text` contiene un link (come quando Instagram condivide "… https://…"),
 // il link viene estratto e il resto del testo diventa la nota.
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Page, Testata } from "../components/Layout.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { ChipEditor, ErrorBox, TypeIcon } from "../components/ui.jsx";
 import { typeLabel } from "../lib/format.js";
 import { detectType, displayHost, extractUrl } from "../lib/detect.js";
-import { ACCEPTED_MIME, TYPES } from "../lib/constants.js";
-import { extractFileText, fileMime, isImage, validateFile, withMime } from "../lib/files.js";
+import { TYPES } from "../lib/constants.js";
 
 function initialFromQuery(query) {
   const url = extractUrl(query.get("url") || "") || extractUrl(query.get("text") || "");
   let note = query.get("text") || "";
   if (url && note) note = note.replace(/\bhttps?:\/\/\S+/i, "").trim();
-  const mode = query.get("mode") || (url ? "link" : note ? "note" : "link");
+  const wanted = query.get("mode");
+  const mode = wanted === "note" || wanted === "link" ? wanted : url ? "link" : note ? "note" : "link";
   return { url: url || query.get("url") || "", note, title: query.get("title") || "", mode };
 }
 
 const MODES = [
   ["link", "Link"],
   ["note", "Nota"],
-  ["file", "File"],
 ];
 
 export default function Add({ archive, query, navigate, back, toast }) {
@@ -37,30 +36,14 @@ export default function Add({ archive, query, navigate, back, toast }) {
   const [typeOverride, setTypeOverride] = useState(null);
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
-  const [file, setFile] = useState(null);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
-  const fileRef = useRef(null);
   usePageColor(PAGE.add);
 
   const cleanUrl = extractUrl(url);
-  const autoType =
-    mode === "link" ? detectType(cleanUrl) : mode === "file" ? (file && isImage(fileMime(file)) ? "image" : "file") : "note";
+  const autoType = mode === "link" ? detectType(cleanUrl) : "note";
   const type = typeOverride || autoType;
-  const typeChoices = mode === "link" ? ["link", "social", "video", "place", "shopping"] : mode === "note" ? ["note", "shopping", "place"] : ["file", "image"];
-
-  const pickFile = (f) => {
-    setError(null);
-    if (!f) return setFile(null);
-    const err = validateFile(f);
-    if (err) {
-      setFile(null);
-      setError(err);
-      if (fileRef.current) fileRef.current.value = "";
-      return;
-    }
-    setFile(f);
-  };
+  const typeChoices = mode === "link" ? ["link", "social", "video", "place", "shopping"] : ["note", "shopping", "place"];
 
   const paste = async () => {
     try {
@@ -78,7 +61,6 @@ export default function Add({ archive, query, navigate, back, toast }) {
     setError(null);
     const base = { title: title.trim() || null, note: note.trim() || null, categories, tags, type };
     let item;
-    let upload = null;
     if (mode === "link") {
       if (!cleanUrl) return setError("Inserisci un link valido (es. https://…).");
       item = { ...base, url: cleanUrl, status: "processing" };
@@ -86,22 +68,10 @@ export default function Add({ archive, query, navigate, back, toast }) {
       if (!note.trim() && !title.trim()) return setError("Scrivi almeno un titolo o un testo.");
       // Una nota può contenere un link: lo conserviamo come originale, senza leggerlo.
       item = { ...base, url: extractUrl(note) || null, status: "saved", status_detail: "Nota scritta da te.", text_source: "inserito da te" };
-    } else {
-      if (!file) return setError("Scegli un file da caricare.");
-      upload = withMime(file);
-      const ex = await extractFileText(upload);
-      item = {
-        ...base,
-        extracted_text: ex.text,
-        text_source: ex.source,
-        status: ex.status,
-        status_detail: ex.detail,
-        processed_at: new Date().toISOString(),
-      };
     }
     setSaving(true);
     try {
-      const created = await archive.add(item, upload);
+      const created = await archive.add(item);
       toast("Salvato nell'archivio");
       navigate(`/elemento/${created.id}`, { replace: true });
     } catch (err) {
@@ -115,7 +85,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
       <Testata onBack={() => back("/")} />
       <h1 className="gigante !mb-6">Aggiungi</h1>
       <form onSubmit={save} noValidate className="space-y-6">
-        <div role="tablist" aria-label="Cosa vuoi salvare" className="grid grid-cols-3 gap-1.5">
+        <div role="tablist" aria-label="Cosa vuoi salvare" className="grid grid-cols-2 gap-1.5">
           {MODES.map(([k, label]) => (
             <button
               key={k}
@@ -159,21 +129,6 @@ export default function Add({ archive, query, navigate, back, toast }) {
             <p id="url-help" className="micro mt-1.5 text-[0.8rem]">
               {cleanUrl ? <>Da <strong className="font-bold text-inchiostro">{displayHost(cleanUrl)}</strong>: leggerò titolo e testo pubblici dopo il salvataggio.</> : "Incolla un link: articoli, Reel, video, posti di Google o Apple Maps…"}
             </p>
-          </div>
-        )}
-
-        {mode === "file" && (
-          <div>
-            <label htmlFor="add-file" className="etichetta">File (immagini, PDF, testo · max 15 MB)</label>
-            <input
-              id="add-file"
-              ref={fileRef}
-              type="file"
-              accept={[...ACCEPTED_MIME, ".md", ".heic"].join(",")}
-              className="mt-1.5 block w-full text-sm font-semibold file:mr-3 file:min-h-[44px] file:rounded-full file:border-0 file:bg-inchiostro file:px-5 file:font-bold file:text-sfondo"
-              onChange={(e) => pickFile(e.target.files?.[0] || null)}
-            />
-            {file && <p className="micro mt-1.5 text-[0.8rem]">{file.name} · <span className="num">{(file.size / 1024 / 1024).toFixed(1)} MB</span></p>}
           </div>
         )}
 

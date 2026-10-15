@@ -393,22 +393,23 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page).toHaveURL(/\/elemento\//);
 });
 
-test("carica un file di testo: testo estratto e cercabile", async ({ page }) => {
-  await page.goto("/aggiungi");
-  await page.getByRole("tab", { name: "File" }).click();
-  await page.getByLabel(/^File/).setInputFiles({ name: "appunti.md", mimeType: "text/markdown", buffer: Buffer.from("# Docker\nComando utile: docker compose up -d") });
-  await page.getByRole("button", { name: "Salva", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "appunti.md" })).toBeVisible();
-  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+test("carica un file di testo dal + della chat: testo estratto e cercabile", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Scegli foto, video o file").setInputFiles({ name: "appunti.md", mimeType: "text/markdown", buffer: Buffer.from("# Docker\nComando utile: docker compose up -d") });
+  await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.goto("/archivio?q=compose");
   await expect(page.getByText("appunti.md")).toBeVisible();
 });
 
-test("file non ammesso: errore chiaro, niente salvataggio", async ({ page }) => {
+test("file non ammesso dal +: errore chiaro, niente salvataggio", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Scegli foto, video o file").setInputFiles({ name: "virus.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") });
+  await expect(page.getByText(/Tipo di file non supportato/)).toBeVisible();
+});
+
+test("Aggiungi ha solo Link e Nota (i file si aggiungono dal +)", async ({ page }) => {
   await page.goto("/aggiungi");
-  await page.getByRole("tab", { name: "File" }).click();
-  await page.getByLabel(/^File/).setInputFiles({ name: "virus.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") });
-  await expect(page.getByRole("alert")).toContainText("Tipo di file non supportato");
+  await expect(page.getByRole("tab")).toHaveText(["Link", "Nota"]);
 });
 
 test("link non valido: messaggio di errore", async ({ page }) => {
@@ -718,7 +719,7 @@ test("chat: il tondo + accanto al campo apre Foto, video o file e Link; un file 
   // Non c'è più nella barra in basso.
   await expect(page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("button")).toHaveCount(0);
   await piu.click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Foto, video o file", "Link"]);
+  await expect(page.getByRole("menuitem")).toHaveText(["Foto, video o file", "Link o nota"]);
   // Un tocco fuori (anche sopra la barra) chiude il menu senza attivare quello che sta sotto.
   const arch = await page.getByRole("link", { name: "Archivio", exact: true }).boundingBox();
   await page.mouse.click(arch.x + arch.width / 2, arch.y + arch.height / 2);
@@ -842,7 +843,7 @@ test("chat: appena invii, si vede la risposta in preparazione sopra il campo, no
   await expect(vign).toHaveCSS("border-top-left-radius", "18px");
 });
 
-test("Aggiungi: i tre pulsanti non sono attaccati al titolo", async ({ page }) => {
+test("Aggiungi: i pulsanti non sono attaccati al titolo", async ({ page }) => {
   await page.goto("/aggiungi");
   const h = await page.getByRole("heading", { name: "Aggiungi", level: 1 }).boundingBox();
   const t = await page.getByRole("tab", { name: "Link" }).boundingBox();
