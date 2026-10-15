@@ -657,3 +657,24 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await expect(bar.getByRole("link", { name: /Via Seconda 2, Milano/ })).toBeVisible();
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
 });
+
+test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il campo resta in fondo", async ({ page }) => {
+  // Sull'iPhone, nel rimbalzo in cima, visualViewport.offsetTop diventa negativo.
+  await page.addInitScript(() => {
+    const vv = new EventTarget();
+    Object.defineProperties(vv, {
+      width: { get: () => window.innerWidth },
+      height: { get: () => window.innerHeight },
+      offsetTop: { value: -420 },
+      offsetLeft: { value: 0 },
+      pageTop: { value: -420 },
+      scale: { value: 1 },
+    });
+    Object.defineProperty(window, "visualViewport", { value: vv, configurable: true });
+  });
+  await page.goto("/");
+  const composer = page.locator(".chat-composer");
+  await expect(composer).toBeVisible();
+  expect(await page.evaluate(() => window.visualViewport.offsetTop)).toBe(-420);
+  expect(await composer.evaluate((el) => el.style.transform)).toBe("");
+});
