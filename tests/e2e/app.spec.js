@@ -693,3 +693,29 @@ test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il cam
   expect(await page.evaluate(() => window.visualViewport.offsetTop)).toBe(-420);
   expect(await composer.evaluate((el) => el.style.transform)).toBe("");
 });
+
+test("barra: il tondo + a destra apre un menu con Foto, File e Aggiungi manualmente; una foto si salva subito", async ({ page }) => {
+  await page.goto("/archivio");
+  const nav = await page.getByRole("navigation", { name: "Navigazione principale" }).boundingBox();
+  const piu = page.getByRole("button", { name: "Foto, file o nota" });
+  const pb = await piu.boundingBox();
+  expect(pb.x).toBeGreaterThan(nav.x + nav.width);
+  await piu.click();
+  await expect(page.getByRole("menuitem")).toHaveText(["Foto", "File", "Aggiungi manualmente"]);
+  // Un tocco fuori chiude il menu senza attivare quello che sta sotto (la barra).
+  const chat = await page.getByRole("link", { name: "Chat", exact: true }).boundingBox();
+  await page.mouse.click(chat.x + chat.width / 2, chat.y + chat.height / 2);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/archivio$/);
+  // Foto: si sceglie dalla libreria e finisce nell'archivio.
+  await piu.click();
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto" }).click()]);
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await chooser.setFiles({ name: "schermata.png", mimeType: "image/png", buffer: png });
+  await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
+  await expect(page.getByText("schermata.png").first()).toBeVisible();
+  // Aggiungi manualmente porta alla pagina Aggiungi.
+  await piu.click();
+  await page.getByRole("menuitem", { name: "Aggiungi manualmente" }).click();
+  await expect(page).toHaveURL(/\/aggiungi$/);
+});
