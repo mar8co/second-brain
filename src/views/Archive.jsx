@@ -102,10 +102,11 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const [ordineSalvato, setOrdineSalvato] = useState(readOrder);
   const [ordina, setOrdina] = useState(false);
   const tiles = useMemo(() => {
-    const all = [...fissi, ...boxes.map(([name, its]) => ({ id: `c:${name}`, kind: "categoria", name, items: its, sub: plural(its.length, "contenuto", "contenuti"), color: categoryColor(name) }))];
+    const nomi = [...new Set(items.flatMap((it) => it.categories || []))].sort((a, b) => a.localeCompare(b, "it"));
+    const all = [...fissi, ...boxes.map(([name, its]) => ({ id: `c:${name}`, kind: "categoria", name, items: its, sub: plural(its.length, "contenuto", "contenuti"), color: categoryColor(name, nomi) }))];
     const byId = new Map(all.map((t) => [t.id, t]));
     return orderBoxes(all.map((t) => t.id), ordineSalvato).map((id) => byId.get(id));
-  }, [boxes, restaurants, events, photos, docs, ordineSalvato]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [boxes, items, restaurants, events, photos, docs, ordineSalvato]); // eslint-disable-line react-hooks/exhaustive-deps
   const moveTile = (id, dir) => {
     const next = moveBox(tiles.map((t) => t.id), id, dir);
     setOrdineSalvato(next);

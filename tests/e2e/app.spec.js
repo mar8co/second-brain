@@ -694,7 +694,7 @@ test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il cam
   expect(await composer.evaluate((el) => el.style.transform)).toBe("");
 });
 
-test("chat: il tondo + accanto al campo apre Foto, video o file e Aggiungi manualmente; un file si salva subito", async ({ page }) => {
+test("chat: il tondo + accanto al campo apre Foto, video o file e Link; un file si salva subito", async ({ page }) => {
   await page.goto("/");
   const piu = page.getByRole("button", { name: "Aggiungi foto, video o file" });
   const campo = await page.getByRole("textbox", { name: "Chiedi alla tua memoria" }).boundingBox();
@@ -703,7 +703,7 @@ test("chat: il tondo + accanto al campo apre Foto, video o file e Aggiungi manua
   // Non c'è più nella barra in basso.
   await expect(page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("button")).toHaveCount(0);
   await piu.click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Foto, video o file", "Aggiungi manualmente"]);
+  await expect(page.getByRole("menuitem")).toHaveText(["Foto, video o file", "Link"]);
   // Un tocco fuori (anche sopra la barra) chiude il menu senza attivare quello che sta sotto.
   const arch = await page.getByRole("link", { name: "Archivio", exact: true }).boundingBox();
   await page.mouse.click(arch.x + arch.width / 2, arch.y + arch.height / 2);
@@ -723,10 +723,10 @@ test("chat: il tondo + accanto al campo apre Foto, video o file e Aggiungi manua
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
   await expect(page.getByText("schermata.png").first()).toBeVisible();
   await expect(page.getByText("clip.mp4").first()).toBeVisible();
-  // Aggiungi manualmente porta alla pagina Aggiungi.
+  // Link porta alla pagina Aggiungi.
   await page.goto("/");
   await piu.click();
-  await page.getByRole("menuitem", { name: "Aggiungi manualmente" }).click();
+  await page.getByRole("menuitem", { name: "Link" }).click();
   await expect(page).toHaveURL(/\/aggiungi$/);
 });
 
@@ -738,6 +738,8 @@ test("Archivio a box: il box Foto e video mostra la foto salvata", async ({ page
   await chooser.setFiles({ name: "vestito.png", mimeType: "image/png", buffer: png });
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
+  // La foto ha la sua copertina anche nel box della categoria.
+  await expect(page.getByRole("button", { name: /^Senza categoria/ }).locator("img")).toBeVisible();
   await page.getByRole("button", { name: /^Foto e video, 1 file/ }).click();
   await expect(page.getByRole("heading", { name: "Foto e video", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "vestito.png" }).locator("img")).toBeVisible();

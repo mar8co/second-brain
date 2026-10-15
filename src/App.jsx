@@ -9,6 +9,7 @@ import { useArchive } from "./hooks/useArchive.js";
 import { useAiStatus } from "./hooks/useAiStatus.js";
 import { useSettings } from "./hooks/useSettings.js";
 import { isSyncMode, supabase } from "./lib/supabase.js";
+import { FileStoreContext } from "./lib/fileurl.js";
 import { createLocalStore } from "./lib/store/local.js";
 import { createRemoteStore } from "./lib/store/remote.js";
 import { startChatSync, stopChatSync } from "./lib/chatlog.js";
@@ -73,7 +74,7 @@ function Shell({ auth }) {
   // L'avviso sta appena sopra la barra (e sopra il campo della chat).
   const toastBottom = chat ? "calc(150px + env(safe-area-inset-bottom))" : main ? "calc(84px + env(safe-area-inset-bottom))" : "calc(24px + env(safe-area-inset-bottom))";
   return (
-    <>
+    <FileStoreContext.Provider value={store}>
       {view}
       {main && <BottomNav path={path} navigate={navigate} />}
       <div role="status" aria-live="polite">
@@ -95,6 +96,6 @@ function Shell({ auth }) {
           </div>
         )}
       </div>
-    </>
+    </FileStoreContext.Provider>
   );
 }
