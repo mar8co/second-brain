@@ -1,7 +1,7 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
-import { useState } from "react";
-import { CircleEllipsis, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Ellipsis, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -95,7 +95,25 @@ function AddressForm({ name, start, onSave, onCancel }) {
 }
 
 export function RestaurantList({ restaurants, onOpen, onStreet }) {
+  // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
+  // ({ key, mode: "modifica" | "aggiungi" }).
+  const [menu, setMenu] = useState(null);
   const [editing, setEditing] = useState(null);
+
+  // Il menu si chiude toccando fuori o con Esc.
+  useEffect(() => {
+    if (!menu) return undefined;
+    const close = (e) => {
+      if (e.type === "keydown" ? e.key === "Escape" : !e.target.closest?.("[data-menu]")) setMenu(null);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [menu]);
+
   if (!restaurants.length) {
     return (
       <EmptyState title="Ancora nessun ristorante">
@@ -103,6 +121,10 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       </EmptyState>
     );
   }
+  const choose = (r, mode) => {
+    setMenu(null);
+    setEditing({ key: r.key, mode });
+  };
   return (
     <ul className="righe">
       {restaurants.map((r) => (
@@ -110,23 +132,39 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
           <div className="flex items-start justify-between gap-3">
             <p className={NAME}>{r.name}</p>
             {onStreet && (
-              <button
-                type="button"
-                className="-mb-3 -mr-1.5 -mt-2.5 grid h-11 w-11 shrink-0 place-items-center"
-                aria-label={`Indirizzi di ${r.name}`}
-                aria-expanded={editing === r.key}
-                onClick={() => setEditing(editing === r.key ? null : r.key)}
-              >
-                <CircleEllipsis className="h-[1.7rem] w-[1.7rem]" strokeWidth={1.8} aria-hidden="true" />
-              </button>
+              <div className="relative -mb-3 -mr-2 -mt-2.5 shrink-0" data-menu>
+                <button
+                  type="button"
+                  className="grid h-11 w-11 place-items-center"
+                  aria-label={`Indirizzi di ${r.name}`}
+                  aria-haspopup="menu"
+                  aria-expanded={menu === r.key}
+                  onClick={() => setMenu(menu === r.key ? null : r.key)}
+                >
+                  <Ellipsis className="h-7 w-7" strokeWidth={4} aria-hidden="true" />
+                </button>
+                {menu === r.key && (
+                  <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-2 top-10 z-20 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] shadow-none">
+                    {r.streets.length > 0 && (
+                      <button type="button" role="menuitem" className="block w-full border-b border-riga px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "modifica")}>
+                        Modifica via
+                      </button>
+                    )}
+                    <button type="button" role="menuitem" className="block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "aggiungi")}>
+                      Aggiungi via
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           <SourceLinks items={r.items} onOpen={onOpen} />
           {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet />) : <MapsLink name={r.name} where={r.address} />}
-          {onStreet && editing === r.key && (
+          {onStreet && editing?.key === r.key && (
             <AddressForm
+              key={editing.mode}
               name={r.name}
-              start={r.streets}
+              start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets}
               onCancel={() => setEditing(null)}
               onSave={(v) => {
                 setEditing(null);
