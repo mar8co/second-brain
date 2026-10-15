@@ -608,9 +608,9 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page.getByRole("heading", { name: "Passati" })).toBeVisible();
   await expect(page.locator("[data-passati]")).toHaveCSS("opacity", "0.5");
   await expect(page.getByText("Serata carbonara da Enzo").locator("xpath=ancestor::li[1]").getByRole("link", { name: /Apri su Guida di prova/ })).toBeVisible();
-  // Il riquadro della data è rosso come il box Ristoranti.
+  // Il riquadro della data è giallo.
   await expect(page.getByText("25 ott", { exact: true })).toBeVisible();
-  await expect(page.getByText("25 ott", { exact: true }).locator("xpath=ancestor::div[1]")).toHaveCSS("background-color", "rgb(255, 59, 28)");
+  await expect(page.getByText("25 ott", { exact: true }).locator("xpath=ancestor::div[1]")).toHaveCSS("background-color", "rgb(255, 214, 10)");
   // Biglietto: sotto il talloncino c'è la dentellatura a zigzag.
   await expect(page.locator("[data-biglietto]").first().locator("div[aria-hidden=true]")).toHaveCSS("background-image", /svg/);
   // Calendario .ics: file "second-brain.ics" con gli eventi datati, tutto il giorno.

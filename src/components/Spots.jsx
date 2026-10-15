@@ -178,8 +178,8 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
   );
 }
 
-// Dentellatura del biglietto: dentini rossi (come il talloncino) verso destra.
-const ZIGZAG = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="9" height="12"><polygon points="0,0 9,6 0,12" fill="#ff3b1c"/></svg>')}")`;
+// Dentellatura del biglietto: dentini gialli (come il talloncino) verso destra.
+const ZIGZAG = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="9" height="12"><polygon points="0,0 9,6 0,12" fill="#ffd60a"/></svg>')}")`;
 
 function EventRows({ events, onOpen }) {
   return (
@@ -189,7 +189,7 @@ function EventRows({ events, onOpen }) {
         const cover = e.items.find((it) => it.image_url || it.file_path) || e.items[0];
         return (
           <li key={e.key} data-biglietto className="flex overflow-hidden rounded-2xl border-[1.5px] border-inchiostro">
-            <div className="flex w-[4.6rem] shrink-0 flex-col items-center justify-center self-stretch bg-[var(--rosso)] px-1 py-3 text-center text-[#0a0a0a]">
+            <div className="flex w-[4.6rem] shrink-0 flex-col items-center justify-center self-stretch bg-[var(--giallo)] px-1 py-3 text-center text-[#0a0a0a]">
               <b className="num text-[0.95rem] font-extrabold leading-tight">{day}</b>
               <span className="num text-[0.8rem] font-bold leading-tight">{rest.join(" ")}</span>
             </div>
