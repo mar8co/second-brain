@@ -13,6 +13,7 @@ import { displayHost } from "../lib/detect.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
 import { isImage } from "../lib/files.js";
 import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
+import { hasStreet, mapsUrl, restaurantsOf } from "../lib/spots.js";
 
 function mapsLink(place) {
   const p = new URLSearchParams();
@@ -162,11 +163,18 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
               Apri {item.file_name}
             </a>
           )}
-          {item.place && (
+          {/* Solo posti precisi: un link a Maps salvato, o un locale con la via. La
+              località generica di un Reel ("Rome, Italy") non porta alla pagina del locale. */}
+          {item.place && (item.type === "place" || typeof item.place.lat === "number") && (
             <a href={mapsLink(item.place)} target="_blank" rel="noopener noreferrer" className="bottone chiaro largo">
               {item.place.name ? `${item.place.name} · ` : ""}Apri in Mappe <span aria-hidden="true">→</span>
             </a>
           )}
+          {restaurantsOf([item]).filter((r) => hasStreet(r.address)).slice(0, 5).map((r) => (
+            <a key={r.key} href={mapsUrl(r.name, r.address)} target="_blank" rel="noopener noreferrer" className="bottone chiaro largo">
+              {r.name} · {r.address} <span aria-hidden="true">→</span>
+            </a>
+          ))}
         </div>
 
         {item.note && (

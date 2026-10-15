@@ -2,6 +2,7 @@
 // server per i salvataggi in background): nessuna dipendenza dal browser.
 
 import { cleanList } from "./item.js";
+import { normalize } from "./search.js";
 
 export const TRANSCRIPT_SOURCE = "trascrizione incollata da te";
 
@@ -121,8 +122,25 @@ export function aiPayload(item) {
 // v4: tipo dei posti e eventi, per i box Ristoranti ed Eventi).
 export const DIGEST_VERSION = 5;
 
+// Quando l'AI rifà la scheda, la via già trovata (o scritta a mano) di un locale
+// non si perde; un locale con la via a mano che l'AI non cita più resta.
+export function carryStreets(places, previous) {
+  const old = Array.isArray(previous) ? previous.filter((p) => p && p.kind === "ristorante" && typeof p.name === "string") : [];
+  const key = (p) => normalize(p.name);
+  const used = new Set();
+  const out = (places || []).map((p) => {
+    const o = p && p.kind === "ristorante" ? old.find((x) => key(x) === key(p) && (x.street || x.geo_at)) : null;
+    if (!o) return p;
+    used.add(key(o));
+    return { ...p, ...(o.street ? { street: o.street } : {}), ...(o.manual ? { manual: true } : {}), ...(o.geo_at ? { geo_at: o.geo_at } : {}) };
+  });
+  for (const o of old) if (o.manual && o.street && !used.has(key(o))) out.push(o);
+  return out;
+}
+
 // Risposta della rielaborazione (server/ai.js) → campo `ai` dell'elemento.
-export function aiFromDigest(r, { applied = false, now = new Date() } = {}) {
+// `previous`: il campo `ai` di prima, da cui si recuperano le vie dei locali.
+export function aiFromDigest(r, { applied = false, now = new Date(), previous = null } = {}) {
   return {
     v: DIGEST_VERSION,
     summary: r.summary || "",
@@ -133,7 +151,7 @@ export function aiFromDigest(r, { applied = false, now = new Date() } = {}) {
     tags: r.tags || [],
     // Posti visitabili citati ({ name, address, kind }) ed eventi con data
     // ({ name, date, end_date, place }).
-    places: r.places || [],
+    places: carryStreets(r.places, previous?.places),
     events: r.events || [],
     model: r.model || null,
     generated_at: now.toISOString(),

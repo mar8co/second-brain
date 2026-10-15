@@ -48,6 +48,30 @@ export function streetPatch(item, index, name, found, now = new Date()) {
   return { ai: { ...item.ai, places: next } };
 }
 
+// Via scritta a mano per un locale: [{ id, patch }] per ogni contenuto che lo
+// cita. La via a mano (manual) vale più di quella dell'AI o di OpenStreetMap e
+// resta anche se l'AI rifà la scheda; vuota, toglie la via e il locale torna a
+// essere cercato su OpenStreetMap.
+export function manualStreetPatches(items, name, street, now = new Date()) {
+  const key = normalize(name);
+  const value = text(street).replace(/\s+/g, " ").slice(0, 200);
+  const out = [];
+  for (const item of items) {
+    const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
+    if (!places.some((p) => p && p.kind === "ristorante" && normalize(text(p.name)) === key)) continue;
+    const next = places.map((p) => {
+      if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
+      const rest = { ...p };
+      delete rest.street;
+      delete rest.manual;
+      delete rest.geo_at;
+      return value ? { ...rest, street: value, manual: true, geo_at: now.toISOString() } : rest;
+    });
+    out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
+  }
+  return out;
+}
+
 // Oggi nel fuso del telefono, come AAAA-MM-GG.
 export function todayISO(now = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
@@ -70,7 +94,7 @@ export function restaurantsOf(items) {
     for (const p of places) {
       if (!p || p.kind !== "ristorante" || !text(p.name)) continue;
       // La via trovata con OpenStreetMap (street) vale più di un indirizzo generico.
-      add(m, normalize(p.name), { name: text(p.name), address: text(p.street) || text(p.address) }, item);
+      add(m, normalize(p.name), { name: text(p.name), address: text(p.street) || text(p.address), manual: p.manual === true }, item);
     }
   }
   return [...m.values()].sort((a, b) => a.name.localeCompare(b.name, "it"));
