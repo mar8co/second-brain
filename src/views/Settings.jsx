@@ -95,11 +95,11 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
       )}
 
       <Section title="Dati e account">
-        <button type="button" className="bottone chiaro" onClick={exportJson} disabled={!archive.items.length}>
-          Esporta archivio <span className="num">({archive.items.length})</span>
+        <button type="button" className="link" onClick={exportJson} disabled={!archive.items.length}>
+          Fai il Backup
         </button>
         {!syncMode && (
-          <p className="text-tenue"><strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser: se cancelli i dati del sito li perdi. Esporta spesso.</p>
+          <p className="text-tenue"><strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser: se cancelli i dati del sito li perdi. Fai il backup spesso.</p>
         )}
       </Section>
 

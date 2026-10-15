@@ -1,7 +1,7 @@
-// Salva subito foto e file scelti dal pulsante + della barra: uno per volta,
+// Salva subito foto, video e file scelti dal pulsante + della barra: uno per volta,
 // come da Aggiungi (testo estratto dai PDF e dai file di testo, immagini lette
 // dall'AI dopo il salvataggio). Restituisce quanti sono stati salvati e gli errori.
-import { extractFileText, fileMime, isImage, validateFile, withMime } from "./files.js";
+import { extractFileText, fileMime, isImage, isVideo, validateFile, withMime } from "./files.js";
 
 export async function saveFiles(files, add) {
   const saved = [];
@@ -20,7 +20,7 @@ export async function saveFiles(files, add) {
         note: null,
         categories: [],
         tags: [],
-        type: isImage(fileMime(upload)) ? "image" : "file",
+        type: isImage(fileMime(upload)) ? "image" : isVideo(fileMime(upload)) ? "video" : "file",
         extracted_text: ex.text,
         text_source: ex.source,
         status: ex.status,

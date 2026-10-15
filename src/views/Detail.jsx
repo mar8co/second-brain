@@ -11,7 +11,7 @@ import { formatDate, typeLabel } from "../lib/format.js";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
-import { isImage } from "../lib/files.js";
+import { isImage, isVideo } from "../lib/files.js";
 import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
 import { mapsUrl, restaurantsOf } from "../lib/spots.js";
 
@@ -97,7 +97,10 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const site = item.site_name || (item.url ? displayHost(item.url) : TYPES[item.type]?.label);
   const reprocessable = ((item.url && !item.file_path) || canReadFile) && (item.status !== "processing" || stale);
 
-  const cover = showImage ? (
+  const showVideo = item.file_path && isVideo(item.file_mime) && fileUrl;
+  const cover = showVideo ? (
+    <video src={fileUrl} controls playsInline preload="metadata" className="w-full rounded-[18px] bg-[#0a0a0a]" aria-label={item.title || item.file_name || "Video salvato"} />
+  ) : showImage ? (
     <img src={fileUrl} alt={item.title || item.file_name || "Immagine salvata"} className="w-full rounded-[18px]" />
   ) : item.image_url ? (
     <img src={item.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-80 w-full rounded-[18px] object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />

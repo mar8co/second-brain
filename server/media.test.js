@@ -286,6 +286,31 @@ describe("immagini e PDF salvati dall'app: letti dall'AI in background", () => {
     expect(db.writes[0].ai).toBeUndefined();
   });
 
+  it("video caricato (iPhone, .mov): trascritto dall'AI, mime adattato a Gemini", async () => {
+    const { handleRead } = await import("./read.js");
+    const db = fileDb({ ...image, type: "video", file_mime: "video/quicktime", file_name: "clip.mov", status: "saved" });
+    const g = fakeGemini({ title: "Consigli sul workshop", transcript: "Ciao a tutti, domani parlo di intelligenza artificiale.", slides: [] });
+    const r = await handleRead({ authHeader: jwt, body: { file: true, id: ID, ai: false, prev_status: "saved" }, env: envAuth, fetchImpl: g.fetchImpl, db });
+    expect(r).toEqual({ status: 202, json: { background: true } });
+    const part = g.requests[0].contents[0].parts[0];
+    expect(part.inline_data.mime_type).toBe("video/mov");
+    expect(g.requests[0].contents[0].parts.at(-1).text).toMatch(/Trascrivi il parlato/);
+    expect(db.writes[0]).toMatchObject({
+      extracted_text: "Ciao a tutti, domani parlo di intelligenza artificiale.",
+      text_source: "trascrizione dell'AI (video caricato)",
+      status: "analyzed",
+    });
+  });
+
+  it("video più grande di 50 MB: non va all'AI", async () => {
+    const { handleRead } = await import("./read.js");
+    const db = fileDb({ ...image, type: "video", file_mime: "video/mp4", file_size: 51 * 1024 * 1024 });
+    const g = fakeGemini({ title: "x", transcript: "x", slides: [] });
+    const r = await handleRead({ authHeader: jwt, body: { file: true, id: ID, ai: false }, env: envAuth, fetchImpl: g.fetchImpl, db });
+    expect(r.status).toBe(400);
+    expect(g.requests).toHaveLength(0);
+  });
+
   it("PDF di molte pagine tagliato al limite dell'AI: restano le pagine lette", async () => {
     const { handleRead } = await import("./read.js");
     const db = fileDb({ ...image, title: null, file_mime: "application/pdf", status: "partial" });

@@ -48,6 +48,7 @@ export const DEFAULT_CATEGORIES = [
 // Limiti condivisi (validati sia nel client sia sul server).
 export const LIMITS = {
   fileBytes: 15 * 1024 * 1024, // 15 MB per file caricato
+  videoBytes: 50 * 1024 * 1024, // 50 MB per video (massimo del piano gratuito di Supabase)
   textChars: 20_000, // testo estratto conservato per elemento
   titleChars: 300,
   noteChars: 20_000,
@@ -63,6 +64,9 @@ export const ACCEPTED_MIME = [
   "image/gif",
   "image/heic",
   "image/heif",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
   "application/pdf",
   "text/plain",
   "text/markdown",

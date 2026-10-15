@@ -59,8 +59,9 @@ export function userItemsDb(env, authHeader) {
   };
 }
 
-// File letti dall'AI: fino a 15 MB (limite del bucket).
+// File letti dall'AI: fino al limite del bucket (15 MB; 50 MB i video).
 const FILE_MAX = 15 * 1024 * 1024;
+const VIDEO_FILE_MAX = 50 * 1024 * 1024;
 
 // Immagine o PDF senza testo già salvato: l'AI lo legge in background e
 // scrive il risultato con il token dell'utente, come per i post social.
@@ -79,7 +80,7 @@ async function readSavedFile({ authHeader, body, env, fetchImpl, waitUntil, db, 
   if (!item?.file_path) return { status: 404, json: { error: "Elemento non trovato." } };
   const kind = unreadFile(item);
   if (!kind) return { status: 400, json: { error: "Questo file non va letto dall'AI (già letto o di un tipo non supportato)." } };
-  if (Number(item.file_size) > FILE_MAX) return { status: 400, json: { error: "File troppo grande per la lettura dell'AI." } };
+  if (Number(item.file_size) > (kind === "video" ? VIDEO_FILE_MAX : FILE_MAX)) return { status: 400, json: { error: "File troppo grande per la lettura dell'AI." } };
   const known = cleanList(Array.isArray(body.categories) ? body.categories : [], 50);
   // Stato prima della lettura (ora l'elemento è "in elaborazione").
   const prevStatus = typeof body.prev_status === "string" && STATUS_KEYS.includes(body.prev_status) ? body.prev_status : "saved";

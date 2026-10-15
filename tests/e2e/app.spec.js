@@ -38,7 +38,7 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   for (const n of ["Archivio", "AI", "Dati e account", "Informazioni e privacy"]) ys.push((await page.getByText(n, { exact: true }).last().boundingBox()).y);
   expect([...ys].sort((a, b) => a - b)).toEqual(ys);
   await expect(page.getByRole("switch", { name: /Rielabora con l'AI/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Esporta archivio/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fai il Backup" })).toBeVisible();
   await expect(page.getByText(/IndexedDB/)).toBeHidden();
   await page.getByText("Informazioni e privacy").click();
   await expect(page.getByText(/IndexedDB/)).toBeVisible();
@@ -694,7 +694,7 @@ test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il cam
   expect(await composer.evaluate((el) => el.style.transform)).toBe("");
 });
 
-test("chat: il tondo + accanto al campo apre Foto, File e Aggiungi manualmente; una foto si salva subito", async ({ page }) => {
+test("chat: il tondo + accanto al campo apre Foto e video, File e Aggiungi manualmente; una foto e un video si salvano subito", async ({ page }) => {
   await page.goto("/");
   const piu = page.getByRole("button", { name: "Foto, file o nota" });
   const campo = await page.getByRole("textbox", { name: "Chiedi alla tua memoria" }).boundingBox();
@@ -703,7 +703,7 @@ test("chat: il tondo + accanto al campo apre Foto, File e Aggiungi manualmente; 
   // Non c'è più nella barra in basso.
   await expect(page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("button")).toHaveCount(0);
   await piu.click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Foto", "File", "Aggiungi manualmente"]);
+  await expect(page.getByRole("menuitem")).toHaveText(["Foto e video", "File", "Aggiungi manualmente"]);
   // Un tocco fuori (anche sopra la barra) chiude il menu senza attivare quello che sta sotto.
   const arch = await page.getByRole("link", { name: "Archivio", exact: true }).boundingBox();
   await page.mouse.click(arch.x + arch.width / 2, arch.y + arch.height / 2);
@@ -711,12 +711,18 @@ test("chat: il tondo + accanto al campo apre Foto, File e Aggiungi manualmente; 
   await expect(page).toHaveURL(/\/$/);
   // Foto: si sceglie dalla libreria e finisce nell'archivio.
   await piu.click();
-  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto" }).click()]);
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto e video" }).click()]);
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await chooser.setFiles({ name: "schermata.png", mimeType: "image/png", buffer: png });
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
+  // Anche un video (dallo stesso pulsante).
+  await piu.click();
+  const [chooser2] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto e video" }).click()]);
+  await chooser2.setFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("00000018667479706d703432", "hex") });
+  await expect(page.getByText("Salvato nell'archivio").first()).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
   await expect(page.getByText("schermata.png").first()).toBeVisible();
+  await expect(page.getByText("clip.mp4").first()).toBeVisible();
   // Aggiungi manualmente porta alla pagina Aggiungi.
   await page.goto("/");
   await piu.click();

@@ -13,6 +13,10 @@ const EXT_MIME = {
   pdf: "application/pdf",
   heic: "image/heic",
   heif: "image/heif",
+  mp4: "video/mp4",
+  m4v: "video/mp4",
+  mov: "video/quicktime",
+  webm: "video/webm",
 };
 
 // Alcuni browser non danno il MIME di .md/.heic: lo ricaviamo dall'estensione.
@@ -25,9 +29,10 @@ export function fileMime(file) {
 export function validateFile(file) {
   if (!file) return "Nessun file selezionato.";
   if (file.size === 0) return "Il file è vuoto.";
-  if (file.size > LIMITS.fileBytes) return `File troppo grande: massimo ${Math.round(LIMITS.fileBytes / 1024 / 1024)} MB.`;
   const mime = fileMime(file);
-  if (!ACCEPTED_MIME.includes(mime)) return "Tipo di file non supportato. Usa immagini, PDF o file di testo.";
+  if (!ACCEPTED_MIME.includes(mime)) return "Tipo di file non supportato. Usa immagini, video, PDF o file di testo.";
+  const max = isVideo(mime) ? LIMITS.videoBytes : LIMITS.fileBytes;
+  if (file.size > max) return `File troppo grande: massimo ${Math.round(max / 1024 / 1024)} MB.`;
   return null;
 }
 
@@ -38,6 +43,7 @@ export function withMime(file) {
 }
 
 export const isImage = (mime) => /^image\//.test(mime || "");
+export const isVideo = (mime) => /^video\//.test(mime || "");
 
 // { text, source, status, detail }
 export async function extractFileText(file) {
@@ -47,6 +53,14 @@ export async function extractFileText(file) {
       ? "Immagine conservata. Con l'AI attiva viene letta e descritta in automatico; altrimenti aggiungi una nota per ritrovarla."
       : "Immagine conservata. Il testo di questo formato di immagine non viene letto automaticamente: aggiungi una nota per ritrovarla.";
     return { text: null, source: null, status: "saved", detail };
+  }
+  if (isVideo(mime)) {
+    return {
+      text: null,
+      source: null,
+      status: "saved",
+      detail: "Video conservato. Con l'AI attiva ne trascrivo il parlato e il testo a schermo in automatico; altrimenti aggiungi una nota per ritrovarlo.",
+    };
   }
   if (/^text\/|json$/.test(mime)) {
     const text = (await file.text()).slice(0, LIMITS.textChars);

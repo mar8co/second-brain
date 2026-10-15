@@ -178,11 +178,14 @@ export async function transcribeFiles({ env, kind, files, fetchImpl, deadline })
 }
 
 // File salvato nell'archivio (immagine o PDF senza testo) → { title, text, textSource, model }.
-// kind: "image" | "pages".
-export async function readStoredFile({ env, kind, mime, data, fetchImpl = fetch, deadline = Date.now() + 150_000 }) {
+// kind: "image" | "pages" | "video".
+export async function readStoredFile({ env, kind, mime: savedMime, data, fetchImpl = fetch, deadline = Date.now() + 150_000 }) {
+  // Gemini chiama "video/mov" i video di iPhone (video/quicktime).
+  const mime = savedMime === "video/quicktime" ? "video/mov" : savedMime;
   const part = data.length <= INLINE_MAX ? { inline_data: { mime_type: mime, data: data.toString("base64") } } : await uploadToGemini({ env, data, mime, fetchImpl, deadline });
   const r = await readWithGemini({ env, kind, parts: [part], fetchImpl, timeoutMs: 90_000, deadline });
-  return { ...r, textSource: kind === "image" ? "testo e descrizione dell'immagine letti dall'AI" : "testo del PDF letto dall'AI" };
+  const textSource = { image: "testo e descrizione dell'immagine letti dall'AI", video: "trascrizione dell'AI (video caricato)" }[kind] || "testo del PDF letto dall'AI";
+  return { ...r, textSource };
 }
 
 // https://www.youtube.com/shorts/ID, youtu.be/ID, watch?v=ID → URL canonico, altrimenti null.

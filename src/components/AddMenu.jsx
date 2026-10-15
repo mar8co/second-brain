@@ -1,5 +1,5 @@
 // Tondo + accanto al campo della chat: un piccolo menu per aggiungere foto, file o
-// scrivere a mano. Foto e file si salvano subito, senza cambiare schermata.
+// scrivere a mano. Foto, video e file si salvano subito, senza cambiare schermata.
 import { useEffect, useRef, useState } from "react";
 import { FileText, Image, PencilLine, Plus } from "lucide-react";
 import { ACCEPTED_MIME } from "../lib/constants.js";
@@ -50,12 +50,12 @@ export default function AddMenu({ archive, navigate, toast }) {
   const row = "flex w-full whitespace-nowrap items-center gap-3 px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]";
   return (
     <div className="piu-barra" ref={root} onMouseDown={keepLayout}>
-      <input ref={photoRef} type="file" accept="image/*" multiple hidden aria-label="Scegli le foto" onChange={pick} />
+      <input ref={photoRef} type="file" accept="image/*,video/*" multiple hidden aria-label="Scegli foto e video" onChange={pick} />
       <input ref={fileRef} type="file" accept={[...ACCEPTED_MIME, ".md", ".heic"].join(",")} multiple hidden aria-label="Scegli i file" onChange={pick} />
       {open && (
         <div role="menu" aria-label="Aggiungi" className="absolute bottom-[calc(100%+10px)] left-0 z-[2] min-w-[15rem] overflow-hidden rounded-2xl border-[1.5px] border-[#0a0a0a] bg-white text-[#0a0a0a]">
           <button type="button" role="menuitem" className={`${row} border-b border-[rgb(10_10_10/0.15)]`} onClick={() => choose(() => photoRef.current?.click())}>
-            <Image className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Foto
+            <Image className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Foto e video
           </button>
           <button type="button" role="menuitem" className={`${row} border-b border-[rgb(10_10_10/0.15)]`} onClick={() => choose(() => fileRef.current?.click())}>
             <FileText className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> File

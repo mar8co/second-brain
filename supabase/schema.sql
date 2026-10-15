@@ -78,13 +78,14 @@ create policy "items_delete_own" on public.items
   for delete to authenticated using (user_id = (select auth.uid()));
 
 -- ---------------------------------------------------------------------------
--- Storage: bucket PRIVATO "files" (15 MB, tipi ammessi), un file per elemento
+-- Storage: bucket PRIVATO "files" (50 MB, tipi ammessi), un file per elemento
 -- in <user_id>/<item_id>/<nome>. Si accede solo con URL firmati a scadenza.
 -- ---------------------------------------------------------------------------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
-  'files', 'files', false, 15728640,
+  'files', 'files', false, 52428800,
   array['image/jpeg','image/png','image/webp','image/gif','image/heic','image/heif',
+        'video/mp4','video/quicktime','video/webm',
         'application/pdf','text/plain','text/markdown','text/csv','application/json']
 )
 on conflict (id) do update
