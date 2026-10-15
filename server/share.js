@@ -41,6 +41,14 @@ export function supabaseShareDb(env) {
   };
 }
 
+// Condividendo una foto o un video il Comando invia solo il nome del file
+// ("PHOTO-2026-10-15-10-04-33"): salvarlo darebbe una nota vuota, senza originale.
+export function looksLikeFileName(text) {
+  const t = String(text || "").trim();
+  if (!t || /\s{2,}|\n/.test(t) || extractUrl(t)) return false;
+  return /^[\w\- ()]{1,80}\.(heic|heif|jpe?g|png|gif|webp|mov|mp4|m4v|webm|pdf)$/i.test(t) || /^(PHOTO|VIDEO|IMG|MOV|IMG_E?|Screenshot|Schermata)[-_ ]?[\d\-_ .a-z]{4,40}$/i.test(t);
+}
+
 // Testo condiviso → elemento iniziale (come /aggiungi?text=).
 export function itemFromShared(rawText) {
   const text = String(rawText || "").trim().slice(0, MAX_TEXT);
@@ -180,6 +188,9 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
   if (media?.error) return { status: 400, json: { error: media.error } };
   if (media && !aiConfigured(env)) {
     return { status: 503, json: { error: "Per trascrivere video e slide serve l'AI: manca GEMINI_API_KEY sul server." } };
+  }
+  if (!media && typeof raw === "string" && looksLikeFileName(raw)) {
+    return { status: 400, json: { error: "Il Comando ha inviato solo il nome del file, non la foto o il video: non salvo nulla. Per foto, video e file apri l'app → Chat → tondo + → Foto, video o file." } };
   }
   const item = media ? itemFromMedia(media.kind, typeof raw === "string" ? raw : "") : itemFromShared(typeof raw === "string" ? raw : "");
   if (!item) return { status: 400, json: { error: "Niente da salvare: il Comando non ha inviato testo o link." } };

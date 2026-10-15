@@ -62,7 +62,8 @@ export default function QuickShare({ toast }) {
     <div className="space-y-2.5">
       <p>
         Salva un link <strong className="font-extrabold">senza aprire l'app</strong>: serve un codice personale e un Comando Rapido. Il server legge il link (Reel, TikTok, video e
-        caroselli pubblici) e l'AI assegna categorie e tag in background.
+        caroselli pubblici) e l'AI assegna categorie e tag in background.{" "}
+        <strong className="font-extrabold">Foto, video e file non si salvano da qui</strong> (il Comando invia solo il nome): usa il tondo + nella Chat.
       </p>
       {error && <ErrorBox>{error}</ErrorBox>}
       {token ? (

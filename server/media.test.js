@@ -349,3 +349,13 @@ describe("immagini e PDF salvati dall'app: letti dall'AI in background", () => {
     expect(g.requests).toHaveLength(0);
   });
 });
+
+import { looksLikeFileName } from "./share.js";
+describe("nome di file condiviso", () => {
+  it("riconosce i nomi di foto e video", () => {
+    for (const t of ["PHOTO-2026-10-15-10-04-33", "VIDEO-2026-10-15-10-04-33", "IMG_1234.HEIC", "Schermata 2026-10-15 alle 10.04.33"]) expect(looksLikeFileName(t)).toBe(true);
+  });
+  it("non tocca testo e link", () => {
+    for (const t of ["Compra il latte", "https://example.com/a.jpg", "Idea: parcheggio aeroporto"]) expect(looksLikeFileName(t)).toBe(false);
+  });
+});
