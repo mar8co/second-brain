@@ -24,6 +24,7 @@ describe("detectType", () => {
     ["https://youtu.be/dQw4w9WgXcQ", "video"],
     ["https://www.google.com/maps/place/Da+Michele/@40.8497,14.2632,17z", "place"],
     ["https://maps.app.goo.gl/AbC123", "place"],
+    ["https://share.google/2lAWnifSs2vjJV4Ux", "place"],
     ["https://maps.apple.com/?q=Bar&ll=45.1,9.2", "place"],
     ["https://example.com/doc.pdf", "file"],
     ["https://blog.example.com/articolo", "link"],

@@ -50,6 +50,8 @@ export function isGoogleMaps(url) {
   if (!h) return false;
   if (h === "maps.app.goo.gl" || (h === "goo.gl" && /\/maps\//.test(url))) return true;
   if (h === "maps.google.com") return true;
+  // Link corti che Google Maps crea con "Condividi" (share.google).
+  if (h === "share.google") return true;
   return /(^|\.)google\.[a-z.]+$/.test(h) && /\/maps(\/|$|\?)/.test(new URL(url).pathname + "/");
 }
 
