@@ -9,6 +9,8 @@ export default defineConfig({
   timeout: 30_000,
   fullyParallel: false,
   workers: 1,
+  // In CI gli errori compaiono anche come annotazioni del controllo.
+  reporter: process.env.CI ? [["list"], ["github"]] : "list",
   use: {
     baseURL: `http://127.0.0.1:${APP}`,
     // Viewport e comportamento touch da iPhone (motore Chromium).
