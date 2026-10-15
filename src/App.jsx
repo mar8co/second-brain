@@ -66,7 +66,7 @@ function Shell({ auth }) {
   return (
     <>
       {view}
-      {main && <BottomNav path={path} navigate={navigate} />}
+      {main && <BottomNav path={path} navigate={navigate} archive={archive} toast={toast} />}
       <div role="status" aria-live="polite">
         {toastMsg && (
           <div key={toastMsg.key} className="brindisi" style={{ bottom: toastBottom }}>

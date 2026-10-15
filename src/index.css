@@ -249,10 +249,18 @@ button { cursor: pointer; }
   .riga-interruttore[aria-checked="true"] i::after { transform: translateX(18px); }
   .riga-interruttore:disabled { opacity: 0.4; }
 
-  /* Barra in basso: pillola nera flottante, solo parole. */
-  .schede {
+  /* Barra in basso: pillola nera flottante, solo parole, col tondo + a destra. */
+  .barra-in-basso {
     position: fixed; left: 50%; transform: translateX(-50%); z-index: 20; bottom: calc(12px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: 10px;
+  }
+  .schede {
     display: flex; gap: 4px; padding: 5px; border-radius: 999px; background: #0a0a0a; box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
+  }
+  .piu-barra { position: relative; }
+  .piu-tondo {
+    display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; padding: 0;
+    background: #fff; color: #0a0a0a; border: 2px solid #0a0a0a; box-shadow: 0 8px 30px rgb(0 0 0 / 0.25);
   }
   .schede a {
     border-radius: 999px; padding: 0.7rem 1.25rem; font-weight: 650; font-size: 0.92rem; letter-spacing: -0.01em;
