@@ -782,6 +782,7 @@ test("lista: lo swipe su una riga scopre Elimina, con Annulla", async ({ page })
   await page.getByLabel(/^Titolo/).fill("Prova da togliere");
   await page.getByLabel("Testo").fill("Testo di prova");
   await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
   await page.goto("/archivio");
   const riga = page.getByRole("link", { name: /Prova da togliere/ }).first();
   await expect(riga).toBeVisible();
