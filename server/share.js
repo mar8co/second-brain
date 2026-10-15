@@ -21,7 +21,7 @@ import { readLink, socialTarget } from "./social.js";
 
 const MAX_TEXT = 5000;
 // Molti link inoltrati insieme: oltre questo numero il resto si scarta (tempo della funzione).
-export const MAX_LINKS = 15;
+export const MAX_LINKS = 50;
 const MANY_TEXT = 20000;
 
 // Accesso al database tramite due funzioni SQL (supabase/schema.sql) che
@@ -254,7 +254,7 @@ async function shareCore({ authHeader, body, env, waitUntil, db, fetchImpl }) {
 
 // Più link nello stesso invio (es. "seleziona tutti" in WhatsApp): ognuno salvato
 // a parte, i doppioni (già nell'archivio o ripetuti) scartati. La lettura e l'AI
-// proseguono dopo la risposta, a gruppi di 3 per restare nei tempi della funzione.
+// proseguono dopo la risposta, a gruppi di 5 per restare nei tempi della funzione.
 async function shareMany({ token, urls, env, waitUntil, db, fetchImpl }) {
   const store = db || supabaseShareDb(env);
   const list = urls.slice(0, MAX_LINKS);
@@ -296,7 +296,7 @@ async function shareMany({ token, urls, env, waitUntil, db, fetchImpl }) {
   };
   const job = (async () => {
     const queue = [...created];
-    await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
+    await Promise.all(Array.from({ length: Math.min(5, queue.length) }, async () => {
       for (let it = queue.shift(); it; it = queue.shift()) await run(it);
     }));
   })();
