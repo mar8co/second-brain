@@ -194,7 +194,7 @@ function EventRows({ events, onOpen }) {
               <span className="num text-[0.8rem] font-bold leading-tight">{rest.join(" ")}</span>
             </div>
             <div aria-hidden="true" className="w-[9px] shrink-0 self-stretch" style={{ backgroundImage: ZIGZAG, backgroundRepeat: "repeat-y", backgroundSize: "9px 12px" }} />
-            <div className="min-w-0 flex-1 py-3 pl-2">
+            <div className="min-w-0 flex-1 self-center py-3 pl-4">
               <p className={NAME}>{e.name}</p>
               <SourceLinks items={e.items} onOpen={onOpen} />
               {e.place && <MapsLink name={e.name} where={e.place} plain />}
@@ -206,7 +206,7 @@ function EventRows({ events, onOpen }) {
               )}
             </div>
             {cover && (cover.image_url || cover.file_path) && (
-              <div className="shrink-0 py-3 pl-2 pr-3">
+              <div className="shrink-0 self-center py-3 pl-2 pr-3">
                 <Thumb item={cover} size="h-16 w-16" rounded="rounded-lg" />
               </div>
             )}

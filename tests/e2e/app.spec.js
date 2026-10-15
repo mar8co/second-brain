@@ -611,6 +611,14 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   // Il riquadro della data è giallo.
   await expect(page.getByText("25 ott", { exact: true })).toBeVisible();
   await expect(page.getByText("25 ott", { exact: true }).locator("xpath=ancestor::div[1]")).toHaveCSS("background-color", "rgb(255, 214, 10)");
+  // Il testo del biglietto non è attaccato allo zigzag e sta a metà altezza.
+  const bigl = page.locator("[data-biglietto]").first();
+  const bb = await bigl.boundingBox();
+  const zz = await bigl.locator("div[aria-hidden=true]").boundingBox();
+  const nome = await bigl.getByText("Serata carbonara da Enzo").boundingBox();
+  expect(nome.x - (zz.x + zz.width)).toBeGreaterThanOrEqual(14);
+  const testo = await bigl.locator("div.min-w-0").boundingBox();
+  expect(Math.abs(testo.y + testo.height / 2 - (bb.y + bb.height / 2))).toBeLessThan(3);
   // Biglietto: sotto il talloncino c'è la dentellatura a zigzag.
   await expect(page.locator("[data-biglietto]").first().locator("div[aria-hidden=true]")).toHaveCSS("background-image", /svg/);
   // Calendario .ics: file "second-brain.ics" con gli eventi datati, tutto il giorno.
