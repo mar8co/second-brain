@@ -122,7 +122,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
             <strong className="font-extrabold">Versione dell'app.</strong> <span className="num">{__BUILD__}</span>
           </p>
           <p>Per leggere un link, il suo indirizzo viene aperto dal server dell'app (Vercel), che legge solo dati pubblici.</p>
-          <p>Per trovare la via di un locale nel box Ristoranti, nome e città del locale vengono inviati a OpenStreetMap (gratuito, senza account), una sola volta per locale.</p>
+          <p>Per trovare la via di un locale nel box Ristoranti, nome e città del locale vengono inviati a OpenStreetMap (gratuito, senza account), una sola volta per locale. Le copertine dei posti sono tessere della mappa di OpenStreetMap, caricate dal tuo telefono.</p>
           <p>
             <strong className="font-extrabold">AI (Google Gemini).</strong>{" "}
             {aiStatus.ai ? `Attiva sul server (modello ${aiStatus.model}): la chiave non è mai inviata all'app.` : `Non configurata${aiStatus.error ? ` (${aiStatus.error})` : ""}.`}{" "}

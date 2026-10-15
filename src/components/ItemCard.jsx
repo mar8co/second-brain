@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { rememberThumb } from "../lib/thumbs.js";
 import { hasFileCover, useFileUrl } from "../lib/fileurl.js";
 import { displayTitle } from "../lib/item.js";
-import { displayHost } from "../lib/detect.js";
+import { displayHost, mapTileUrl } from "../lib/detect.js";
 import { itemColor } from "../lib/colors.js";
 import { StatusBadge, TypeIcon } from "./ui.jsx";
 import { formatDate, typeLabel } from "../lib/format.js";
@@ -41,7 +41,8 @@ function LinkThumbFallback({ item, size, rounded }) {
 function LinkThumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
   // Se il CDN non risponde subito si riprova una volta dopo un attimo.
   const [tries, setTries] = useState(0);
-  const url = item.image_url;
+  // Senza copertina propria, i posti con coordinate mostrano la loro mappa.
+  const url = item.image_url || (item.type === "place" ? mapTileUrl(item.place) : null);
   if (url && tries < 2 && /^https?:\/\//.test(url)) {
     return (
       <img

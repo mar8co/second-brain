@@ -72,7 +72,7 @@ export async function processItem(item, { store, onUpdate, ai, categories = [], 
   if ((item.url && !item.file_path) || file) {
     // Stato prima della nuova lettura: se la lettura è peggiore resta quello.
     const prevStatus = item.status;
-    cur = await store.update(item.id, { status: "processing", status_detail: file ? (file === "image" ? "Lettura dell'immagine in corso…" : "Lettura del PDF in corso…") : null });
+    cur = await store.update(item.id, { status: "processing", status_detail: file ? (file === "image" ? "Lettura dell'immagine in corso…" : file === "video" ? "Trascrizione del video in corso…" : "Lettura del PDF in corso…") : null });
     onUpdate(cur);
     let patch;
     try {
