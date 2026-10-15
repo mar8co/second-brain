@@ -1,6 +1,6 @@
 // Impostazioni: archivio (rianalizza, aggiungi), AI, salvataggio rapido da iPhone, dati e
 // account; il resto (privacy, installazione) in "Informazioni e privacy", chiuso.
-import { LogOut, Plus, RotateCw } from "lucide-react";
+import { DatabaseBackup, LogOut, RotateCw } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import QuickShare from "../components/QuickShare.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -15,7 +15,7 @@ function Section({ title, children }) {
   );
 }
 
-export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back, navigate }) {
+export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back }) {
   usePageColor(PAGE.settings);
   const { reanalysis, reanalyzable, reanalyzeAll } = archive;
   const reanalyze = async () => {
@@ -47,9 +47,9 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
             {reanalysis ? <span className="num">{reanalysis.done}/{reanalysis.total}</span> : "Rianalizza"}
             {!reanalysis && aiStatus.ai && reanalyzable.length > 0 && <span className="conta num">{reanalyzable.length}</span>}
           </button>
-          <button type="button" className="pillola justify-center" onClick={() => navigate("/aggiungi")}>
-            <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" />
-            Aggiungi
+          <button type="button" className="pillola justify-center" onClick={exportJson} disabled={!archive.items.length}>
+            <DatabaseBackup className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
+            Fai il Backup
           </button>
           {syncMode && (
             <button type="button" className="pillola !border-[#e02a0d] !bg-[#e02a0d] !text-white justify-center" onClick={signOut}>
@@ -94,14 +94,11 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
         </details>
       )}
 
-      <Section title="Dati e account">
-        <button type="button" className="link" onClick={exportJson} disabled={!archive.items.length}>
-          Fai il Backup
-        </button>
-        {!syncMode && (
+      {!syncMode && (
+        <Section title="Dati e account">
           <p className="text-tenue"><strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser: se cancelli i dati del sito li perdi. Fai il backup spesso.</p>
-        )}
-      </Section>
+        </Section>
+      )}
 
       <details className="group mt-6 border-y-[1.5px] border-inchiostro">
         <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 py-2 text-[0.95rem] font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden">
