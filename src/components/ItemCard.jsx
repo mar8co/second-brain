@@ -1,7 +1,7 @@
 // Riga dell'elenco: copertina (o il colore dell'elemento con l'icona del tipo),
 // fonte e data in piccolo, titolo grande, in basso stato e categorie. In vista
 // a box, ogni elemento è una copertina con il titolo sotto.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { rememberThumb } from "../lib/thumbs.js";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
@@ -78,13 +78,78 @@ export function ItemCard({ item, onOpen }) {
   );
 }
 
-export function ItemList({ items, onOpen }) {
+// Riga con swipe verso sinistra: scopre "Elimina". Solo nella lista.
+const APERTA = 88;
+function RigaSwipe({ item, onOpen, onDelete }) {
+  const [x, setX] = useState(0);
+  const [trascina, setTrascina] = useState(false);
+  const start = useRef(null);
+  const mosso = useRef(false);
+  const onDown = (e) => {
+    start.current = { x: e.clientX, y: e.clientY, base: x };
+    mosso.current = false;
+  };
+  const onMove = (e) => {
+    const s0 = start.current;
+    if (!s0) return;
+    const dx = e.clientX - s0.x;
+    if (!mosso.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(e.clientY - s0.y)) {
+      mosso.current = true;
+      setTrascina(true);
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+    if (mosso.current) setX(Math.max(-APERTA, Math.min(0, s0.base + dx)));
+  };
+  const onUp = () => {
+    if (!start.current) return;
+    start.current = null;
+    setTrascina(false);
+    if (mosso.current) setX((v) => (v < -APERTA / 2 ? -APERTA : 0));
+  };
+  return (
+    <div className="relative overflow-hidden">
+      <button
+        type="button"
+        className="absolute inset-y-0 right-0 flex items-center justify-center bg-[#e02a0d] text-[0.95rem] font-extrabold text-white"
+        style={{ width: APERTA }}
+        tabIndex={x < 0 ? 0 : -1}
+        aria-hidden={x === 0}
+        onClick={() => onDelete(item)}
+      >
+        Elimina
+      </button>
+      <div
+        className="relative bg-sfondo"
+        style={{ transform: `translateX(${x}px)`, transition: trascina ? "none" : "transform 0.18s", touchAction: "pan-y" }}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+        onDragStart={(e) => e.preventDefault()}
+        onClickCapture={(e) => {
+          // Dopo un trascinamento il tocco non apre la scheda; a riga aperta chiude.
+          if (mosso.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            mosso.current = false;
+          } else if (x < 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            setX(0);
+          }
+        }}
+      >
+        <ItemCard item={item} onOpen={onOpen} />
+      </div>
+    </div>
+  );
+}
+
+export function ItemList({ items, onOpen, onDelete }) {
   return (
     <ul className="righe">
       {items.map((it) => (
-        <li key={it.id}>
-          <ItemCard item={it} onOpen={onOpen} />
-        </li>
+        <li key={it.id}>{onDelete ? <RigaSwipe item={it} onOpen={onOpen} onDelete={onDelete} /> : <ItemCard item={it} onOpen={onOpen} />}</li>
       ))}
     </ul>
   );

@@ -162,7 +162,7 @@ export function formatEventDate(date, end, today = todayISO()) {
   return end ? `${one(date)} – ${one(end)}` : one(date);
 }
 
-// Repository: tutto ciò che è stato caricato come file (foto, video, documenti).
-export function filesOf(items) {
-  return (items || []).filter((it) => it.file_path);
-}
+// File caricati: foto e video da una parte, documenti dall'altra.
+const isMedia = (it) => /^(image|video)\//.test(it.file_mime || "");
+export const photosOf = (items) => (items || []).filter((it) => it.file_path && isMedia(it));
+export const docsOf = (items) => (items || []).filter((it) => it.file_path && !isMedia(it));

@@ -78,6 +78,7 @@ export async function extractUrlInfo(rawUrl, { allowPrivate = false } = {}) {
     if (type === "place") {
       let place = parsePlaceFromUrl(url);
       let finalUrl = url;
+      let finalSeen = null;
       if (!place?.name) {
         // Link corti (maps.app.goo.gl): seguiamo i redirect solo per leggere l'URL finale.
         const r = await safeFetch(url, { ...fetchOpts, maxBytes: 64 * 1024 });
@@ -87,12 +88,19 @@ export async function extractUrlInfo(rawUrl, { allowPrivate = false } = {}) {
           if (p && (p.name || !place)) place = p;
           if (place?.name) break;
         }
+        // Link share.google e simili: il nome può stare nella ricerca Google a cui
+        // rimandano (?q=) o nel titolo della pagina finale pubblica.
+        if (!place?.name) {
+          const named = placeNameFromChain([...r.redirects, r.finalUrl], r);
+          if (named) place = { name: named, lat: place?.lat ?? null, lng: place?.lng ?? null };
+        }
+        if (!place?.name) finalSeen = shortUrl(r.finalUrl);
       }
       if (!place) {
         return result(base, {
           finalUrl,
           status: "partial",
-          detail: "Link di mappe salvato, ma non sono riuscito a leggere nome o coordinate del posto.",
+          detail: `Link di mappe salvato, ma non sono riuscito a leggere nome o coordinate del posto.${finalSeen ? ` Pagina finale: ${finalSeen}` : ""}`,
         });
       }
       return result(base, {
@@ -104,7 +112,7 @@ export async function extractUrlInfo(rawUrl, { allowPrivate = false } = {}) {
         status: place.name ? "analyzed" : "partial",
         detail: place.name
           ? "Nome e posizione letti dal link della mappa; orari e recensioni non vengono letti."
-          : "Ho letto solo le coordinate dal link: aggiungi tu il nome del posto.",
+          : `Ho letto solo le coordinate dal link: aggiungi tu il nome del posto.${finalSeen ? ` Pagina finale: ${finalSeen}` : ""}`,
       });
     }
 
@@ -254,4 +262,38 @@ export async function handleExtract({ authHeader, body, env }) {
   const out = await extractUrlInfo(raw, { allowPrivate: env.EXTRACT_ALLOW_PRIVATE === "1" });
   if (out.error) return { status: 400, json: { error: out.error } };
   return { status: 200, json: out };
+}
+
+// Indirizzo breve da mostrare in una nota (senza parametri lunghi).
+function shortUrl(u) {
+  try {
+    const x = new URL(u);
+    return `${x.host}${x.pathname}${x.search}`.slice(0, 160);
+  } catch {
+    return String(u || "").slice(0, 160);
+  }
+}
+
+const GENERIC_TITLE = /^(google( maps| search| ricerca)?|before you continue|prima di continuare|accedi|sign in|maps)$/i;
+
+// Nome di un posto da una catena di indirizzi (ricerca Google ?q=) o, se non c'è,
+// dal titolo della pagina finale pubblica ("Nome - Google Maps").
+export function placeNameFromChain(urls, page) {
+  for (const u of urls) {
+    try {
+      const x = new URL(u);
+      if (/(^|\.)google\.[a-z.]+$/i.test(x.hostname) && /^\/(search|maps\/search)/.test(x.pathname)) {
+        const q = (x.searchParams.get("q") || "").trim();
+        if (q && !/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(q) && q.length < 120) return q;
+      }
+    } catch {
+      // indirizzo non valido: si passa al prossimo
+    }
+  }
+  if (page?.status === 200 && page.text && /html/i.test(page.contentType || "")) {
+    const m = page.text.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) || page.text.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const t = (m?.[1] || "").replace(/&amp;/g, "&").replace(/&#39;|&apos;/g, "'").replace(/\s+[-–·]\s+Google.*$/i, "").trim();
+    if (t && t.length < 120 && !GENERIC_TITLE.test(t)) return t;
+  }
+  return null;
 }
