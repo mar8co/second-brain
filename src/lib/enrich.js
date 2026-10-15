@@ -78,8 +78,8 @@ export function rebasePatch(fresh, before, patch) {
   return out;
 }
 
-// File salvato che l'AI può leggere (immagine, PDF senza testo selezionabile)
-// e non ancora letto. "image" o "pages", altrimenti null.
+// File salvato che l'AI può leggere (immagine, PDF senza testo selezionabile,
+// video) e non ancora letto. "image", "pages" o "video", altrimenti null.
 // Immagini che l'AI sa leggere (le GIF e gli altri formati no).
 export const aiReadableImage = (mime) => /^image\/(jpeg|png|webp|heic|heif)$/.test(String(mime || "").toLowerCase());
 
@@ -88,6 +88,7 @@ export function unreadFile(item) {
   const mime = String(item.file_mime || "").toLowerCase();
   if (aiReadableImage(mime)) return "image";
   if (mime === "application/pdf") return "pages";
+  if (/^video\/(mp4|quicktime|webm)$/.test(mime)) return "video";
   return null;
 }
 

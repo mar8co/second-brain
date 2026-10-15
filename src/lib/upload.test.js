@@ -13,6 +13,11 @@ describe("saveFiles", () => {
     expect(add.mock.calls[0][1].name).toBe("foto.png");
     expect(add.mock.calls[1][0]).toMatchObject({ type: "file", extracted_text: "testo", status: "analyzed" });
   });
+  it("un video si salva come video", async () => {
+    const add = vi.fn(async (item) => item);
+    await saveFiles([file("clip.mp4", "video/mp4")], add);
+    expect(add.mock.calls[0][0]).toMatchObject({ type: "video", status: "saved" });
+  });
   it("salta i file non ammessi e continua con gli altri", async () => {
     const add = vi.fn(async (item) => item);
     const r = await saveFiles([file("a.exe", "application/x-msdownload"), file("b.png", "image/png")], add);

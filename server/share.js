@@ -100,7 +100,7 @@ export async function enrichMedia({ item, media, known = [], env, fetchImpl, dea
 // (testo e descrizione) e scheda di memoria. Se la lettura non riesce, resta
 // lo stato di prima con il motivo.
 export async function enrichFile({ item, kind, data, known = [], env, fetchImpl, deadline = Date.now() + 200_000, classify = true, apply = true, prevStatus = item.status }) {
-  const what = kind === "image" ? "Lettura dell'immagine" : "Lettura del PDF";
+  const what = { image: "Lettura dell'immagine", video: "Trascrizione del video" }[kind] || "Lettura del PDF";
   const mime = String(item.file_mime || "").toLowerCase();
   const patch = await transcriptionPatch(() => readStoredFile({ env, kind, mime, data, fetchImpl, deadline }), what);
   patch.processed_at = new Date().toISOString();
