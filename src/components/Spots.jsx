@@ -1,10 +1,12 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useEffect, useState } from "react";
-import { Ellipsis, X } from "lucide-react";
+import { CalendarPlus, Ellipsis, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
+import { buildIcs } from "../lib/ics.js";
+import { Thumb } from "./ItemCard.jsx";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
 function SourceLinks({ items, onOpen }) {
@@ -178,19 +180,36 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
 
 function EventRows({ events, onOpen }) {
   return (
-    <ul className="righe">
-      {events.map((e) => (
-        <li key={e.key} className="grid grid-cols-[5.6rem_minmax(0,1fr)] gap-3 py-3.5">
-          <p className="num text-[0.9rem] font-extrabold leading-tight">{e.date ? formatEventDate(e.date, e.end_date) : "—"}</p>
-          <div className="min-w-0">
-            <p className={NAME}>{e.name}</p>
-            <SourceLinks items={e.items} onOpen={onOpen} />
-            {e.place && <MapsLink name={e.name} where={e.place} plain />}
-          </div>
-        </li>
-      ))}
+    <ul className="mt-3.5 space-y-3">
+      {events.map((e) => {
+        const [day, ...rest] = (e.date ? formatEventDate(e.date, e.end_date) : "—").split(" ");
+        const cover = e.items.find((it) => it.image_url || it.file_path) || e.items[0];
+        return (
+          <li key={e.key} className="flex gap-3 rounded-2xl border-[1.5px] border-inchiostro p-3">
+            <div className="grid w-[4.4rem] shrink-0 place-items-center self-start rounded-xl bg-[#ffb5d0] px-1 py-2.5 text-center text-[#0a0a0a]">
+              <b className="num text-[0.95rem] font-extrabold leading-tight">{day}</b>
+              <span className="num text-[0.8rem] font-bold leading-tight">{rest.join(" ")}</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className={NAME}>{e.name}</p>
+              <SourceLinks items={e.items} onOpen={onOpen} />
+              {e.place && <MapsLink name={e.name} where={e.place} plain />}
+            </div>
+            {cover && (cover.image_url || cover.file_path) && <Thumb item={cover} size="h-16 w-16" rounded="rounded-lg" />}
+          </li>
+        );
+      })}
     </ul>
   );
+}
+
+function downloadIcs(all) {
+  const blob = new Blob([buildIcs(all)], { type: "text/calendar;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "second-brain.ics";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 export function EventList({ events, onOpen }) {
@@ -202,8 +221,15 @@ export function EventList({ events, onOpen }) {
       </EmptyState>
     );
   }
+  const dated = [...upcoming, ...past];
   return (
     <>
+      {dated.length > 0 && (
+        <button type="button" className="pillola mt-3" onClick={() => downloadIcs(dated)}>
+          <CalendarPlus className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
+          Calendario .ics
+        </button>
+      )}
       {upcoming.length > 0 && <EventRows events={upcoming} onOpen={onOpen} />}
       {undated.length > 0 && (
         <>
