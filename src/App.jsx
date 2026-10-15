@@ -19,11 +19,13 @@ import Add from "./views/Add.jsx";
 import Detail from "./views/Detail.jsx";
 import Settings from "./views/Settings.jsx";
 import Login from "./views/Login.jsx";
+import NuovaPassword from "./views/NuovaPassword.jsx";
 
 export default function App() {
   const auth = useAuth();
   if (isSyncMode && auth.loading) return <Spinner label="Avvio…" />;
-  if (isSyncMode && !auth.session) return <Login signIn={auth.signIn} />;
+  if (isSyncMode && auth.recovery) return <NuovaPassword setNewPassword={auth.setNewPassword} />;
+  if (isSyncMode && !auth.session) return <Login signIn={auth.signIn} resetPassword={auth.resetPassword} />;
   return <Shell auth={auth} />;
 }
 
