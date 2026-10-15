@@ -730,7 +730,7 @@ test("chat: il tondo + accanto al campo apre Foto, video o file e Aggiungi manua
   await expect(page).toHaveURL(/\/aggiungi$/);
 });
 
-test("Archivio a box: il box Foto e video mostra la galleria con la foto salvata", async ({ page }) => {
+test("Archivio a box: il box Repository mostra la foto salvata", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Aggiungi foto, video o file" }).click();
   const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
@@ -738,7 +738,7 @@ test("Archivio a box: il box Foto e video mostra la galleria con la foto salvata
   await chooser.setFiles({ name: "vestito.png", mimeType: "image/png", buffer: png });
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
-  await page.getByRole("button", { name: /^Foto e video, 1 file/ }).click();
-  await expect(page.getByRole("heading", { name: "Foto e video", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: /^Repository, 1 file/ }).click();
+  await expect(page.getByRole("heading", { name: "Repository", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "vestito.png" }).locator("img")).toBeVisible();
 });
