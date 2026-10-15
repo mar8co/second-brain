@@ -3,6 +3,7 @@
 // a box, ogni elemento è una copertina con il titolo sotto.
 import { useRef, useState } from "react";
 import { rememberThumb } from "../lib/thumbs.js";
+import { hasFileCover, useFileUrl } from "../lib/fileurl.js";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
 import { itemColor } from "../lib/colors.js";
@@ -12,7 +13,32 @@ import { formatDate, typeLabel } from "../lib/format.js";
 // Copertina in piccolo (Reel, video, link con immagine); se manca o non si
 // carica più (i link delle copertine social scadono) resta il quadrato del
 // colore dell'elemento con l'icona del tipo.
-export function Thumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
+export function Thumb(props) {
+  return hasFileCover(props.item) ? <FileCover {...props} /> : <LinkThumb {...props} />;
+}
+
+// Foto e video caricati: la copertina è il file stesso (per i video, il primo fotogramma).
+function FileCover({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
+  const url = useFileUrl(item);
+  const video = /^video\//.test(item.file_mime || "");
+  const cls = `${size} shrink-0 ${rounded} object-cover`;
+  if (!url) return <LinkThumbFallback item={item} size={size} rounded={rounded} />;
+  return video ? (
+    <video src={`${url}#t=0.1`} preload="metadata" muted playsInline className={cls} style={{ background: itemColor(item) }} aria-hidden="true" />
+  ) : (
+    <img src={url} alt="" loading="lazy" className={cls} style={{ background: itemColor(item) }} />
+  );
+}
+
+function LinkThumbFallback({ item, size, rounded }) {
+  return (
+    <div className={`${size} flex shrink-0 items-center justify-center ${rounded} text-[#0a0a0a]`} style={{ background: itemColor(item), boxShadow: "inset 0 0 0 1.5px #0a0a0a" }}>
+      <TypeIcon type={item.type} className="h-6 w-6" />
+    </div>
+  );
+}
+
+function LinkThumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
   // Se il CDN non risponde subito si riprova una volta dopo un attimo.
   const [tries, setTries] = useState(0);
   const url = item.image_url;
@@ -31,11 +57,7 @@ export function Thumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
       />
     );
   }
-  return (
-    <div className={`${size} flex shrink-0 items-center justify-center ${rounded} text-[#0a0a0a]`} style={{ background: itemColor(item), boxShadow: "inset 0 0 0 1.5px #0a0a0a" }}>
-      <TypeIcon type={item.type} className="h-6 w-6" />
-    </div>
-  );
+  return <LinkThumbFallback item={item} size={size} rounded={rounded} />;
 }
 
 export function ItemCard({ item, onOpen }) {

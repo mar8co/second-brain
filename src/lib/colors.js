@@ -24,24 +24,28 @@ export function itemColor(item) {
 // blu. Sul nero e sul blu il testo è bianco, sugli altri nero.
 export const BOX_PALETTE = [
   { bg: "var(--giallo)", fg: "#0a0a0a" },
-  { bg: "var(--rosa)", fg: "#0a0a0a" },
-  { bg: "var(--grigio)", fg: "#0a0a0a" },
-  { bg: "var(--sabbia)", fg: "#0a0a0a" },
+  { bg: "var(--arancio)", fg: "#0a0a0a" },
   { bg: "var(--rosso)", fg: "#0a0a0a" },
-  { bg: "var(--verde)", fg: "#0a0a0a" },
+  { bg: "var(--rosa)", fg: "#0a0a0a" },
   { bg: "var(--blu)", fg: "#ffffff" },
+  { bg: "var(--verde)", fg: "#0a0a0a" },
+  { bg: "var(--sabbia)", fg: "#0a0a0a" },
+  { bg: "var(--grigio)", fg: "#0a0a0a" },
   { bg: "#0a0a0a", fg: "#ffffff" },
 ];
 export const BOX_FIXED = {
-  ristoranti: BOX_PALETTE[4],
+  ristoranti: BOX_PALETTE[2],
   eventi: BOX_PALETTE[5],
-  foto: BOX_PALETTE[6],
-  file: BOX_PALETTE[7],
+  foto: BOX_PALETTE[4],
+  file: BOX_PALETTE[8],
 };
 
-// Ogni categoria ha il suo colore, sempre lo stesso.
-export function categoryColor(name) {
-  return pick(name, BOX_PALETTE);
+// Le categorie prendono i colori in sequenza (giallo per prima), nell'ordine
+// alfabetico di tutte le categorie dell'archivio: così ogni categoria ha un
+// colore stabile e si vedono tutti i colori.
+export function categoryColor(name, allNames = []) {
+  const i = allNames.indexOf(name);
+  return i >= 0 ? BOX_PALETTE[i % BOX_PALETTE.length] : pick(name, BOX_PALETTE);
 }
 
 // Stile di una scatola: sfondo, testo e testo tenue coerenti.
