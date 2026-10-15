@@ -131,10 +131,29 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       {restaurants.map((r) => (
         <li key={r.key} className="flex gap-3 py-4">
           <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <p className={NAME_BIG}>{r.name}</p>
+          <p className={NAME_BIG}>{r.name}</p>
+          <SourceLinks items={r.items} onOpen={onOpen} />
+          {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
+          {onStreet && editing?.key === r.key && (
+            <AddressForm
+              key={editing.mode}
+              name={r.name}
+              start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets}
+              onCancel={() => setEditing(null)}
+              onSave={(v) => {
+                setEditing(null);
+                onStreet(r.name, v);
+              }}
+            />
+          )}
+          </div>
+          {(() => {
+            const cover = r.items.find((it) => it.image_url || it.file_path);
+            if (!cover && !onStreet) return null;
+            return (
+              <div className="flex shrink-0 flex-col items-end gap-1">
             {onStreet && (
-              <div className={`relative ${menu === r.key ? "z-[60]" : ""} -mb-3 -mr-2 -mt-2.5 shrink-0`}>
+              <div className={`relative ${menu === r.key ? "z-[60]" : ""} -mr-2 -mt-2.5 self-end`}>
                 <button
                   type="button"
                   className="grid h-11 w-11 place-items-center"
@@ -159,29 +178,9 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
                 )}
               </div>
             )}
-          </div>
-          <SourceLinks items={r.items} onOpen={onOpen} />
-          {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
-          {onStreet && editing?.key === r.key && (
-            <AddressForm
-              key={editing.mode}
-              name={r.name}
-              start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets}
-              onCancel={() => setEditing(null)}
-              onSave={(v) => {
-                setEditing(null);
-                onStreet(r.name, v);
-              }}
-            />
-          )}
-          </div>
-          {(() => {
-            const cover = r.items.find((it) => it.image_url || it.file_path);
-            return cover ? (
-              <div className="shrink-0 self-center">
-                <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" />
+                {cover && <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" />}
               </div>
-            ) : null;
+            );
           })()}
         </li>
       ))}
