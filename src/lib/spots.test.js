@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eventsOf, formatEventDate, hasStreet, mapsUrl, restaurantsOf, todayISO } from "./spots.js";
+import { eventsOf, formatEventDate, hasStreet, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -95,5 +95,35 @@ describe("hasStreet", () => {
     expect(hasStreet("Roma")).toBe(false);
     expect(hasStreet("Roma 00184")).toBe(false);
     expect(hasStreet("")).toBe(false);
+  });
+});
+
+describe("via dei locali", () => {
+  const item = (id, places) => ({ id, ai: { v: 5, places } });
+  it("mette in coda solo i locali con la sola città, una volta per locale", () => {
+    const q = streetQueue([
+      item("a", [{ name: "Bar San Calisto", address: "Roma", kind: "ristorante" }, { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" }, { name: "Museo", address: "Roma", kind: "altro" }]),
+      item("b", [{ name: "bar san calisto", address: "Roma", kind: "ristorante" }, { name: "Già cercato", address: "Roma", kind: "ristorante", geo_at: "2026-10-15T08:00:00Z" }, { name: "Con via", address: "Roma", street: "Via X 1, Roma", kind: "ristorante" }]),
+    ]);
+    expect(q).toHaveLength(1);
+    expect(q[0]).toMatchObject({ name: "Bar San Calisto", address: "Roma" });
+    expect(q[0].targets.map((t) => t.id)).toEqual(["a", "b"]);
+  });
+
+  it("salva la via trovata, o solo che è già stato cercato", () => {
+    const it0 = item("a", [{ name: "Bar San Calisto", address: "Roma", kind: "ristorante" }]);
+    const at = new Date("2026-10-15T08:00:00Z");
+    const ok = streetPatch(it0, 0, "Bar San Calisto", { street: "Piazza di San Calisto 3, Roma" }, at);
+    expect(ok.ai.places[0]).toMatchObject({ street: "Piazza di San Calisto 3, Roma", geo_at: "2026-10-15T08:00:00.000Z" });
+    const none = streetPatch(it0, 0, "Bar San Calisto", null, at);
+    expect(none.ai.places[0].street).toBeUndefined();
+    expect(none.ai.places[0].geo_at).toBeDefined();
+    // La scheda è cambiata nel frattempo: niente da salvare.
+    expect(streetPatch(it0, 0, "Altro", { street: "x" }, at)).toBeNull();
+  });
+
+  it("l'elenco dei ristoranti usa la via trovata", () => {
+    const r = restaurantsOf([item("a", [{ name: "Bar San Calisto", address: "Roma", street: "Piazza di San Calisto 3, Roma", kind: "ristorante" }])]);
+    expect(r[0].address).toBe("Piazza di San Calisto 3, Roma");
   });
 });

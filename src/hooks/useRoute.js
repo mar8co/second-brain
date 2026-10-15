@@ -14,9 +14,9 @@ export function useRoute() {
     return () => window.removeEventListener("popstate", on);
   }, []);
 
-  const navigate = useCallback((to, { replace = false } = {}) => {
+  const navigate = useCallback((to, { replace = false, state = {} } = {}) => {
     if (to === window.location.pathname + window.location.search) return;
-    window.history[replace ? "replaceState" : "pushState"]({}, "", to);
+    window.history[replace ? "replaceState" : "pushState"](state, "", to);
     setLoc(read());
     if (!replace) window.scrollTo(0, 0);
   }, []);

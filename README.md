@@ -156,6 +156,7 @@ I token sono in `src/index.css` e `tailwind.config.js`, i colori delle pagine in
 In Archivio, a box, i primi due box sono **Ristoranti** ed **Eventi**. Non sono categorie: li ricava l'AI nella scheda di memoria di ogni contenuto (`ai.places` con `kind: "ristorante"` per i locali dove si mangia o si beve, `ai.events` con nome, data, fine e posto), solo da ciò che il contenuto dice davvero.
 
 - **Ristoranti**: elenco per nome, con via sotto e il link al Reel, al post o alla pagina da cui vengono (e alla scheda nell'app). Lo stesso locale citato in più contenuti compare una volta con più link.
+  - Il link sotto il nome è la via con il link a Google Maps. Se l'AI ha solo la città, aperto il box l'app cerca la via con **OpenStreetMap** (Nominatim, gratuito e senza chiave, tramite `/api/geo`: una richiesta al secondo, ogni locale una volta sola, risultato salvato in `ai.places[].street`). Se non lo trova resta "Cerca su Maps". Google Maps non si usa per la ricerca: la sua API è a pagamento e non si leggono le sue pagine.
 - **Eventi**: in ordine di data (prossimi, poi quelli senza data); quelli già passati stanno in fondo, in grigio.
 
 Ricerca e filtri valgono anche qui. I contenuti salvati prima (scheda v3) vengono riletti dall'AI a poco a poco, con l'app aperta, e solo allora compaiono in questi box. La Mappa è stata tolta (era la PR #20, nella cronologia di git).

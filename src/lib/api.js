@@ -56,6 +56,8 @@ export const api = {
   // history: turni precedenti [{ q, a }] per le domande di seguito.
   ask: (question, items, memory = [], total = items.length + memory.length, history = []) =>
     post("/api/ai", { action: "ask", question, items, memory, total, history }, { timeoutMs: 45000 }),
+  // Via di un locale dal nome (OpenStreetMap) → { query, found: { street } | null }.
+  geo: (place) => post("/api/geo", { place }, { timeoutMs: 15000 }),
   // Archivi grandi: quali elementi leggere per intero → { ids }.
   // Posizione di un posto dal nome (OpenStreetMap) → { query, found }.
   select: (question, memory, history = []) => post("/api/ai", { action: "select", question, memory, history }, { timeoutMs: 25000 }),

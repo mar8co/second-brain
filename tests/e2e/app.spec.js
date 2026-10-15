@@ -453,6 +453,20 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
   await expect(page.getByRole("link", { name: /Pasta al limone in 10 minuti/ })).toBeVisible();
   await expect(page.getByText("Idea regalo per Giulia")).toHaveCount(0);
 
+  // Lo swipe indietro dell'iPhone (indietro nella cronologia) torna alle categorie.
+  await page.goBack();
+  await expect(page).not.toHaveURL(/category=/);
+  await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
+  // "Categorie" fa lo stesso passo indietro, senza lasciare il box nella cronologia.
+  await page.getByRole("button", { name: "Ricette, 1 contenuto" }).click();
+  await page.getByRole("button", { name: "Categorie", exact: true }).click();
+  await expect(page).not.toHaveURL(/category=/);
+  await page.goBack();
+  await expect(page).not.toHaveURL(/category=/);
+  await page.goForward();
+  await page.getByRole("button", { name: "Ricette, 1 contenuto" }).click();
+  await expect(page).toHaveURL(/category=Ricette/);
+
   // Vista Lista: la lista di sempre, e la scelta resta dopo il ricaricamento.
   await vista.getByRole("button", { name: "Lista" }).click();
   await expect(page.locator("ul.righe li")).toHaveCount(1);
@@ -502,9 +516,14 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   // L'indirizzo con la via completa è il testo del link a Maps (nome e via nella ricerca).
   const mappa = enzo.getByRole("link", { name: /Via dei Vascellari 29, Roma/ });
   await expect(mappa).toHaveAttribute("href", "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Da Enzo al 29, Via dei Vascellari 29, Roma"));
-  // Con la sola città (senza via) il link dice "Cerca su Maps": mai "Roma" come testo del link.
-  await expect(righe.first().getByRole("link", { name: /Cerca su Maps/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Roma$/);
-  await expect(righe.first().getByRole("link", { name: /^Roma/ })).toHaveCount(0);
+  // Il Bar ha solo la città: la via si cerca su OpenStreetMap (qui finto), si
+  // vede nel link a Maps e resta salvata dopo il ricaricamento.
+  const bar = righe.first();
+  await expect(bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Piazza%20di%20San%20Calisto%203%2C%20Roma$/);
+  await expect(bar.getByRole("link", { name: /^Roma/ })).toHaveCount(0);
+  await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
   await expect(enzo.getByRole("link", { name: /Apri su Guida di prova/ })).toHaveAttribute("href", `${FIX}/trastevere`);
   await expect(enzo.getByRole("link", { name: "Scheda" })).toBeVisible();
   // Prima "Apri su …" e Scheda, sotto la via con il link a Maps.
