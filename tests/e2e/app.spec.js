@@ -524,6 +524,14 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
   await page.reload();
   await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
+  // La via si può scrivere a mano; vale più di quella trovata (qui il Bar) e resta dopo il ricaricamento.
+  await bar.getByRole("button", { name: "Modifica la via" }).click();
+  await bar.getByLabel("Via di Bar San Calisto").fill("Via Prova 5, Roma");
+  await bar.getByRole("button", { name: "Salva" }).click();
+  await expect(bar.getByRole("link", { name: /Via Prova 5, Roma/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Via%20Prova%205%2C%20Roma$/);
+  await page.reload();
+  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
+  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto/ })).toHaveCount(0);
   await expect(enzo.getByRole("link", { name: /Apri su Guida di prova/ })).toHaveAttribute("href", `${FIX}/trastevere`);
   await expect(enzo.getByRole("link", { name: "Scheda" })).toBeVisible();
   // Prima "Apri su …" e Scheda, sotto la via con il link a Maps.
@@ -531,6 +539,13 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const via = await mappa.boundingBox();
   expect(via.y).toBeGreaterThan(apri.y + apri.height - 1);
   await expect(page.getByText("Museo di Trastevere")).toHaveCount(0);
+
+  // La scheda ha il link a Maps dei locali con la via (non quello generico di una località).
+  await enzo.getByRole("link", { name: "Scheda" }).click();
+  await expect(page.getByRole("link", { name: /Da Enzo al 29 · Via dei Vascellari 29, Roma/ })).toHaveAttribute("href", /query=Da%20Enzo%20al%2029%2C%20Via%20dei%20Vascellari%2029%2C%20Roma$/);
+  await expect(page.getByRole("link", { name: /Bar San Calisto · Via Prova 5, Roma/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Apri in Mappe/ })).toHaveCount(0);
+  await page.goBack();
 
   // Eventi: prossimi per data, poi senza data, in fondo i passati in grigio.
   await page.getByRole("button", { name: "Categorie", exact: true }).click();

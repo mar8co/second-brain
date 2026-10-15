@@ -1,5 +1,6 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
+import { useState } from "react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -49,7 +50,39 @@ function MapsLink({ name, where, plain = false }) {
 
 const NAME = "text-[1.2rem] font-extrabold leading-[1.05] tracking-[-0.035em]";
 
-export function RestaurantList({ restaurants, onOpen }) {
+// Via scritta a mano: un campo sotto il locale, con Salva e Annulla. Vuoto e
+// salvato, toglie la via scritta e il locale torna a essere cercato.
+function StreetForm({ name, start, onSave, onCancel }) {
+  const [value, setValue] = useState(start);
+  return (
+    <form
+      className="mt-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(value);
+      }}
+    >
+      <label className="sr-only" htmlFor={`via-${name}`}>Via di {name}</label>
+      <input
+        id={`via-${name}`}
+        className="campo piccolo"
+        value={value}
+        autoFocus
+        autoComplete="off"
+        autoCapitalize="words"
+        placeholder="Via e numero, città"
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <div className="mt-1.5 flex gap-4 text-[0.88rem]">
+        <button type="submit" className="link">Salva</button>
+        <button type="button" className="link text-tenue" onClick={onCancel}>Annulla</button>
+      </div>
+    </form>
+  );
+}
+
+export function RestaurantList({ restaurants, onOpen, onStreet }) {
+  const [editing, setEditing] = useState(null);
   if (!restaurants.length) {
     return (
       <EmptyState title="Ancora nessun ristorante">
@@ -64,6 +97,23 @@ export function RestaurantList({ restaurants, onOpen }) {
           <p className={NAME}>{r.name}</p>
           <SourceLinks items={r.items} onOpen={onOpen} />
           <MapsLink name={r.name} where={r.address} />
+          {onStreet && editing === r.key ? (
+            <StreetForm
+              name={r.name}
+              start={r.manual || hasStreet(r.address) ? r.address : ""}
+              onCancel={() => setEditing(null)}
+              onSave={(v) => {
+                setEditing(null);
+                onStreet(r.name, v);
+              }}
+            />
+          ) : (
+            onStreet && (
+              <button type="button" className="link mt-0.5 text-[0.85rem] text-tenue" onClick={() => setEditing(r.key)}>
+                {hasStreet(r.address) ? "Modifica la via" : "Scrivi la via"}
+              </button>
+            )
+          )}
         </li>
       ))}
     </ul>

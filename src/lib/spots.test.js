@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { eventsOf, formatEventDate, hasStreet, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { carryStreets } from "./enrich.js";
+import { eventsOf, formatEventDate, hasStreet, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -125,5 +126,38 @@ describe("via dei locali", () => {
   it("l'elenco dei ristoranti usa la via trovata", () => {
     const r = restaurantsOf([item("a", [{ name: "Bar San Calisto", address: "Roma", street: "Piazza di San Calisto 3, Roma", kind: "ristorante" }])]);
     expect(r[0].address).toBe("Piazza di San Calisto 3, Roma");
+  });
+});
+
+describe("via scritta a mano", () => {
+  const a = { id: "a", ai: { v: 5, places: [{ name: "Da Enzo", address: "Roma", kind: "ristorante" }, { name: "Museo", address: "Roma", kind: "altro" }] } };
+  const b = { id: "b", ai: { v: 5, places: [{ name: "da  enzo", address: "Roma", kind: "ristorante", street: "Via vecchia 1, Roma", geo_at: "2026-10-14T00:00:00Z" }] } };
+  const c = { id: "c", ai: { v: 5, places: [{ name: "Altro", address: "Roma", kind: "ristorante" }] } };
+  const NOW = new Date("2026-10-15T08:00:00Z");
+
+  it("si salva in ogni contenuto che cita il locale e vale più di quella trovata", () => {
+    const patches = manualStreetPatches([a, b, c], "Da Enzo", "  Via Prova   5, Roma ", NOW);
+    expect(patches.map((p) => p.id)).toEqual(["a", "b"]);
+    expect(patches[0].patch.ai.places[0]).toMatchObject({ street: "Via Prova 5, Roma", manual: true, geo_at: NOW.toISOString() });
+    expect(patches[0].patch.ai.places[1]).toEqual(a.ai.places[1]);
+    expect(patches[1].patch.ai.places[0].street).toBe("Via Prova 5, Roma");
+    const after = { ...a, ai: patches[0].patch.ai };
+    expect(restaurantsOf([after])[0]).toMatchObject({ address: "Via Prova 5, Roma", manual: true });
+    expect(streetQueue([after])).toEqual([]);
+  });
+
+  it("vuota, toglie la via e il locale torna a essere cercato", () => {
+    const [p] = manualStreetPatches([b], "Da Enzo", "  ", NOW);
+    expect(p.patch.ai.places[0]).toEqual({ name: "da  enzo", address: "Roma", kind: "ristorante" });
+  });
+
+  it("resta quando l'AI rifà la scheda; un locale a mano che l'AI non cita più si tiene", () => {
+    const manual = [{ name: "Da Enzo", address: "Roma", kind: "ristorante", street: "Via Prova 5, Roma", manual: true, geo_at: "x" }, { name: "Sparito", address: "", kind: "ristorante", street: "Via X 1, Roma", manual: true }];
+    const next = carryStreets([{ name: "da enzo", address: "Roma", kind: "ristorante" }, { name: "Museo", address: "", kind: "altro" }], manual);
+    expect(next[0]).toMatchObject({ street: "Via Prova 5, Roma", manual: true, geo_at: "x" });
+    expect(next[1].name).toBe("Museo");
+    expect(next[2].name).toBe("Sparito");
+    // Un locale nuovo, senza via già nota, resta com'è.
+    expect(carryStreets([{ name: "Nuovo", kind: "ristorante" }], manual)[0]).toEqual({ name: "Nuovo", kind: "ristorante" });
   });
 });

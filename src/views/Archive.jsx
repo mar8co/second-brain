@@ -9,7 +9,7 @@ import { PAGE } from "../lib/colors.js";
 import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, RestaurantList } from "../components/Spots.jsx";
-import { eventsOf, restaurantsOf } from "../lib/spots.js";
+import { eventsOf, manualStreetPatches, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
@@ -51,6 +51,16 @@ export default function Archive({ archive, query, navigate, openItem }) {
   usePageColor(PAGE.archive);
   // Aperto il box Ristoranti, si cerca la via dei locali che hanno solo la città.
   useStreets(archive, sezione === "ristoranti");
+
+  // Via di un locale scritta a mano nel box Ristoranti: si salva in ogni
+  // contenuto che lo cita.
+  const saveStreet = async (name, street) => {
+    try {
+      for (const { id, patch } of manualStreetPatches(archive.items, name, street)) await archive.update(id, patch);
+    } catch {
+      // Non salvata (rete o accesso): la riga resta com'era e si può riprovare.
+    }
+  };
 
   const setParam = (patch) => {
     const p = new URLSearchParams(query);
@@ -213,7 +223,7 @@ export default function Archive({ archive, query, navigate, openItem }) {
           <Spinner />
         ) : sezione ? (
           <>
-            {sezione === "ristoranti" ? <RestaurantList restaurants={restaurants} onOpen={openItem} /> : <EventList events={events} onOpen={openItem} />}
+            {sezione === "ristoranti" ? <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} /> : <EventList events={events} onOpen={openItem} />}
           </>
         ) : results.length === 0 ? (
           items.length === 0 ? (

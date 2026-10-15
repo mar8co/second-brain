@@ -34,10 +34,10 @@ export async function classifyItem(item, { store, categories, apply = false, kee
   // L'avviso di un tentativo precedente non riuscito non serve più.
   const detail = withoutAiFailure(item.status_detail);
   if (detail !== (item.status_detail ?? null)) patch.status_detail = detail;
-  if (!apply) return store.update(item.id, { ...patch, ai: aiFromDigest(r, { applied: keepApplied && Boolean(item.ai?.applied) }) });
+  if (!apply) return store.update(item.id, { ...patch, ai: aiFromDigest(r, { applied: keepApplied && Boolean(item.ai?.applied), previous: item.ai }) });
   return store.update(item.id, {
     ...patch,
-    ai: aiFromDigest(r, { applied: true }),
+    ai: aiFromDigest(r, { applied: true, previous: item.ai }),
     categories: [...(item.categories || []), ...r.categories.filter((c) => !(item.categories || []).includes(c))],
     tags: [...(item.tags || []), ...r.tags.filter((t) => !(item.tags || []).includes(t))],
   });
