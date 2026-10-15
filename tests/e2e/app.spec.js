@@ -537,7 +537,15 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const ic = await icona.boundingBox();
   expect(ic.x).toBeGreaterThan(nomeBar.x + nomeBar.width);
   expect(ic.y).toBeLessThan(nomeBar.y + nomeBar.height);
+  // Tre puntini senza il tondo; un tocco apre un menu: con una via già nota ci sono Modifica e Aggiungi.
+  await expect(icona).toHaveCSS("border-top-width", "0px");
   await icona.click();
+  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
+  await page.keyboard.press("Escape");
+  await expect(bar.getByRole("menu")).toHaveCount(0);
+  await icona.click();
+  await bar.getByRole("menuitem", { name: "Modifica via" }).click();
+  await expect(bar.getByRole("menu")).toHaveCount(0);
   await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Piazza di San Calisto 3, Roma");
   await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Prova 5, Roma");
   await bar.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
@@ -551,6 +559,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto/ })).toHaveCount(0);
   // Togliendo una sede resta l'altra.
   await page.locator("ul.righe > li").first().getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
+  await page.getByRole("menuitem", { name: "Modifica via" }).click();
   await page.getByRole("button", { name: "Togli l'indirizzo 2 di Bar San Calisto" }).click();
   await page.getByRole("button", { name: "Salva" }).click();
   await expect(page.getByRole("link", { name: /Via Seconda 7, Milano/ })).toHaveCount(0);
@@ -620,4 +629,31 @@ test("filtro Autore: i nomi lunghi restano nella larghezza e la pagina non scorr
   expect(b.x).toBeGreaterThanOrEqual(0);
   expect(b.x + b.width).toBeLessThanOrEqual(w);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiungi via", async ({ page }) => {
+  // OpenStreetMap non trova nulla: il Bar resta con la sola città.
+  await page.route("**/api/geo", (route) => route.fulfill({ json: { found: null } }));
+  await addLink(page, `${FIX}/trastevere`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/archivio?sezione=ristoranti");
+  const bar = page.locator("ul.righe > li").first();
+  await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toBeVisible();
+  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
+  await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via"]);
+  await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
+  await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("");
+  await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Nuova 1, Roma");
+  await bar.getByRole("button", { name: "Salva" }).click();
+  await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
+  await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
+  // Ora c'è una via: il menu ha Modifica e Aggiungi; "Aggiungi via" apre la via nota più un campo vuoto.
+  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
+  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
+  await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
+  await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Via Nuova 1, Roma");
+  await bar.getByRole("textbox", { name: "Indirizzo 2 di Bar San Calisto" }).fill("Via Seconda 2, Milano");
+  await bar.getByRole("button", { name: "Salva" }).click();
+  await expect(bar.getByRole("link", { name: /Via Seconda 2, Milano/ })).toBeVisible();
+  await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
 });
