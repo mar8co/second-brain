@@ -5,10 +5,11 @@ import { ErrorBox } from "../components/ui.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 
-export default function Login({ signIn }) {
+export default function Login({ signIn, resetPassword }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
+  const [info, setInfo] = useState(null);
   const [busy, setBusy] = useState(false);
   usePageColor(PAGE.chat);
 
@@ -43,9 +44,30 @@ export default function Login({ signIn }) {
           <label htmlFor="li-pw" className="etichetta">Password</label>
           <input id="li-pw" type="password" autoComplete="current-password" className="campo" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
+        <button
+          type="button"
+          className="link text-[0.95rem]"
+          disabled={busy}
+          onClick={async () => {
+            setError(null);
+            setInfo(null);
+            if (!email.trim()) return setError("Scrivi la tua email qui sopra, poi tocca di nuovo “Hai dimenticato la password?”.");
+            setBusy(true);
+            try {
+              await resetPassword(email.trim());
+              setInfo("Se l'email è registrata, ti ho mandato un link per scegliere una nuova password. Controlla anche lo spam.");
+            } catch (err) {
+              setError(err.message);
+            }
+            setBusy(false);
+          }}
+        >
+          Hai dimenticato la password?
+        </button>
         {error && <ErrorBox>{error}</ErrorBox>}
+        {info && <p role="status" className="font-semibold">{info}</p>}
         <button type="submit" className="bottone grande-azione" disabled={busy}>
-          {busy ? "Accedo…" : "Accedi"}
+          {busy ? "Attendi…" : "Accedi"}
         </button>
       </form>
     </main>
