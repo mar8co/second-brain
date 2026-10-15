@@ -44,7 +44,7 @@ export function buildIcs(events, now = new Date()) {
       `DTSTAMP:${stamp}`,
       `DTSTART;VALUE=DATE:${compact(e.date)}`,
       `DTEND;VALUE=DATE:${compact(nextDay(e.end_date || e.date))}`,
-      `SUMMARY:${esc(e.name)}`,
+      `SUMMARY:${esc(`🎟️ ${e.name}`)}`,
       ...(e.place ? [`LOCATION:${esc(e.place)}`] : []),
       ...(src ? [`URL:${src}`] : []),
       "TRANSP:TRANSPARENT",

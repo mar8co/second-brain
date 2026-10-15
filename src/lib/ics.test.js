@@ -14,7 +14,7 @@ describe("buildIcs", () => {
     expect(ics).toContain("X-APPLE-CALENDAR-COLOR:#ffb5d0");
     expect(ics).toContain("DTSTART;VALUE=DATE:20261025");
     expect(ics).toContain("DTEND;VALUE=DATE:20261028");
-    expect(ics).toContain("SUMMARY:Workshop\\, AI");
+    expect(ics).toContain("SUMMARY:🎟️ Workshop\\, AI");
     expect(ics).not.toContain("Senza data");
     expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
   });
