@@ -1,6 +1,6 @@
 // Radice dell'app: sceglie l'archivio (locale o Supabase), gestisce accesso,
 // navigazione e notifiche brevi.
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BottomNav } from "./components/Layout.jsx";
 import { Spinner } from "./components/ui.jsx";
 import { useRoute } from "./hooks/useRoute.js";
@@ -11,6 +11,7 @@ import { useSettings } from "./hooks/useSettings.js";
 import { isSyncMode, supabase } from "./lib/supabase.js";
 import { createLocalStore } from "./lib/store/local.js";
 import { createRemoteStore } from "./lib/store/remote.js";
+import { startChatSync, stopChatSync } from "./lib/chatlog.js";
 import Chat from "./views/Chat.jsx";
 import Archive from "./views/Archive.jsx";
 import Add from "./views/Add.jsx";
@@ -27,6 +28,14 @@ export default function App() {
 
 function Shell({ auth }) {
   const route = useRoute();
+  // La chat segue l'account: si carica dal server all'accesso, si svuota all'uscita.
+  const userId = auth.session?.user?.id || null;
+  useEffect(() => {
+    if (!isSyncMode) return undefined;
+    if (userId) startChatSync(supabase, userId);
+    else stopChatSync();
+    return undefined;
+  }, [userId]);
   const { path, query, navigate, back } = route;
   const store = useMemo(() => (isSyncMode ? createRemoteStore(supabase) : createLocalStore()), []);
   const aiStatus = useAiStatus(true);

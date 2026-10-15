@@ -225,3 +225,21 @@ grant execute on function public.revoke_share_token() to authenticated;
 grant execute on function public.share_save(text, jsonb) to anon, authenticated;
 grant execute on function public.share_update(text, uuid, jsonb) to anon, authenticated;
 grant execute on function public.share_get(text, uuid) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
+-- Chat sincronizzata: una riga per utente con le domande e risposte (così la
+-- stessa chat si ritrova da tutti i dispositivi). Solo il proprietario la vede.
+-- ---------------------------------------------------------------------------
+create table if not exists public.chat_log (
+  user_id     uuid primary key references auth.users (id) on delete cascade,
+  messages    jsonb not null default '[]'::jsonb,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.chat_log enable row level security;
+
+drop policy if exists "chat_log_own" on public.chat_log;
+create policy "chat_log_own" on public.chat_log
+  for all to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
