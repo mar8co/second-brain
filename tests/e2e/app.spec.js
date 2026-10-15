@@ -497,7 +497,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(ristoranti).toBeVisible();
   await expect(page.getByRole("button", { name: "Eventi, 1 in arrivo" })).toBeVisible();
   // Colorati come le altre scatole, non neri.
-  await expect(ristoranti).toHaveCSS("background-color", "rgb(255, 122, 26)");
+  await expect(ristoranti).toHaveCSS("background-color", "rgb(255, 59, 28)");
   await expect(page.getByRole("button", { name: /^Eventi,/ })).toHaveCSS("background-color", "rgb(34, 179, 94)");
   expect((await ristoranti.boundingBox()).y).toBeLessThan((await page.getByRole("button", { name: /^Cibo,/ }).boundingBox()).y);
 
@@ -730,7 +730,7 @@ test("chat: il tondo + accanto al campo apre Foto, video o file e Aggiungi manua
   await expect(page).toHaveURL(/\/aggiungi$/);
 });
 
-test("Archivio a box: il box Repository mostra la foto salvata", async ({ page }) => {
+test("Archivio a box: il box Foto e video mostra la foto salvata", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Aggiungi foto, video o file" }).click();
   const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
@@ -738,7 +738,60 @@ test("Archivio a box: il box Repository mostra la foto salvata", async ({ page }
   await chooser.setFiles({ name: "vestito.png", mimeType: "image/png", buffer: png });
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
-  await page.getByRole("button", { name: /^Repository, 1 file/ }).click();
-  await expect(page.getByRole("heading", { name: "Repository", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: /^Foto e video, 1 file/ }).click();
+  await expect(page.getByRole("heading", { name: "Foto e video", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: "vestito.png" }).locator("img")).toBeVisible();
+});
+
+test("Archivio a box: i box fissi Foto e video e File hanno le stesse dimensioni di Ristoranti e si possono riordinare", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Aggiungi foto, video o file" }).click();
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
+  await chooser.setFiles({ name: "nota.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF") });
+  await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
+  await page.getByRole("link", { name: "Archivio", exact: true }).click();
+  const size = async (name) => (await page.getByRole("button", { name: new RegExp(`^${name},`) }).boundingBox());
+  const r = await size("Ristoranti");
+  for (const n of ["Eventi", "Foto e video", "File"]) {
+    const b = await size(n);
+    expect(Math.abs(b.width - r.width)).toBeLessThan(2);
+    expect(Math.abs(b.height - r.height)).toBeLessThan(2);
+  }
+  // Riordino: File passa prima di Foto e video.
+  const x0 = (await size("File")).y * 1000 + (await size("File")).x;
+  await page.getByRole("button", { name: "Ordina" }).click();
+  await page.getByRole("button", { name: "Sposta File prima" }).click();
+  await page.getByRole("button", { name: "Sposta File prima" }).click();
+  await page.getByRole("button", { name: "Fine" }).click();
+  const x1 = (await size("File")).y * 1000 + (await size("File")).x;
+  expect(x1).toBeLessThan(x0);
+  await page.reload();
+  const x2 = (await size("File")).y * 1000 + (await size("File")).x;
+  expect(x2).toBe(x1);
+  // Il box File mostra il documento.
+  await page.getByRole("button", { name: /^File,/ }).click();
+  await expect(page.getByRole("heading", { name: "File", level: 1 })).toBeVisible();
+  await expect(page.getByRole("link", { name: /nota\.pdf/ })).toBeVisible();
+});
+
+test("lista: lo swipe su una riga scopre Elimina, con Annulla", async ({ page }) => {
+  await page.goto("/aggiungi");
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel(/^Titolo/).fill("Prova da togliere");
+  await page.getByLabel("Testo").fill("Testo di prova");
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await page.goto("/archivio");
+  const riga = page.getByRole("link", { name: /Prova da togliere/ }).first();
+  await expect(riga).toBeVisible();
+  const b = await riga.boundingBox();
+  await page.mouse.move(b.x + b.width - 20, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width - 80, b.y + b.height / 2, { steps: 5 });
+  await page.mouse.move(b.x + b.width - 140, b.y + b.height / 2, { steps: 5 });
+  await page.mouse.up();
+  await page.getByRole("button", { name: "Elimina" }).click();
+  await expect(page.getByText("Elemento eliminato")).toBeVisible();
+  await expect(page.getByRole("link", { name: /Prova da togliere/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Annulla" }).click();
+  await expect(page.getByRole("link", { name: /Prova da togliere/ }).first()).toBeVisible();
 });

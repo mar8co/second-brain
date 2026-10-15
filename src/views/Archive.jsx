@@ -1,22 +1,24 @@
 // Archivio: ricerca testuale istantanea + filtri per tipo, periodo, sito, autore, categoria.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, FolderArchive, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
+import { CalendarDays, ChevronLeft, ArrowUpDown, FileText, Images, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
 import { Page } from "../components/Layout.jsx";
 import Calendario from "../components/Calendario.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
-import { PAGE } from "../lib/colors.js";
+import { BOX_FIXED, PAGE, categoryColor } from "../lib/colors.js";
+import { moveBox, orderBoxes, readOrder, saveOrder } from "../lib/boxorder.js";
 import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, RestaurantList } from "../components/Spots.jsx";
 import Gallery from "../components/Gallery.jsx";
-import { eventsOf, manualStreetPatches, filesOf, restaurantsOf } from "../lib/spots.js";
+import { docsOf, eventsOf, manualStreetPatches, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
 import { TYPES } from "../lib/constants.js";
 import { formatRange } from "../lib/calendar.js";
 
+const SEZIONI = ["ristoranti", "eventi", "foto", "file"];
 const FILTER_KEYS = ["type", "category", "author", "site", "from", "to"];
 
 // Vista scelta (box o lista), ricordata su questo telefono. Di partenza: box.
@@ -29,7 +31,7 @@ function readVista() {
   }
 }
 
-export default function Archive({ archive, store, query, navigate, openItem }) {
+export default function Archive({ archive, store, toast, query, navigate, openItem }) {
   const { items, loading, error, reload } = archive;
   const q = query.get("q") || "";
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, query.get(k) || ""]));
@@ -48,7 +50,7 @@ export default function Archive({ archive, store, query, navigate, openItem }) {
   const [open, setOpen] = useState(shown.length > 0);
   // Box fissi Ristoranti ed Eventi (solo a box): quale è aperto.
   const sezioneParam = query.get("sezione");
-  const sezione = vista === "box" && (sezioneParam === "ristoranti" || sezioneParam === "eventi" || sezioneParam === "repository") ? sezioneParam : "";
+  const sezione = vista === "box" && SEZIONI.includes(sezioneParam) ? sezioneParam : "";
   usePageColor(PAGE.archive);
   // Aperto il box Ristoranti, si cerca la via dei locali che hanno solo la città.
   useStreets(archive, sezione === "ristoranti");
@@ -87,16 +89,37 @@ export default function Archive({ archive, store, query, navigate, openItem }) {
   const boxes = useMemo(() => groupByCategory(matches), [matches]);
   const restaurants = useMemo(() => restaurantsOf(matches), [matches]);
   const events = useMemo(() => eventsOf(matches), [matches]);
-  const media = useMemo(() => filesOf(matches), [matches]);
+  const photos = useMemo(() => photosOf(matches), [matches]);
+  const docs = useMemo(() => docsOf(matches), [matches]);
   const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
-  const special = [
-    { key: "ristoranti", name: "Ristoranti", Icon: Utensils, color: "var(--arancio)", sub: restaurants.length ? `${restaurants.length} ${restaurants.length === 1 ? "locale" : "locali"}` : "Ancora nessuno" },
-    { key: "eventi", name: "Eventi", Icon: CalendarDays, color: "var(--verde)", sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : `${eventsTotal} ${eventsTotal === 1 ? "evento" : "eventi"}` },
-    { key: "repository", name: "Repository", Icon: FolderArchive, color: "var(--blu)", sub: media.length ? `${media.length} file` : "Ancora nessuno" },
-  ];
+  const plural = (n, uno, molti) => (n === 1 ? `1 ${uno}` : `${n} ${molti}`);
+  const fissi = [
+    { id: "ristoranti", name: "Ristoranti", Icon: Utensils, items: restaurants, sub: restaurants.length ? plural(restaurants.length, "locale", "locali") : "Ancora nessuno" },
+    { id: "eventi", name: "Eventi", Icon: CalendarDays, items: [], sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : plural(eventsTotal, "evento", "eventi") },
+    { id: "foto", name: "Foto e video", Icon: Images, items: photos, sub: photos.length ? plural(photos.length, "file", "file") : "Ancora nessuno" },
+    { id: "file", name: "File", Icon: FileText, items: docs, sub: docs.length ? plural(docs.length, "file", "file") : "Ancora nessuno" },
+  ].map((t) => ({ ...t, kind: "fisso", color: BOX_FIXED[t.id] }));
+  const [ordineSalvato, setOrdineSalvato] = useState(readOrder);
+  const [ordina, setOrdina] = useState(false);
+  const tiles = useMemo(() => {
+    const all = [...fissi, ...boxes.map(([name, its]) => ({ id: `c:${name}`, kind: "categoria", name, items: its, sub: plural(its.length, "contenuto", "contenuti"), color: categoryColor(name) }))];
+    const byId = new Map(all.map((t) => [t.id, t]));
+    return orderBoxes(all.map((t) => t.id), ordineSalvato).map((id) => byId.get(id));
+  }, [boxes, restaurants, events, photos, docs, ordineSalvato]); // eslint-disable-line react-hooks/exhaustive-deps
+  const moveTile = (id, dir) => {
+    const next = moveBox(tiles.map((t) => t.id), id, dir);
+    setOrdineSalvato(next);
+    saveOrder(next);
+  };
+  const openTile = (t) => (t.kind === "fisso" ? openBox({ sezione: t.id }) : openBox({ category: t.name }));
   const cats = useMemo(() => countBy(items, "categories"), [items]);
   const authors = useMemo(() => countValues(items, "author"), [items]);
   const sites = useMemo(() => countValues(items, "site_name"), [items]);
+  // Dalla lista: swipe sulla riga e "Elimina", con "Annulla" per qualche secondo.
+  const removeFromList = (item) => {
+    const undo = archive.removeSoon(item);
+    toast("Elemento eliminato", { action: { label: "Annulla", run: undo } });
+  };
   const clearAll = () => setParam(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])));
   // Filtri attivi come pillole da togliere; Dal e Al insieme, come periodo.
   const chips = [
@@ -111,14 +134,10 @@ export default function Archive({ archive, store, query, navigate, openItem }) {
       {chips.length > 0 && <span className="conta num" aria-hidden="true">{chips.length}</span>}
     </button>
   );
-  const titolo = sezione ? (sezione === "ristoranti" ? "Ristoranti" : sezione === "repository" ? "Repository" : "Eventi") : dentro ? filters.category : "Archivio";
+  const titolo = sezione ? fissi.find((t) => t.id === sezione).name : dentro ? filters.category : "Archivio";
   const indietro = sezione ? () => closeBox({ sezione: "" }) : dentro ? () => closeBox({ category: "" }) : null;
   const conteggio = sezione
-    ? sezione === "ristoranti"
-      ? restaurants.length === 1 ? "1 locale" : `${restaurants.length} locali`
-      : sezione === "repository"
-      ? media.length === 1 ? "1 file" : `${media.length} file`
-      : eventsTotal === 1 ? "1 evento" : `${eventsTotal} eventi`
+    ? fissi.find((t) => t.id === sezione).sub
     : vista === "box" && !filters.category
       ? boxes.length === 1 ? "1 categoria" : `${boxes.length} categorie`
       : results.length === 1 ? "1 elemento" : `${results.length} elementi`;
@@ -176,6 +195,12 @@ export default function Archive({ archive, store, query, navigate, openItem }) {
                 </button>
               )}
               {!sezione && filtriBtn}
+              {!sezione && !dentro && vista === "box" && items.length > 0 && (
+                <button type="button" className={`pillola${ordina ? " attiva" : ""}`} aria-pressed={ordina} onClick={() => setOrdina((o) => !o)}>
+                  <ArrowUpDown className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                  {ordina ? "Fine" : "Ordina"}
+                </button>
+              )}
               <span aria-live="polite" className="sr-only">{conteggio}</span>
             </span>
             {sezione && filtriBtn}
@@ -234,8 +259,8 @@ export default function Archive({ archive, store, query, navigate, openItem }) {
           <>
             {sezione === "ristoranti" ? (
               <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} />
-            ) : sezione === "repository" ? (
-              <FotoBox items={media} store={store} onOpen={openItem} />
+            ) : sezione === "foto" || sezione === "file" ? (
+              <FotoBox items={sezione === "foto" ? photos : docs} store={store} onOpen={openItem} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file"} />
             ) : (
               <EventList events={events} onOpen={openItem} />
             )}
@@ -262,11 +287,11 @@ export default function Archive({ archive, store, query, navigate, openItem }) {
         ) : (
           <>
             {vista === "lista" ? (
-              <ItemList items={results} onOpen={openItem} />
+              <ItemList items={results} onOpen={openItem} onDelete={removeFromList} />
             ) : filters.category ? (
               <ItemGrid items={results} onOpen={openItem} />
             ) : (
-              <CategoryBoxes boxes={boxes} onOpen={(c) => openBox({ category: c })} special={special} onSpecial={(k) => openBox({ sezione: k })} />
+              <CategoryBoxes tiles={tiles} onOpen={openTile} ordina={ordina} onMove={moveTile} />
             )}
           </>
         )}
@@ -355,12 +380,12 @@ function Periodo({ from, to, onChange }) {
   );
 }
 
-// Box Repository: i file caricati dalla Chat, con le categorie dell'AI come filtro rapido.
-function FotoBox({ items, store, onOpen }) {
+// Box Foto e video / File: i file caricati dalla Chat, con le categorie dell'AI come filtro rapido.
+function FotoBox({ items, store, onOpen, vuoto }) {
   const [cat, setCat] = useState("");
   const cats = countBy(items, "categories");
   const list = cat ? items.filter((it) => (it.categories || []).includes(cat)) : items;
-  if (!items.length) return <EmptyState title="Ancora nessun file">Dal tondo + nella Chat salvi foto, video e documenti: li trovi qui.</EmptyState>;
+  if (!items.length) return <EmptyState title={vuoto}>Dal tondo + nella Chat salvi foto, video e documenti: li trovi qui.</EmptyState>;
   return (
     <>
       {cats.length > 1 && (
