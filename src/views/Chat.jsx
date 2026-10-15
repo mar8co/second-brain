@@ -80,10 +80,18 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     const answer = last.result && !last.pending ? listRef.current?.querySelector("li:last-child [data-risposta]") : null;
     // In attesa: la domanda e sotto la risposta che si sta preparando, sotto la
     // testata (non il fondo della lista, che finirebbe dietro al campo di testo).
-    const waiting = last.pending ? listRef.current?.lastElementChild : null;
-    if (answer) answer.scrollIntoView({ block: "start" });
-    else if (waiting) waiting.scrollIntoView({ block: "start" });
-    else endRef.current?.scrollIntoView({ block: "end" });
+    const waiting = last.pending ? listRef.current?.lastElementChild?.querySelector("[data-risposta]") : null;
+    const go = () => {
+      if (answer) answer.scrollIntoView({ block: "start" });
+      else if (waiting) waiting.scrollIntoView({ block: "end" });
+      else endRef.current?.scrollIntoView({ block: "end" });
+    };
+    go();
+    // Subito dopo l'invio il campo si accorcia e la tastiera si assesta: si ripete
+    // quando il layout è fermo, così il "Cerco nella tua memoria…" resta in vista.
+    if (!waiting) return undefined;
+    const t = [120, 450].map((ms) => setTimeout(go, ms));
+    return () => t.forEach(clearTimeout);
   }, [log, loading]);
 
   const ask = async (question) => {
@@ -208,7 +216,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
             id="chat-q"
             rows={1}
             className="campo-chat"
-            placeholder="Chiedi alla tua memoria…"
+            placeholder="Chiedimi qualcosa..."
             value={text}
             maxLength={1000}
             onChange={(e) => setText(e.target.value)}
@@ -275,13 +283,13 @@ function QaBubbles({ msg, byId, archiveOk, onOpen }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-md bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white">
+        <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white">
           {msg.q}
           <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
         </p>
       </div>
-      <div className="flex scroll-mt-24 justify-start" data-risposta>
-        <div className="card-bianca w-full max-w-[94%] rounded-bl-md px-4 py-3.5">
+      <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
+        <div className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5">
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
