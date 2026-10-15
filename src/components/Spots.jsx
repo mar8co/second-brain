@@ -100,18 +100,13 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
   const [menu, setMenu] = useState(null);
   const [editing, setEditing] = useState(null);
 
-  // Il menu si chiude toccando fuori o con Esc.
+  // Il menu si chiude con Esc; toccando fuori lo chiude lo strato trasparente
+  // qui sotto, che assorbe il tocco (i link sotto non si attivano).
   useEffect(() => {
     if (!menu) return undefined;
-    const close = (e) => {
-      if (e.type === "keydown" ? e.key === "Escape" : !e.target.closest?.("[data-menu]")) setMenu(null);
-    };
-    document.addEventListener("pointerdown", close);
+    const close = (e) => e.key === "Escape" && setMenu(null);
     document.addEventListener("keydown", close);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-    };
+    return () => document.removeEventListener("keydown", close);
   }, [menu]);
 
   if (!restaurants.length) {
@@ -126,13 +121,15 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
     setEditing({ key: r.key, mode });
   };
   return (
+    <>
+      {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
     <ul className="righe">
       {restaurants.map((r) => (
         <li key={r.key} className="py-3.5">
           <div className="flex items-start justify-between gap-3">
             <p className={NAME}>{r.name}</p>
             {onStreet && (
-              <div className="relative -mb-3 -mr-2 -mt-2.5 shrink-0" data-menu>
+              <div className={`relative ${menu === r.key ? "z-[60]" : ""} -mb-3 -mr-2 -mt-2.5 shrink-0`}>
                 <button
                   type="button"
                   className="grid h-11 w-11 place-items-center"
@@ -141,10 +138,10 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
                   aria-expanded={menu === r.key}
                   onClick={() => setMenu(menu === r.key ? null : r.key)}
                 >
-                  <Ellipsis className="h-7 w-7" strokeWidth={4} aria-hidden="true" />
+                  <Ellipsis className="h-7 w-7" strokeWidth={2.6} aria-hidden="true" />
                 </button>
                 {menu === r.key && (
-                  <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-2 top-10 z-20 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] shadow-none">
+                  <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-2 top-10 z-[60] min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] shadow-none">
                     {r.streets.length > 0 && (
                       <button type="button" role="menuitem" className="block w-full border-b border-riga px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "modifica")}>
                         Modifica via
@@ -175,6 +172,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
         </li>
       ))}
     </ul>
+    </>
   );
 }
 

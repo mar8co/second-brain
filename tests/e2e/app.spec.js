@@ -42,6 +42,7 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   await expect(page.getByText(/IndexedDB/)).toBeHidden();
   await page.getByText("Informazioni e privacy").click();
   await expect(page.getByText(/IndexedDB/)).toBeVisible();
+  await expect(page.getByText(/Versione dell'app/)).toBeVisible();
   // In Archivio non ci sono più; Filtri è una sola icona (senza la parola) sotto la ricerca.
   await page.goto("/archivio");
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
@@ -539,6 +540,20 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   expect(ic.y).toBeLessThan(nomeBar.y + nomeBar.height);
   // Tre puntini senza il tondo; un tocco apre un menu: con una via già nota ci sono Modifica e Aggiungi.
   await expect(icona).toHaveCSS("border-top-width", "0px");
+  await icona.click();
+  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
+  // Un tocco fuori (anche sopra un link, o sulla barra in basso) chiude solo il menu: il link sotto non scatta.
+  const url0 = page.url();
+  const link = await bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ }).boundingBox();
+  await page.mouse.click(link.x + link.width / 2, link.y + link.height / 2);
+  await expect(bar.getByRole("menu")).toHaveCount(0);
+  expect(page.url()).toBe(url0);
+  expect(page.context().pages()).toHaveLength(1);
+  await icona.click();
+  const nav = await page.getByRole("link", { name: "Chat", exact: true }).boundingBox();
+  await page.mouse.click(nav.x + nav.width / 2, nav.y + nav.height / 2);
+  await expect(bar.getByRole("menu")).toHaveCount(0);
+  expect(page.url()).toBe(url0);
   await icona.click();
   await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
   await page.keyboard.press("Escape");
