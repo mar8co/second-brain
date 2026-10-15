@@ -10,7 +10,7 @@ export default [
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
-      globals: globals.browser,
+      globals: { ...globals.browser, __BUILD__: "readonly" },
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
     plugins: { "react-hooks": reactHooks, "react-refresh": reactRefresh },

@@ -42,6 +42,13 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   usePageColor(PAGE.chat);
   useSopraTastiera(formRef);
 
+  // Niente rimbalzo in cima: altrimenti con la pagina tirata giù il titolo
+  // scende con lei e il campo di testo si ridisegna senza il segnaposto.
+  useEffect(() => {
+    document.documentElement.classList.add("senza-rimbalzo");
+    return () => document.documentElement.classList.remove("senza-rimbalzo");
+  }, []);
+
   // Il campo cresce con il testo (fino a circa 6 righe, poi scorre).
   useLayoutEffect(() => {
     const el = boxRef.current;

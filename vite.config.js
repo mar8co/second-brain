@@ -42,6 +42,8 @@ export default defineConfig(({ mode }) => {
   };
 
   return {
+    // Versione dell'app (commit su Vercel), mostrata in Impostazioni per capire quale copia gira.
+    define: { __BUILD__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7) || "locale") },
     plugins: [
       react(),
       devApi("/api/extract", handleRead, apiEnv),
@@ -81,6 +83,25 @@ export default defineConfig(({ mode }) => {
           navigateFallback: "/index.html",
           navigateFallbackDenylist: [/^\/api\//],
           maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+          // Le miniature dei contenuti (immagini di altri siti) restano sul telefono dopo
+          // il primo caricamento: Archivio non le riscarica a ogni apertura.
+          runtimeCaching: [
+            {
+              // `self` esiste nel service worker, dove questa funzione viene eseguita.
+              // eslint-disable-next-line no-undef
+              urlPattern: ({ request, url }) => request.destination === "image" && url.origin !== self.location.origin,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "miniature",
+                // Qui si legge soltanto: a salvare ci pensa l'app (src/lib/thumbs.js), a
+                // caricamento riuscito, così un errore del CDN non resta in cache.
+                plugins: [{ cacheWillUpdate: async () => null }],
+                matchOptions: { ignoreVary: true },
+                expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 180, purgeOnQuotaError: true },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
+          ],
         },
       }),
     ],

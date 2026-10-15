@@ -2,6 +2,7 @@
 // fonte e data in piccolo, titolo grande, in basso stato e categorie. In vista
 // a box, ogni elemento è una copertina con il titolo sotto.
 import { useState } from "react";
+import { rememberThumb } from "../lib/thumbs.js";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
 import { itemColor } from "../lib/colors.js";
@@ -12,16 +13,19 @@ import { formatDate, typeLabel } from "../lib/format.js";
 // carica più (i link delle copertine social scadono) resta il quadrato del
 // colore dell'elemento con l'icona del tipo.
 export function Thumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
-  const [failed, setFailed] = useState(false);
+  // Se il CDN non risponde subito si riprova una volta dopo un attimo.
+  const [tries, setTries] = useState(0);
   const url = item.image_url;
-  if (url && !failed && /^https?:\/\//.test(url)) {
+  if (url && tries < 2 && /^https?:\/\//.test(url)) {
     return (
       <img
+        key={tries}
         src={url}
         alt=""
         loading="lazy"
         referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
+        onLoad={() => rememberThumb(url)}
+        onError={() => (tries === 0 ? setTimeout(() => setTries(1), 1500) : setTries(2))}
         className={`${size} shrink-0 ${rounded} object-cover`}
         style={{ background: itemColor(item) }}
       />

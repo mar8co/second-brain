@@ -41,24 +41,23 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
       {syncMode && session?.user?.email && <p className="micro -mt-2 text-[0.9rem] font-semibold">{session.user.email}</p>}
 
       <Section title="Archivio">
-        <div className="flex flex-wrap gap-2.5">
-          <button type="button" className="pillola relative" disabled={!aiStatus.ai || Boolean(reanalysis) || reanalyzable.length === 0} onClick={reanalyze}>
+        <div className="grid grid-flow-col auto-cols-fr gap-2">
+          <button type="button" className="pillola relative justify-center" disabled={!aiStatus.ai || Boolean(reanalysis) || reanalyzable.length === 0} onClick={reanalyze}>
             <RotateCw className={`h-4 w-4${reanalysis ? " gira" : ""}`} strokeWidth={2.6} aria-hidden="true" />
             {reanalysis ? <span className="num">{reanalysis.done}/{reanalysis.total}</span> : "Rianalizza"}
             {!reanalysis && aiStatus.ai && reanalyzable.length > 0 && <span className="conta num">{reanalyzable.length}</span>}
           </button>
-          <button type="button" className="pillola" onClick={() => navigate("/aggiungi")}>
+          <button type="button" className="pillola justify-center" onClick={() => navigate("/aggiungi")}>
             <Plus className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" />
             Aggiungi
           </button>
           {syncMode && (
-            <button type="button" className="pillola !border-[#e02a0d] !bg-[#e02a0d] !text-white" onClick={signOut}>
+            <button type="button" className="pillola !border-[#e02a0d] !bg-[#e02a0d] !text-white justify-center" onClick={signOut}>
               <LogOut className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
               Esci
             </button>
           )}
         </div>
-        <p className="micro text-[0.8rem]">Rianalizza rilegge con l'AI i contenuti non ancora analizzati bene.</p>
       </Section>
 
       <Section title="AI">
@@ -81,9 +80,18 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
       </Section>
 
       {syncMode && (
-        <Section title="Salvataggio rapido da iPhone">
-          <QuickShare toast={toast} />
-        </Section>
+        <details className="group border-y-[1.5px] border-inchiostro">
+          <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 py-2 text-[0.95rem] font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden">
+            <span>Salvataggio rapido da iPhone</span>
+            <span aria-hidden="true" className="text-[1.3rem] font-bold leading-none">
+              <span className="group-open:hidden">+</span>
+              <span className="hidden group-open:inline">−</span>
+            </span>
+          </summary>
+          <div className="space-y-2.5 pb-5 text-[0.95rem] font-medium leading-snug">
+            <QuickShare toast={toast} />
+          </div>
+        </details>
       )}
 
       <Section title="Dati e account">
@@ -109,6 +117,9 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
             {syncMode
               ? "Sincronizzati sul tuo progetto Supabase (database e file privati), visibili solo al tuo account."
               : "In questo browser (IndexedDB), senza sincronizzazione né backup."}
+          </p>
+          <p>
+            <strong className="font-extrabold">Versione dell'app.</strong> <span className="num">{__BUILD__}</span>
           </p>
           <p>Per leggere un link, il suo indirizzo viene aperto dal server dell'app (Vercel), che legge solo dati pubblici.</p>
           <p>Per trovare la via di un locale nel box Ristoranti, nome e città del locale vengono inviati a OpenStreetMap (gratuito, senza account), una sola volta per locale.</p>
