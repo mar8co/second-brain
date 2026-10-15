@@ -113,7 +113,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
   return (
     <Page>
       <Testata onBack={() => back("/")} />
-      <h1 className="gigante">Aggiungi</h1>
+      <h1 className="gigante !mb-6">Aggiungi</h1>
       <form onSubmit={save} noValidate className="space-y-6">
         <div role="tablist" aria-label="Cosa vuoi salvare" className="grid grid-cols-3 gap-1.5">
           {MODES.map(([k, label]) => (

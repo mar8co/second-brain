@@ -841,3 +841,10 @@ test("chat: appena invii, si vede la risposta in preparazione sopra il campo, no
   await expect(vign).toHaveCSS("border-bottom-left-radius", "4px");
   await expect(vign).toHaveCSS("border-top-left-radius", "18px");
 });
+
+test("Aggiungi: i tre pulsanti non sono attaccati al titolo", async ({ page }) => {
+  await page.goto("/aggiungi");
+  const h = await page.getByRole("heading", { name: "Aggiungi", level: 1 }).boundingBox();
+  const t = await page.getByRole("tab", { name: "Link" }).boundingBox();
+  expect(t.y - (h.y + h.height)).toBeGreaterThanOrEqual(20);
+});
