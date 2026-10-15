@@ -857,3 +857,21 @@ test("Aggiungi: i pulsanti non sono attaccati al titolo", async ({ page }) => {
   const t = await page.getByRole("tab", { name: "Link" }).boundingBox();
   expect(t.y - (h.y + h.height)).toBeGreaterThanOrEqual(20);
 });
+
+test("chat: salendo compare la freccetta per tornare in basso", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  for (const q of ["Cosa ho salvato sul limone?", "Raccontami la ricetta lunga con il limone", "E il sale?"]) {
+    await box.fill(q);
+    await box.press("Enter");
+    await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
+  }
+  const freccia = page.getByRole("button", { name: "Vai all'ultimo messaggio" });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(freccia).toBeVisible();
+  await freccia.click();
+  await expect(freccia).toBeHidden();
+});

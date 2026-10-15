@@ -4,7 +4,7 @@
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Settings } from "lucide-react";
+import { ArrowDown, ArrowUp, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { Thumb } from "../components/ItemCard.jsx";
 import AddMenu from "../components/AddMenu.jsx";
@@ -93,6 +93,18 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     const t = [120, 450].map((ms) => setTimeout(go, ms));
     return () => t.forEach(clearTimeout);
   }, [log, loading]);
+
+  // Freccetta per tornare in fondo, come su WhatsApp: compare quando si è saliti.
+  const [lontano, setLontano] = useState(false);
+  useEffect(() => {
+    const onScroll = () => {
+      const el = document.documentElement;
+      setLontano(el.scrollHeight - window.scrollY - window.innerHeight > 400);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [log]);
 
   const ask = async (question) => {
     // I turni precedenti servono per le domande di seguito ("e quanto costa?").
@@ -208,6 +220,18 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
       </main>
 
       <form ref={formRef} onSubmit={send} className="chat-composer fixed inset-x-0 bottom-0 z-10">
+        {lontano && (
+          <button
+            type="button"
+            data-vai-in-fondo
+            className="tondo absolute bottom-full right-4 mb-3 h-11 w-11 bg-white shadow-md"
+            aria-label="Vai all'ultimo messaggio"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })}
+          >
+            <ArrowDown className="h-5 w-5" strokeWidth={3} aria-hidden="true" />
+          </button>
+        )}
         <div className="mx-auto flex max-w-[528px] items-end gap-2">
           <AddMenu archive={archive} navigate={navigate} toast={toast} />
           <label htmlFor="chat-q" className="sr-only">Chiedi alla tua memoria</label>
