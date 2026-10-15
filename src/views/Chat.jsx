@@ -8,6 +8,7 @@ import { ArrowDown, ArrowUp, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { Thumb } from "../components/ItemCard.jsx";
 import AddMenu from "../components/AddMenu.jsx";
+import { saveFiles, uploadMessage } from "../lib/upload.js";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { askArchive, recentTurns } from "../lib/ask.js";
@@ -105,6 +106,16 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, [log]);
+
+  // Immagine (o file) incollata nel campo: salvata come dal "+", senza altri passaggi.
+  const pasteFiles = async (e) => {
+    const files = [...(e.clipboardData?.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    toast(files.length === 1 ? "Salvo…" : `Salvo ${files.length} file…`);
+    const r = await saveFiles(files, archive.add);
+    toast(uploadMessage(r));
+  };
 
   const ask = async (question) => {
     // I turni precedenti servono per le domande di seguito ("e quanto costa?").
@@ -244,6 +255,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
             value={text}
             maxLength={1000}
             onChange={(e) => setText(e.target.value)}
+            onPaste={pasteFiles}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) send(e);
             }}

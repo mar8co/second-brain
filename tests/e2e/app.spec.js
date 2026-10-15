@@ -893,3 +893,15 @@ test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni
   await page.getByLabel("Link", { exact: true }).press("Enter");
   await expect(page).toHaveURL(/\/elemento\//);
 });
+
+test("chat: incollando un file nel campo viene salvato come dal +", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Chiedi alla tua memoria").evaluate((el) => {
+    const dt = new window.DataTransfer();
+    dt.items.add(new window.File(["# Pagina\nTesto incollato con la parola zafferano"], "incollato.md", { type: "text/markdown" }));
+    el.dispatchEvent(new window.ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  });
+  await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
+  await page.goto("/archivio?q=zafferano");
+  await expect(page.getByText("incollato.md")).toBeVisible();
+});
