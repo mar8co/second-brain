@@ -877,3 +877,19 @@ test("chat: salendo compare la freccetta per tornare in basso", async ({ page })
   await expect(freccia).toBeHidden();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.scrollY - window.innerHeight)).toBeLessThan(60);
 });
+
+test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni saltati", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/aggiungi");
+  await page.getByLabel("Link", { exact: true }).fill(`Ricetta ${FIX}/ricetta\n${FIX}/trastevere\n${FIX}/trastevere/`);
+  await expect(page.getByText("2 link", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/archivio/);
+  await expect(page.getByText("1 link salvato, 1 già presente")).toBeVisible();
+  // Con un solo link, Invio salva come prima.
+  await page.goto("/aggiungi");
+  await page.getByLabel("Link", { exact: true }).fill(`${FIX}/ricetta?x=1`);
+  await page.getByLabel("Link", { exact: true }).press("Enter");
+  await expect(page).toHaveURL(/\/elemento\//);
+});

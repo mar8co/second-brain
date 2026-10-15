@@ -172,9 +172,21 @@ declare
   uid uuid := public.share_user(p_token);
   r public.items;
   new_id uuid;
+  dup uuid;
   cats text[];
 begin
   r := jsonb_populate_record(null::public.items, p_item);
+  -- Stesso link già salvato (senza www, slash finale e #frammento): non si duplica.
+  if r.url is not null then
+    select id into dup from public.items i
+    where i.user_id = uid
+      and lower(regexp_replace(regexp_replace(regexp_replace(i.url, '#.*$', ''), '^https?://(www\.)?', ''), '/+$', ''))
+        = lower(regexp_replace(regexp_replace(regexp_replace(r.url, '#.*$', ''), '^https?://(www\.)?', ''), '/+$', ''))
+    limit 1;
+    if dup is not null then
+      return jsonb_build_object('id', dup, 'duplicate', true, 'categories', '[]'::jsonb);
+    end if;
+  end if;
   insert into public.items (user_id, type, url, title, note, status, status_detail, text_source)
   values (uid, coalesce(r.type, 'link'), r.url, r.title, r.note, coalesce(r.status, 'saved'), r.status_detail, r.text_source)
   returning id into new_id;

@@ -10,7 +10,7 @@ import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { ChipEditor, ErrorBox, TypeIcon } from "../components/ui.jsx";
 import { typeLabel } from "../lib/format.js";
-import { detectType, displayHost, extractUrl } from "../lib/detect.js";
+import { detectType, displayHost, extractUrl, extractUrls, urlKey } from "../lib/detect.js";
 import { TYPES } from "../lib/constants.js";
 
 function initialFromQuery(query) {
@@ -41,6 +41,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
   usePageColor(PAGE.add);
 
   const cleanUrl = extractUrl(url);
+  const manyUrls = mode === "link" ? extractUrls(url) : [];
   const autoType = mode === "link" ? detectType(cleanUrl) : "note";
   const type = typeOverride || autoType;
   const typeChoices = mode === "link" ? ["link", "social", "video", "place", "shopping"] : ["note", "shopping", "place"];
@@ -49,7 +50,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
     try {
       const t = await navigator.clipboard.readText();
       const u = extractUrl(t);
-      if (u) setUrl(u);
+      if (u) setUrl(extractUrls(t).length > 1 ? t : u);
       else setError("Negli appunti non c'è un link.");
     } catch {
       setError("Non riesco a leggere gli appunti: incolla il link nel campo.");
@@ -61,6 +62,30 @@ export default function Add({ archive, query, navigate, back, toast }) {
     setError(null);
     const base = { title: title.trim() || null, note: note.trim() || null, categories, tags, type };
     let item;
+    if (mode === "link" && manyUrls.length > 1) {
+      // Più link incollati insieme: ognuno a parte, i doppioni (già salvati o
+      // ripetuti) si saltano.
+      const have = new Set(archive.items.map((it) => it.url && urlKey(it.url)).filter(Boolean));
+      const fresh = manyUrls.filter((u) => !have.has(urlKey(u)));
+      setSaving(true);
+      let done = 0;
+      for (const u of fresh) {
+        try {
+          await archive.add({ ...base, title: null, note: null, url: u, type: detectType(u), status: "processing" });
+          done += 1;
+        } catch {
+          /* gli altri proseguono */
+        }
+      }
+      const dup = manyUrls.length - fresh.length;
+      const miss = fresh.length - done;
+      toast(`${done} ${done === 1 ? "link salvato" : "link salvati"}${dup ? `, ${dup} già present${dup === 1 ? "e" : "i"}` : ""}${miss ? `, ${miss} non salvat${miss === 1 ? "o" : "i"}` : ""}`);
+      if (miss && !done) {
+        setError("Salvataggio non riuscito: riprova.");
+        return setSaving(false);
+      }
+      return navigate("/archivio", { replace: true });
+    }
     if (mode === "link") {
       if (!cleanUrl) return setError("Inserisci un link valido (es. https://…).");
       item = { ...base, url: cleanUrl, status: "processing" };
@@ -108,18 +133,24 @@ export default function Add({ archive, query, navigate, back, toast }) {
           <div>
             <label htmlFor="add-url" className="etichetta">Link</label>
             <div className="flex items-end gap-2">
-              <input
+              <textarea
                 id="add-url"
-                type="url"
+                rows={url.includes("\n") ? 4 : 1}
                 inputMode="url"
                 autoCapitalize="none"
                 autoCorrect="off"
                 autoComplete="off"
                 autoFocus={!init.url}
-                className="campo"
+                className="campo resize-none"
                 placeholder="https://www.instagram.com/reel/…"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
                 aria-describedby="url-help"
               />
               <button type="button" className="pillola mb-1.5" onClick={paste} aria-label="Incolla dagli appunti">
@@ -127,7 +158,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
               </button>
             </div>
             <p id="url-help" className="micro mt-1.5 text-[0.8rem]">
-              {cleanUrl ? <>Da <strong className="font-bold text-inchiostro">{displayHost(cleanUrl)}</strong>: leggerò titolo e testo pubblici dopo il salvataggio.</> : "Incolla un link: articoli, Reel, video, posti di Google o Apple Maps…"}
+              {manyUrls.length > 1 ? <><strong className="font-bold text-inchiostro">{manyUrls.length} link</strong>: li salvo uno per uno, i doppioni li salto.</> : cleanUrl ? <>Da <strong className="font-bold text-inchiostro">{displayHost(cleanUrl)}</strong>: leggerò titolo e testo pubblici dopo il salvataggio.</> : "Incolla un link: articoli, Reel, video, posti di Google o Apple Maps…"}
             </p>
           </div>
         )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectType, extractUrl, parsePlaceFromUrl } from "./detect.js";
+import { detectType, extractUrl, extractUrls, parsePlaceFromUrl, urlKey } from "./detect.js";
 
 describe("extractUrl", () => {
   it("estrae il link da un testo condiviso", () => {
@@ -69,5 +69,16 @@ describe("mapTileUrl", () => {
   it("senza coordinate non c'è copertina", () => {
     expect(mapTileUrl({ name: "Bar" })).toBe(null);
     expect(mapTileUrl(null)).toBe(null);
+  });
+});
+
+describe("extractUrls / urlKey", () => {
+  it("trova tutti i link senza doppioni (www, slash, utm)", () => {
+    const t = "Guarda https://www.x.com/a/ e https://x.com/a?utm_source=wa poi https://y.it/z. fine";
+    expect(extractUrls(t)).toEqual(["https://www.x.com/a/", "https://y.it/z"]);
+    expect(extractUrls("niente qui")).toEqual([]);
+  });
+  it("urlKey tiene i parametri veri", () => {
+    expect(urlKey("https://x.com/v?id=1")).not.toBe(urlKey("https://x.com/v?id=2"));
   });
 });

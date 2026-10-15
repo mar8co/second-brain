@@ -29,6 +29,34 @@ export function extractUrl(text) {
   }
 }
 
+// Tutti i link http(s) di un testo (es. molti link inoltrati da WhatsApp), nell'ordine,
+// senza doppioni.
+export function extractUrls(text) {
+  const out = [];
+  const seen = new Set();
+  for (const m of String(text || "").matchAll(/\bhttps?:\/\/[^\s<>"'`]+/gi)) {
+    const u = extractUrl(m[0]);
+    const k = u && urlKey(u);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(u);
+  }
+  return out;
+}
+
+// Chiave per riconoscere lo stesso link scritto in modi diversi: senza www,
+// slash finale, #frammento e parametri di tracciamento (utm_*, fbclid, igshid).
+export function urlKey(url) {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    for (const k of [...u.searchParams.keys()]) if (/^(utm_|fbclid$|igshid$|igsh$|si$)/i.test(k)) u.searchParams.delete(k);
+    return `${u.hostname.toLowerCase().replace(/^www\./, "")}${u.pathname.replace(/\/+$/, "")}${u.search}`.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
 function host(url) {
   try {
     return new URL(url).hostname.toLowerCase().replace(/^www\./, "").replace(/^m\./, "");
