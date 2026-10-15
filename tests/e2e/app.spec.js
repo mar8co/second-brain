@@ -86,6 +86,7 @@ test("link incollato nella chat: salvato nell'archivio, la chat resta per le dom
 test("campo della chat: cresce con il testo; mentre si scrive la barra Chat / Archivio sparisce", async ({ page }) => {
   await page.goto("/");
   const box = page.getByLabel("Chiedi alla tua memoria");
+  await expect(box).toHaveAttribute("placeholder", "Chiedimi qualcosa...");
   const nav = page.getByRole("navigation", { name: "Navigazione principale" });
   const h1 = (await box.boundingBox()).height;
   await box.click();
@@ -830,4 +831,8 @@ test("chat: appena invii, si vede la risposta in preparazione sopra il campo, no
   const form = await page.locator("form.chat-composer").boundingBox();
   await expect.poll(async () => { const b = await attesa.boundingBox(); return b.y + b.height <= form.y + 2 && b.y > 50; }).toBe(true);
   await expect(page.getByText("Un'altra domanda sul limone")).toBeInViewport();
+  // Vignetta: l'angolo in basso a sinistra del box bianco è quasi retto, gli altri tondi.
+  const vign = page.locator(".vignetta").last();
+  await expect(vign).toHaveCSS("border-bottom-left-radius", "4px");
+  await expect(vign).toHaveCSS("border-top-left-radius", "18px");
 });

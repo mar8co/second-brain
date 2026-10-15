@@ -208,6 +208,8 @@ button { cursor: pointer; }
     --inchiostro: #0a0a0a; --tenue: rgb(10 10 10 / 0.62); --riga: rgb(10 10 10 / 0.14); --sfondo: #fff;
     background: #fff; color: #0a0a0a; border-radius: 18px; box-shadow: 0 6px 18px rgb(0 0 0 / 0.1);
   }
+  /* Vignetta della chat: l'angolo vicino a chi parla è quasi retto. */
+  .card-bianca.vignetta { border-bottom-left-radius: 4px; }
   .riquadro { background: #fff; color: #0a0a0a; border-radius: 14px; padding: 12px 14px; }
 
   /* Archivio a box: scatola colorata con le copertine dentro. */
