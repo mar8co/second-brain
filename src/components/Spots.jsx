@@ -186,7 +186,7 @@ function EventRows({ events, onOpen }) {
         const cover = e.items.find((it) => it.image_url || it.file_path) || e.items[0];
         return (
           <li key={e.key} className="flex gap-3 rounded-2xl border-[1.5px] border-inchiostro p-3">
-            <div className="grid w-[4.4rem] shrink-0 place-items-center self-start rounded-xl bg-[#ffb5d0] px-1 py-2.5 text-center text-[#0a0a0a]">
+            <div className="grid w-[4.4rem] shrink-0 place-items-center self-start rounded-xl bg-[var(--rosso)] px-1 py-2.5 text-center text-[#0a0a0a]">
               <b className="num text-[0.95rem] font-extrabold leading-tight">{day}</b>
               <span className="num text-[0.8rem] font-bold leading-tight">{rest.join(" ")}</span>
             </div>
