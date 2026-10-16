@@ -1,7 +1,7 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useState } from "react";
-import { CalendarPlus, MapPin, X } from "lucide-react";
+import { CalendarPlus, MapPin, Pencil, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -114,14 +114,21 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       {restaurants.map((r) => (
         <li key={r.key} className="flex items-center gap-3 py-4">
           <div className="min-w-0 flex-1">
-          <p className={NAME_BIG}>{r.name}</p>
+          <div className="flex items-start gap-2">
+            <p className={NAME_BIG}>{r.name}</p>
+            {onStreet && editing?.key !== r.key && (
+              <button
+                type="button"
+                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-[1.5px] border-inchiostro"
+                aria-label={r.streets.length ? "Modifica via" : "Aggiungi via"}
+                onClick={() => setEditing({ key: r.key })}
+              >
+                <Pencil className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+              </button>
+            )}
+          </div>
           <SourceLinks items={r.items} onOpen={onOpen} />
           {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
-          {onStreet && editing?.key !== r.key && (
-            <button type="button" className="mt-1.5 text-[0.8rem] font-semibold text-[var(--tenue)] underline underline-offset-2" onClick={() => setEditing({ key: r.key })}>
-              {r.streets.length ? "Modifica via" : "Aggiungi via"}
-            </button>
-          )}
           {onStreet && editing?.key === r.key && (
             <AddressForm
               name={r.name}
