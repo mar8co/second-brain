@@ -119,11 +119,11 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
             {onStreet && editing?.key !== r.key && (
               <button
                 type="button"
-                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full border-[1.5px] border-inchiostro"
+                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center"
                 aria-label={r.streets.length ? "Modifica via" : "Aggiungi via"}
                 onClick={() => setEditing({ key: r.key })}
               >
-                <Pencil className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                <Pencil className="h-[1.15rem] w-[1.15rem]" strokeWidth={2.4} aria-hidden="true" />
               </button>
             )}
           </div>
