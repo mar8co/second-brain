@@ -539,9 +539,11 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const nomeBar = await bar.getByText("Bar San Calisto", { exact: true }).boundingBox();
   const ic = await icona.boundingBox();
   expect(ic.x).toBeGreaterThan(nomeBar.x + nomeBar.width);
-  expect(ic.y).toBeLessThan(nomeBar.y + nomeBar.height);
-  // Tre puntini senza il tondo; un tocco apre un menu: con una via già nota ci sono Modifica e Aggiungi.
-  await expect(icona).toHaveCSS("border-top-width", "0px");
+  // I tre puntini stanno in un tondo con il bordo, a destra e a metà altezza della riga.
+  const riga = await bar.boundingBox();
+  expect(Math.abs(ic.y + ic.height / 2 - (riga.y + riga.height / 2))).toBeLessThan(4);
+  await expect(icona).toHaveCSS("border-top-width", "1px");
+  // Un tocco apre un menu: con una via già nota ci sono Modifica e Aggiungi.
   await icona.click();
   await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
   // Un tocco fuori (anche sopra un link, o sulla barra in basso) chiude solo il menu: il link sotto non scatta.

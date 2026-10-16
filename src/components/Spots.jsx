@@ -129,7 +129,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
     <ul className="righe">
       {restaurants.map((r) => (
-        <li key={r.key} className="flex gap-3 py-4">
+        <li key={r.key} className="flex items-center gap-3 py-4">
           <div className="min-w-0 flex-1">
           <p className={NAME_BIG}>{r.name}</p>
           <SourceLinks items={r.items} onOpen={onOpen} />
@@ -151,21 +151,22 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
             const cover = r.items.find((it) => it.image_url || it.file_path);
             if (!cover && !onStreet) return null;
             return (
-              <div className="flex shrink-0 flex-col items-end gap-1">
+              <div className="flex shrink-0 items-center gap-2.5">
+                {cover && <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" />}
             {onStreet && (
-              <div className={`relative ${menu === r.key ? "z-[60]" : ""} -mr-2 -mt-2.5 self-end`}>
+              <div className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
                 <button
                   type="button"
-                  className="grid h-11 w-11 place-items-center"
+                  className="grid h-10 w-10 place-items-center rounded-full border-[1.5px] border-inchiostro"
                   aria-label={`Indirizzi di ${r.name}`}
                   aria-haspopup="menu"
                   aria-expanded={menu === r.key}
                   onClick={() => setMenu(menu === r.key ? null : r.key)}
                 >
-                  <Ellipsis className="h-7 w-7" strokeWidth={2.6} aria-hidden="true" />
+                  <Ellipsis className="h-6 w-6" strokeWidth={3.5} aria-hidden="true" />
                 </button>
                 {menu === r.key && (
-                  <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-2 top-10 z-[60] min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] shadow-none">
+                  <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-0 top-full z-[60] mt-2 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] shadow-none">
                     {r.streets.length > 0 && (
                       <button type="button" role="menuitem" className="block w-full border-b border-riga px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "modifica")}>
                         Modifica via
@@ -178,7 +179,6 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
                 )}
               </div>
             )}
-                {cover && <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" />}
               </div>
             );
           })()}
