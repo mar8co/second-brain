@@ -535,36 +535,9 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   // Le sedi si scrivono a mano dall'icona tonda accanto al nome (anche più di una);
   // valgono più di quella trovata (qui il Bar) e restano dopo il ricaricamento.
   await expect(bar.getByRole("button", { name: /Scrivi la via|Modifica la via/ })).toHaveCount(0);
-  const icona = bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" });
-  const nomeBar = await bar.getByText("Bar San Calisto", { exact: true }).boundingBox();
-  const ic = await icona.boundingBox();
-  expect(ic.x).toBeGreaterThan(nomeBar.x + nomeBar.width);
-  // I tre puntini stanno in un tondo con il bordo, a destra e a metà altezza della riga.
-  const riga = await bar.boundingBox();
-  expect(Math.abs(ic.y + ic.height / 2 - (riga.y + riga.height / 2))).toBeLessThan(4);
-  await expect(icona).toHaveCSS("border-top-width", "1px");
-  // Un tocco apre un menu: con una via già nota ci sono Modifica e Aggiungi.
-  await icona.click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
-  // Un tocco fuori (anche sopra un link, o sulla barra in basso) chiude solo il menu: il link sotto non scatta.
-  const url0 = page.url();
-  const link = await bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ }).boundingBox();
-  await page.mouse.click(link.x + link.width / 2, link.y + link.height / 2);
-  await expect(bar.getByRole("menu")).toHaveCount(0);
-  expect(page.url()).toBe(url0);
-  expect(page.context().pages()).toHaveLength(1);
-  await icona.click();
-  const nav = await page.getByRole("link", { name: "Chat", exact: true }).boundingBox();
-  await page.mouse.click(nav.x + nav.width / 2, nav.y + nav.height / 2);
-  await expect(bar.getByRole("menu")).toHaveCount(0);
-  expect(page.url()).toBe(url0);
-  await icona.click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
-  await page.keyboard.press("Escape");
-  await expect(bar.getByRole("menu")).toHaveCount(0);
-  await icona.click();
-  await bar.getByRole("menuitem", { name: "Modifica via" }).click();
-  await expect(bar.getByRole("menu")).toHaveCount(0);
+  await expect(bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" })).toHaveCount(0);
+  await expect(bar.getByRole("menuitem")).toHaveCount(0);
+  await bar.getByRole("button", { name: "Modifica via" }).click();
   await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Piazza di San Calisto 3, Roma");
   await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Prova 5, Roma");
   await bar.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
@@ -577,8 +550,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Via Seconda 7, Milano/ })).toBeVisible();
   await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto/ })).toHaveCount(0);
   // Togliendo una sede resta l'altra.
-  await page.locator("ul.righe > li").first().getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await page.getByRole("menuitem", { name: "Modifica via" }).click();
+  await page.locator("ul.righe > li").first().getByRole("button", { name: "Modifica via" }).click();
   await page.getByRole("button", { name: "Togli l'indirizzo 2 di Bar San Calisto" }).click();
   await page.getByRole("button", { name: "Salva" }).click();
   await expect(page.getByRole("link", { name: /Via Seconda 7, Milano/ })).toHaveCount(0);
@@ -674,7 +646,7 @@ test("filtro Autore: i nomi lunghi restano nella larghezza e la pagina non scorr
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiungi via", async ({ page }) => {
+test("Archivio a box: Ristoranti senza via, il testo discreto offre Aggiungi via, poi Modifica via", async ({ page }) => {
   // OpenStreetMap non trova nulla: il Bar resta con la sola città.
   await page.route("**/api/geo", (route) => route.fulfill({ json: { found: null } }));
   await addLink(page, `${FIX}/trastevere`);
@@ -682,19 +654,17 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await page.goto("/archivio?sezione=ristoranti");
   const bar = page.locator("ul.righe > li").first();
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toBeVisible();
-  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via"]);
-  await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
+  await expect(bar.getByRole("button", { name: "Modifica via" })).toHaveCount(0);
+  await bar.getByRole("button", { name: "Aggiungi via" }).click();
   await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("");
   await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Nuova 1, Roma");
   await bar.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
-  // Ora c'è una via: il menu ha Modifica e Aggiungi; "Aggiungi via" apre la via nota più un campo vuoto.
-  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
-  await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
+  // Ora c'è una via: il testo diventa "Modifica via"; la seconda sede si aggiunge dal modulo.
+  await bar.getByRole("button", { name: "Modifica via" }).click();
   await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Via Nuova 1, Roma");
+  await bar.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
   await bar.getByRole("textbox", { name: "Indirizzo 2 di Bar San Calisto" }).fill("Via Seconda 2, Milano");
   await bar.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByRole("link", { name: /Via Seconda 2, Milano/ })).toBeVisible();
