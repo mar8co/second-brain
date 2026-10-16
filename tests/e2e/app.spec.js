@@ -608,8 +608,11 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page.locator("[data-passati]")).toHaveCSS("opacity", "0.5");
   await expect(page.getByText("Serata carbonara da Enzo").locator("xpath=ancestor::li[1]").getByRole("link", { name: /Apri su Guida di prova/ })).toBeVisible();
   // Il riquadro della data è giallo.
-  await expect(page.getByText("25 ott", { exact: true })).toBeVisible();
-  await expect(page.getByText("25 ott", { exact: true }).locator("xpath=ancestor::div[1]")).toHaveCSS("background-color", "rgb(255, 214, 10)");
+  const tra10 = new Date();
+  tra10.setDate(tra10.getDate() + 10);
+  const dataBox = `${tra10.getDate()} ${["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"][tra10.getMonth()]}`;
+  await expect(page.getByText(dataBox, { exact: true })).toBeVisible();
+  await expect(page.getByText(dataBox, { exact: true }).locator("xpath=ancestor::div[1]")).toHaveCSS("background-color", "rgb(255, 214, 10)");
   // Il testo del biglietto non è attaccato allo zigzag e sta a metà altezza.
   const bigl = page.locator("[data-biglietto]").first();
   const bb = await bigl.boundingBox();
