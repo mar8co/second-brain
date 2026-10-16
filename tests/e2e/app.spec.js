@@ -873,6 +873,9 @@ test("chat: salendo compare la freccetta per tornare in basso", async ({ page })
   await page.waitForTimeout(1000);
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(freccia).toBeVisible();
+  // Sta al centro, sopra il campo.
+  const fb = await freccia.boundingBox();
+  expect(Math.abs(fb.x + fb.width / 2 - page.viewportSize().width / 2)).toBeLessThan(4);
   await freccia.dispatchEvent("click");
   await expect(freccia).toBeHidden();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.scrollY - window.innerHeight)).toBeLessThan(60);

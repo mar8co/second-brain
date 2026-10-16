@@ -235,7 +235,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
           <button
             type="button"
             data-vai-in-fondo
-            className="tondo absolute bottom-full right-4 mb-3 h-11 w-11 bg-white shadow-md"
+            className="tondo absolute bottom-full left-1/2 mb-3 h-11 w-11 -translate-x-1/2 bg-white shadow-md"
             aria-label="Vai all'ultimo messaggio"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" })}
