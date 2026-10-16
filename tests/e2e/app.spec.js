@@ -856,6 +856,39 @@ test("chat: salendo compare la freccetta per tornare in basso", async ({ page })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.scrollY - window.innerHeight)).toBeLessThan(60);
 });
 
+test("chat: tenendo premuto su un messaggio compare Copia messaggio e il testo viene copiato", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("Cosa ho salvato sul limone?");
+  await box.press("Enter");
+  await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
+  await page.waitForTimeout(800);
+  const premi = async (loc) => {
+    const b = await loc.boundingBox();
+    await page.mouse.move(b.x + 20, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(650);
+    await page.mouse.up();
+  };
+  // Un tocco breve non apre nulla.
+  const domanda = page.locator("ol p", { hasText: "Cosa ho salvato sul limone?" });
+  await domanda.click();
+  await expect(page.getByRole("button", { name: "Copia messaggio" })).toHaveCount(0);
+  await premi(domanda);
+  await page.getByRole("button", { name: "Copia messaggio" }).click();
+  await expect(page.getByText("Messaggio copiato")).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Cosa ho salvato sul limone?");
+  // Anche la risposta si copia, senza grassetti né citazioni.
+  await premi(page.locator("[data-risposta] .card-bianca").last());
+  await page.getByRole("button", { name: "Copia messaggio" }).click();
+  const copiato = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copiato.length).toBeGreaterThan(10);
+  expect(copiato).not.toMatch(/\*\*|\[\d+\]/);
+});
+
 test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni saltati", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
