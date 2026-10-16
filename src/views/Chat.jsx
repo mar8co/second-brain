@@ -233,10 +233,10 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 
       {copia && (
         <>
-          <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-copia onClick={() => setCopia(null)} />
+          <div className="fixed inset-0 z-50 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]" aria-hidden="true" data-chiudi-copia onClick={() => setCopia(null)} />
           <button
             type="button"
-            className="fixed z-[60] inline-flex items-center gap-2 rounded-full border-[1.5px] border-inchiostro bg-[var(--superficie)] px-4 py-2.5 text-[0.95rem] font-extrabold tracking-[-0.02em]"
+            className="fixed z-[60] inline-flex items-center gap-2 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none] rounded-full border-[1.5px] border-inchiostro bg-[var(--superficie)] px-4 py-2.5 text-[0.95rem] font-extrabold tracking-[-0.02em]"
             style={{ left: Math.min(Math.max(copia.x, 80), window.innerWidth - 80), top: Math.max(copia.y - 56, 70), transform: "translateX(-50%)" }}
             onClick={async () => {
               const ok = await copyText(copia.text);
@@ -400,13 +400,13 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <p {...pressQ} className="max-w-[85%] select-none whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-touch-callout:none]">
+        <p {...pressQ} className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]">
           {msg.q}
           <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
         </p>
       </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
-        <div {...pressA} className="card-bianca vignetta w-full max-w-[94%] select-none px-4 py-3.5 [-webkit-touch-callout:none]">
+        <div {...pressA} className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]">
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
