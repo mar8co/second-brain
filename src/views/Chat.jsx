@@ -4,7 +4,7 @@
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
 import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Settings } from "lucide-react";
+import { ArrowDown, ArrowUp, Copy, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { Thumb } from "../components/ItemCard.jsx";
 import AddMenu from "../components/AddMenu.jsx";
@@ -96,6 +96,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   }, [log, loading]);
 
   // Freccetta per tornare in fondo, come su WhatsApp: compare quando si è saliti.
+  const [copia, setCopia] = useState(null);
   const [lontano, setLontano] = useState(false);
   useEffect(() => {
     const onScroll = () => {
@@ -222,13 +223,31 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
                     <span className="cartellino">{dayLabel(msg.at)}</span>
                   </p>
                 )}
-                <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} />
+                <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} onCopy={(text, pt) => setCopia({ text, ...pt })} />
               </li>
             ))}
           </ol>
         )}
         <div ref={endRef} />
       </main>
+
+      {copia && (
+        <>
+          <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-copia onClick={() => setCopia(null)} />
+          <button
+            type="button"
+            className="fixed z-[60] inline-flex items-center gap-2 rounded-full border-[1.5px] border-inchiostro bg-[var(--superficie)] px-4 py-2.5 text-[0.95rem] font-extrabold tracking-[-0.02em]"
+            style={{ left: Math.min(Math.max(copia.x, 80), window.innerWidth - 80), top: Math.max(copia.y - 56, 70), transform: "translateX(-50%)" }}
+            onClick={async () => {
+              const ok = await copyText(copia.text);
+              setCopia(null);
+              toast(ok ? "Messaggio copiato" : "Copia non riuscita");
+            }}
+          >
+            <Copy className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" /> Copia messaggio
+          </button>
+        </>
+      )}
 
       <form ref={formRef} onSubmit={send} className="chat-composer fixed inset-x-0 bottom-0 z-10">
         {lontano && (
@@ -305,9 +324,66 @@ function useSopraTastiera(ref) {
   }, [ref]);
 }
 
+// Pressione lunga (o tasto destro) su un messaggio: chiama onOpen con il punto
+// premuto. Si annulla se il dito si muove (scorrimento).
+function useLongPress(onOpen) {
+  const t = useRef(0);
+  const start = useRef(null);
+  const stop = () => {
+    clearTimeout(t.current);
+    start.current = null;
+  };
+  return {
+    onPointerDown: (e) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      start.current = { x: e.clientX, y: e.clientY };
+      const { clientX: x, clientY: y } = e;
+      clearTimeout(t.current);
+      t.current = setTimeout(() => onOpen({ x, y }), 450);
+    },
+    onPointerMove: (e) => {
+      const s0 = start.current;
+      if (s0 && Math.hypot(e.clientX - s0.x, e.clientY - s0.y) > 10) stop();
+    },
+    onPointerUp: stop,
+    onPointerCancel: stop,
+    onPointerLeave: stop,
+    onContextMenu: (e) => {
+      e.preventDefault();
+      stop();
+      onOpen({ x: e.clientX, y: e.clientY });
+    },
+  };
+}
+
+// Testo di una risposta senza i segni del grassetto e le citazioni [1].
+function plainAnswer(text) {
+  return String(text || "").replace(/\*\*/g, "").replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "").trim();
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.cssText = "position:fixed;opacity:0;top:0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      ta.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
 // Domanda (a destra, nera) e risposta di Second Brain (a sinistra, bianca),
 // con le fonti.
-function QaBubbles({ msg, byId, archiveOk, onOpen }) {
+function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
   const r = msg.result;
   const answered = r && (r.kind === "answer" || r.kind === "insufficient");
   const sources = answered ? (r.sources || []).map((id) => ({ id, item: byId.get(id), quote: r.quotes?.[id] || "" })) : [];
@@ -316,16 +392,21 @@ function QaBubbles({ msg, byId, archiveOk, onOpen }) {
     const s = sources[n - 1];
     if (s?.item) onOpen(s.item);
   };
+  const pressQ = useLongPress((pt) => onCopy(msg.q, pt));
+  const pressA = useLongPress((pt) => {
+    const t = plainAnswer(r?.answer);
+    if (t) onCopy(t, pt);
+  });
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white">
+        <p {...pressQ} className="max-w-[85%] select-none whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-touch-callout:none]">
           {msg.q}
           <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
         </p>
       </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
-        <div className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5">
+        <div {...pressA} className="card-bianca vignetta w-full max-w-[94%] select-none px-4 py-3.5 [-webkit-touch-callout:none]">
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…

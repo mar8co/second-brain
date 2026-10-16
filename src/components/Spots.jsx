@@ -1,7 +1,7 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
-import { useEffect, useState } from "react";
-import { CalendarPlus, Ellipsis, MapPin, X } from "lucide-react";
+import { useState } from "react";
+import { CalendarPlus, MapPin, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -99,19 +99,8 @@ function AddressForm({ name, start, onSave, onCancel }) {
 }
 
 export function RestaurantList({ restaurants, onOpen, onStreet }) {
-  // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
-  // ({ key, mode: "modifica" | "aggiungi" }).
-  const [menu, setMenu] = useState(null);
+  // editing: locale in modifica ({ key }).
   const [editing, setEditing] = useState(null);
-
-  // Il menu si chiude con Esc; toccando fuori lo chiude lo strato trasparente
-  // qui sotto, che assorbe il tocco (i link sotto non si attivano).
-  useEffect(() => {
-    if (!menu) return undefined;
-    const close = (e) => e.key === "Escape" && setMenu(null);
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [menu]);
 
   if (!restaurants.length) {
     return (
@@ -120,13 +109,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       </EmptyState>
     );
   }
-  const choose = (r, mode) => {
-    setMenu(null);
-    setEditing({ key: r.key, mode });
-  };
   return (
-    <>
-      {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
     <ul className="righe">
       {restaurants.map((r) => (
         <li key={r.key} className="flex items-center gap-3 py-4">
@@ -134,11 +117,15 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
           <p className={NAME_BIG}>{r.name}</p>
           <SourceLinks items={r.items} onOpen={onOpen} />
           {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
+          {onStreet && editing?.key !== r.key && (
+            <button type="button" className="mt-1.5 text-[0.8rem] font-semibold text-[var(--tenue)] underline underline-offset-2" onClick={() => setEditing({ key: r.key })}>
+              {r.streets.length ? "Modifica via" : "Aggiungi via"}
+            </button>
+          )}
           {onStreet && editing?.key === r.key && (
             <AddressForm
-              key={editing.mode}
               name={r.name}
-              start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets}
+              start={r.streets.length ? r.streets : [""]}
               onCancel={() => setEditing(null)}
               onSave={(v) => {
                 setEditing(null);
@@ -149,43 +136,11 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
           </div>
           {(() => {
             const cover = r.items.find((it) => it.image_url || it.file_path);
-            if (!cover && !onStreet) return null;
-            return (
-              <div className="flex shrink-0 items-center gap-2.5">
-                {cover && <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" />}
-            {onStreet && (
-              <div className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
-                <button
-                  type="button"
-                  className="grid h-10 w-10 place-items-center rounded-full border-[1.5px] border-inchiostro"
-                  aria-label={`Indirizzi di ${r.name}`}
-                  aria-haspopup="menu"
-                  aria-expanded={menu === r.key}
-                  onClick={() => setMenu(menu === r.key ? null : r.key)}
-                >
-                  <Ellipsis className="h-6 w-6" strokeWidth={3.5} aria-hidden="true" />
-                </button>
-                {menu === r.key && (
-                  <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-0 top-full z-[60] mt-2 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] shadow-none">
-                    {r.streets.length > 0 && (
-                      <button type="button" role="menuitem" className="block w-full border-b border-riga px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "modifica")}>
-                        Modifica via
-                      </button>
-                    )}
-                    <button type="button" role="menuitem" className="block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "aggiungi")}>
-                      Aggiungi via
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-              </div>
-            );
+            return cover ? <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" /> : null;
           })()}
         </li>
       ))}
     </ul>
-    </>
   );
 }
 
