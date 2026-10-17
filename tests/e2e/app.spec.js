@@ -544,8 +544,8 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   // Un tocco fuori chiude il menu senza far scattare i link sotto.
   const url0 = page.url();
   const link = await bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ }).boundingBox();
-  // (a destra, dove il menu aperto non arriva)
-  await page.mouse.click(page.viewportSize().width - 6, link.y + link.height / 2);
+  // (al bordo sinistro, dove il menu aperto non arriva)
+  await page.mouse.click(4, link.y + link.height / 2);
   await expect(bar.getByRole("menu")).toHaveCount(0);
   expect(page.url()).toBe(url0);
   await icona.click();
@@ -699,10 +699,10 @@ test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, c
   const righe = page.locator("ul.righe > li");
   await expect(righe).toHaveCount(2);
   const bar = righe.first();
-  // I puntini stanno prima di "Apri su ...".
+  // I puntini stanno a destra di "Scheda".
   const pt = await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).boundingBox();
-  const apri = await bar.getByRole("link", { name: /Apri su/ }).boundingBox();
-  expect(pt.x + pt.width).toBeLessThanOrEqual(apri.x + 1);
+  const scheda = await bar.getByRole("link", { name: "Scheda" }).boundingBox();
+  expect(pt.x).toBeGreaterThanOrEqual(scheda.x + scheda.width - 1);
   // Menu > Elimina: il locale sparisce, Annulla lo rimette.
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
   await bar.getByRole("menuitem", { name: "Elimina" }).click();
