@@ -1,7 +1,7 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useState } from "react";
-import { CalendarPlus, MapPin, Pencil, X } from "lucide-react";
+import { CalendarPlus, Ellipsis, MapPin, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -9,11 +9,11 @@ import { buildIcs } from "../lib/ics.js";
 import { Thumb } from "./ItemCard.jsx";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
-function SourceLinks({ items, onOpen }) {
+function SourceLinks({ items, onOpen, extra }) {
   return (
     <ul className="mt-1.5 space-y-0.5 text-[0.88rem] font-bold">
-      {items.map((it) => (
-        <li key={it.id} className="flex flex-wrap gap-x-3">
+      {items.map((it, i) => (
+        <li key={it.id} className="flex flex-wrap items-center gap-x-3">
           {/^https?:\/\//.test(it.url || "") && (
             <a href={it.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-[3px]">
               Apri su {it.site_name || displayHost(it.url)} ↗
@@ -30,6 +30,7 @@ function SourceLinks({ items, onOpen }) {
           >
             Scheda
           </a>
+          {i === 0 && extra}
         </li>
       ))}
     </ul>
@@ -114,20 +115,23 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       {restaurants.map((r) => (
         <li key={r.key} className="flex items-center gap-3 py-4">
           <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2">
-            <p className={NAME_BIG}>{r.name}</p>
-            {onStreet && editing?.key !== r.key && (
-              <button
-                type="button"
-                className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center"
-                aria-label={r.streets.length ? "Modifica via" : "Aggiungi via"}
-                onClick={() => setEditing({ key: r.key })}
-              >
-                <Pencil className="h-[1.15rem] w-[1.15rem]" strokeWidth={2.4} aria-hidden="true" />
-              </button>
-            )}
-          </div>
-          <SourceLinks items={r.items} onOpen={onOpen} />
+          <p className={NAME_BIG}>{r.name}</p>
+          <SourceLinks
+            items={r.items}
+            onOpen={onOpen}
+            extra={
+              onStreet && editing?.key !== r.key ? (
+                <button
+                  type="button"
+                  className="-my-1 grid h-7 w-8 place-items-center"
+                  aria-label={r.streets.length ? "Modifica via" : "Aggiungi via"}
+                  onClick={() => setEditing({ key: r.key })}
+                >
+                  <Ellipsis className="h-5 w-5" strokeWidth={3} aria-hidden="true" />
+                </button>
+              ) : null
+            }
+          />
           {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
           {onStreet && editing?.key === r.key && (
             <AddressForm
