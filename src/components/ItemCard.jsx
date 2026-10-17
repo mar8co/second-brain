@@ -103,7 +103,7 @@ export function ItemCard({ item, onOpen }) {
 
 // Riga con swipe verso sinistra: scopre "Elimina". Solo nella lista.
 const APERTA = 88;
-function RigaSwipe({ item, onOpen, onDelete }) {
+export function SwipeElimina({ onDelete, children }) {
   const [x, setX] = useState(0);
   const [trascina, setTrascina] = useState(false);
   const start = useRef(null);
@@ -130,14 +130,14 @@ function RigaSwipe({ item, onOpen, onDelete }) {
     if (mosso.current) setX((v) => (v < -APERTA / 2 ? -APERTA : 0));
   };
   return (
-    <div className="relative overflow-hidden">
+    <div className={`relative ${x < 0 || trascina ? "overflow-hidden" : ""}`}>
       <button
         type="button"
         className="absolute inset-y-0 right-0 flex items-center justify-center bg-[#e02a0d] text-[0.95rem] font-extrabold text-white"
         style={{ width: APERTA }}
         tabIndex={x < 0 ? 0 : -1}
         aria-hidden={x === 0}
-        onClick={() => onDelete(item)}
+        onClick={onDelete}
       >
         Elimina
       </button>
@@ -162,9 +162,17 @@ function RigaSwipe({ item, onOpen, onDelete }) {
           }
         }}
       >
-        <ItemCard item={item} onOpen={onOpen} />
+        {children}
       </div>
     </div>
+  );
+}
+
+function RigaSwipe({ item, onOpen, onDelete }) {
+  return (
+    <SwipeElimina onDelete={() => onDelete(item)}>
+      <ItemCard item={item} onOpen={onOpen} />
+    </SwipeElimina>
   );
 }
 

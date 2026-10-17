@@ -539,12 +539,13 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const icona = bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" });
   await expect(bar.getByRole("textbox")).toHaveCount(0);
   await icona.click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
+  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via", "Elimina"]);
   await expect(bar.getByRole("textbox")).toHaveCount(0);
   // Un tocco fuori chiude il menu senza far scattare i link sotto.
   const url0 = page.url();
   const link = await bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ }).boundingBox();
-  await page.mouse.click(link.x + link.width / 2, link.y + link.height / 2);
+  // (a destra, dove il menu aperto non arriva)
+  await page.mouse.click(page.viewportSize().width - 6, link.y + link.height / 2);
   await expect(bar.getByRole("menu")).toHaveCount(0);
   expect(page.url()).toBe(url0);
   await icona.click();
@@ -671,7 +672,7 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   const bar = page.locator("ul.righe > li").first();
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toBeVisible();
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via"]);
+  await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via", "Elimina"]);
   await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
   await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("");
   await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Nuova 1, Roma");
@@ -680,7 +681,7 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
   // Ora c'è una via: il menu ha Modifica e Aggiungi; "Modifica via" apre la via nota.
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via"]);
+  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via", "Elimina"]);
   await bar.getByRole("menuitem", { name: "Modifica via" }).click();
   await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Via Nuova 1, Roma");
   await bar.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
@@ -688,6 +689,39 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await bar.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByRole("link", { name: /Via Seconda 2, Milano/ })).toBeVisible();
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
+});
+
+test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, con Annulla", async ({ page }) => {
+  await page.route("**/api/geo", (route) => route.fulfill({ json: { found: null } }));
+  await addLink(page, `${FIX}/trastevere`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/archivio?sezione=ristoranti");
+  const righe = page.locator("ul.righe > li");
+  await expect(righe).toHaveCount(2);
+  const bar = righe.first();
+  // I puntini stanno prima di "Apri su ...".
+  const pt = await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).boundingBox();
+  const apri = await bar.getByRole("link", { name: /Apri su/ }).boundingBox();
+  expect(pt.x + pt.width).toBeLessThanOrEqual(apri.x + 1);
+  // Menu > Elimina: il locale sparisce, Annulla lo rimette.
+  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
+  await bar.getByRole("menuitem", { name: "Elimina" }).click();
+  await expect(righe).toHaveCount(1);
+  await expect(page.getByText("Ristorante eliminato")).toBeVisible();
+  await page.getByRole("button", { name: "Annulla" }).click();
+  await expect(righe).toHaveCount(2);
+  // Swipe a sinistra: appare Elimina sulla riga.
+  const prima = righe.first();
+  const b = await prima.boundingBox();
+  await page.mouse.move(b.x + b.width - 20, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width - 120, b.y + b.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await prima.getByRole("button", { name: "Elimina", exact: true }).click();
+  await expect(righe).toHaveCount(1);
+  // Resta eliminato dopo il ricaricamento (i contenuti restano nell'archivio).
+  await page.reload();
+  await expect(page.locator("ul.righe > li")).toHaveCount(1);
 });
 
 test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il campo resta in fondo", async ({ page }) => {

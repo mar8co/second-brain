@@ -11,7 +11,7 @@ import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, RestaurantList } from "../components/Spots.jsx";
 import Gallery from "../components/Gallery.jsx";
-import { docsOf, eventsOf, manualStreetPatches, photosOf, restaurantsOf } from "../lib/spots.js";
+import { docsOf, eventsOf, hideRestaurantPatches, manualStreetPatches, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
@@ -63,6 +63,20 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     } catch {
       // Non salvata (rete o accesso): la riga resta com'era e si può riprovare.
     }
+  };
+
+  // Elimina un locale dalla lista Ristoranti (i contenuti restano salvati),
+  // con "Annulla" per qualche secondo.
+  const deleteRestaurant = async (name) => {
+    const apply = async (hidden) => {
+      try {
+        for (const { id, patch } of hideRestaurantPatches(archive.items, name, hidden)) await archive.update(id, patch);
+      } catch {
+        // Non salvato (rete o accesso): la riga resta com'era e si può riprovare.
+      }
+    };
+    await apply(true);
+    toast("Ristorante eliminato", { action: { label: "Annulla", run: () => apply(false) } });
   };
 
   const setParam = (patch) => {
@@ -259,7 +273,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : sezione ? (
           <>
             {sezione === "ristoranti" ? (
-              <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} />
+              <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} onDelete={deleteRestaurant} />
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} store={store} onOpen={openItem} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file"} />
             ) : (
