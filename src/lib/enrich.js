@@ -130,10 +130,10 @@ export function carryStreets(places, previous) {
   const key = (p) => normalize(p.name);
   const used = new Set();
   const out = (places || []).map((p) => {
-    const o = p && p.kind === "ristorante" ? old.find((x) => key(x) === key(p) && (x.street || x.geo_at)) : null;
+    const o = p && p.kind === "ristorante" ? old.find((x) => key(x) === key(p) && (x.street || x.geo_at || x.hidden)) : null;
     if (!o) return p;
     used.add(key(o));
-    return { ...p, ...(o.street ? { street: o.street } : {}), ...(o.sedi ? { sedi: o.sedi } : {}), ...(o.manual ? { manual: true } : {}), ...(o.geo_at ? { geo_at: o.geo_at } : {}) };
+    return { ...p, ...(o.street ? { street: o.street } : {}), ...(o.sedi ? { sedi: o.sedi } : {}), ...(o.manual ? { manual: true } : {}), ...(o.geo_at ? { geo_at: o.geo_at } : {}), ...(o.hidden ? { hidden: true } : {}) };
   });
   for (const o of old) if (o.manual && o.street && !used.has(key(o))) out.push(o);
   return out;

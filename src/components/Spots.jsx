@@ -6,7 +6,7 @@ import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
-import { Thumb } from "./ItemCard.jsx";
+import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
 function SourceLinks({ items, onOpen, extra }) {
@@ -14,6 +14,7 @@ function SourceLinks({ items, onOpen, extra }) {
     <ul className="mt-1.5 space-y-0.5 text-[0.88rem] font-bold">
       {items.map((it, i) => (
         <li key={it.id} className="flex flex-wrap items-center gap-x-3">
+          {i === 0 && extra}
           {/^https?:\/\//.test(it.url || "") && (
             <a href={it.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-[3px]">
               Apri su {it.site_name || displayHost(it.url)} ↗
@@ -30,7 +31,6 @@ function SourceLinks({ items, onOpen, extra }) {
           >
             Scheda
           </a>
-          {i === 0 && extra}
         </li>
       ))}
     </ul>
@@ -99,7 +99,12 @@ function AddressForm({ name, start, onSave, onCancel }) {
   );
 }
 
-export function RestaurantList({ restaurants, onOpen, onStreet }) {
+// Riga con swipe verso sinistra per eliminare (se c'è onDelete).
+function Riga({ onDelete, children }) {
+  return onDelete ? <SwipeElimina onDelete={onDelete}>{children}</SwipeElimina> : children;
+}
+
+export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
   // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
   // ({ key, mode: "modifica" | "aggiungi" }).
   const [menu, setMenu] = useState(null);
@@ -130,7 +135,9 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
       {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
     <ul className="righe">
       {restaurants.map((r) => (
-        <li key={r.key} className="flex items-center gap-3 py-4">
+        <li key={r.key} className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
+          <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
+          <div className="flex items-center gap-3 py-4">
           <div className="min-w-0 flex-1">
           <p className={NAME_BIG}>{r.name}</p>
           <SourceLinks
@@ -138,7 +145,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
             onOpen={onOpen}
             extra={
               onStreet && editing?.key !== r.key ? (
-                <span className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
+                <span className="relative">
                   <button
                     type="button"
                     className="-my-1 grid h-7 w-8 place-items-center"
@@ -156,9 +163,22 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
                           Modifica via
                         </button>
                       )}
-                      <button type="button" role="menuitem" className="block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "aggiungi")}>
+                      <button type="button" role="menuitem" className={`block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em] ${onDelete ? "border-b border-riga" : ""}`} onClick={() => choose(r, "aggiungi")}>
                         Aggiungi via
                       </button>
+                      {onDelete && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em] text-[#e02a0d]"
+                          onClick={() => {
+                            setMenu(null);
+                            onDelete(r.name);
+                          }}
+                        >
+                          Elimina
+                        </button>
+                      )}
                     </div>
                   )}
                 </span>
@@ -183,6 +203,8 @@ export function RestaurantList({ restaurants, onOpen, onStreet }) {
             const cover = r.items.find((it) => it.image_url || it.file_path);
             return cover ? <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" /> : null;
           })()}
+          </div>
+          </Riga>
         </li>
       ))}
     </ul>

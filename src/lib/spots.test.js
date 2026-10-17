@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { eventsOf, formatEventDate, hasStreet, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { eventsOf, formatEventDate, hasStreet, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -194,4 +194,25 @@ describe("photosOf e docsOf", () => {
   ];
   it("foto e video", () => expect(photosOf(items).map((i) => i.id)).toEqual([1, 2]));
   it("documenti", () => expect(docsOf(items).map((i) => i.id)).toEqual([3]));
+});
+
+describe("hideRestaurantPatches", () => {
+  const mk = (id, name) => ({ id, ai: { v: 5, places: [{ name, address: "Roma", kind: "ristorante" }, { name: "Museo", kind: "altro" }] } });
+
+  it("toglie il locale dalla lista in ogni contenuto che lo cita e lo rimette", () => {
+    const items = [mk("a", "Da Enzo"), mk("b", "da enzo"), mk("c", "Altro")];
+    const patches = hideRestaurantPatches(items, "Da Enzo");
+    expect(patches.map((p) => p.id)).toEqual(["a", "b"]);
+    const after = items.map((it) => ({ ...it, ai: patches.find((p) => p.id === it.id)?.patch.ai || it.ai }));
+    expect(restaurantsOf(after).map((r) => r.name)).toEqual(["Altro"]);
+    const back = hideRestaurantPatches(after, "Da Enzo", false);
+    const restored = after.map((it) => ({ ...it, ai: back.find((p) => p.id === it.id)?.patch.ai || it.ai }));
+    expect(restaurantsOf(restored).map((r) => r.name)).toEqual(["Altro", "Da Enzo"]);
+  });
+
+  it("resta nascosto quando l'AI rifà la scheda", () => {
+    const [p] = hideRestaurantPatches([mk("a", "Da Enzo")], "Da Enzo");
+    const next = carryStreets([{ name: "Da Enzo", address: "Roma", kind: "ristorante" }], p.patch.ai.places);
+    expect(next[0].hidden).toBe(true);
+  });
 });

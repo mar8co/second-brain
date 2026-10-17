@@ -84,6 +84,25 @@ export function manualStreetPatches(items, name, streets, now = new Date()) {
   return out;
 }
 
+// Toglie un locale dalla lista Ristoranti (hidden) o lo rimette (hidden = false):
+// [{ id, patch }] per ogni contenuto che lo cita. I contenuti restano salvati.
+export function hideRestaurantPatches(items, name, hidden = true) {
+  const key = normalize(name);
+  const out = [];
+  for (const item of items) {
+    const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
+    if (!places.some((p) => p && p.kind === "ristorante" && normalize(text(p.name)) === key)) continue;
+    const next = places.map((p) => {
+      if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
+      const rest = { ...p };
+      delete rest.hidden;
+      return hidden ? { ...rest, hidden: true } : rest;
+    });
+    out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
+  }
+  return out;
+}
+
 // Oggi nel fuso del telefono, come AAAA-MM-GG.
 export function todayISO(now = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
@@ -106,7 +125,7 @@ export function restaurantsOf(items) {
   for (const item of items) {
     const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
     for (const p of places) {
-      if (!p || p.kind !== "ristorante" || !text(p.name)) continue;
+      if (!p || p.kind !== "ristorante" || !text(p.name) || p.hidden === true) continue;
       const key = normalize(p.name);
       const addresses = placeAddresses(p);
       const manual = p.manual === true && addresses.length > 0;
