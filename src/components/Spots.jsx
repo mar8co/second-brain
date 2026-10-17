@@ -14,7 +14,6 @@ function SourceLinks({ items, onOpen, extra }) {
     <ul className="mt-1.5 space-y-0.5 text-[0.88rem] font-bold">
       {items.map((it, i) => (
         <li key={it.id} className="flex flex-wrap items-center gap-x-3">
-          {i === 0 && extra}
           {/^https?:\/\//.test(it.url || "") && (
             <a href={it.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-[3px]">
               Apri su {it.site_name || displayHost(it.url)} ↗
@@ -31,6 +30,7 @@ function SourceLinks({ items, onOpen, extra }) {
           >
             Scheda
           </a>
+          {i === 0 && extra}
         </li>
       ))}
     </ul>
