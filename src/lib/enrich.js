@@ -139,6 +139,13 @@ export function carryStreets(places, previous) {
   return out;
 }
 
+// Gli eventi eliminati dall'elenco restano eliminati dopo una nuova lettura.
+export function carryEvents(events, previous) {
+  const key = (e) => `${normalize(String(e.name || ""))}|${e.date || ""}`;
+  const gone = new Set((Array.isArray(previous) ? previous : []).filter((e) => e && e.hidden === true && e.name).map(key));
+  return (events || []).map((e) => (e && e.name && gone.has(key(e)) ? { ...e, hidden: true } : e));
+}
+
 // Risposta della rielaborazione (server/ai.js) → campo `ai` dell'elemento.
 // `previous`: il campo `ai` di prima, da cui si recuperano le vie dei locali.
 export function aiFromDigest(r, { applied = false, now = new Date(), previous = null } = {}) {
@@ -153,7 +160,7 @@ export function aiFromDigest(r, { applied = false, now = new Date(), previous = 
     // Posti visitabili citati ({ name, address, kind }) ed eventi con data
     // ({ name, date, end_date, place }).
     places: carryStreets(r.places, previous?.places),
-    events: r.events || [],
+    events: carryEvents(r.events, previous?.events),
     model: r.model || null,
     generated_at: now.toISOString(),
     ...(applied ? { applied: true } : {}),

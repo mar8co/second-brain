@@ -103,6 +103,28 @@ export function hideRestaurantPatches(items, name, hidden = true) {
   return out;
 }
 
+// Chiave di un evento nell'elenco: nome e data.
+export function eventKey(e) {
+  return `${normalize(text(e.name))}|${isDay(e.date) ? text(e.date) : ""}`;
+}
+
+// Toglie un evento dalla lista Eventi (hidden) o lo rimette: [{ id, patch }].
+export function hideEventPatches(items, key, hidden = true) {
+  const out = [];
+  for (const item of items) {
+    const events = Array.isArray(item.ai?.events) ? item.ai.events : [];
+    if (!events.some((e) => e && text(e.name) && eventKey(e) === key)) continue;
+    const next = events.map((e) => {
+      if (!e || !text(e.name) || eventKey(e) !== key) return e;
+      const rest = { ...e };
+      delete rest.hidden;
+      return hidden ? { ...rest, hidden: true } : rest;
+    });
+    out.push({ id: item.id, patch: { ai: { ...item.ai, events: next } } });
+  }
+  return out;
+}
+
 // Oggi nel fuso del telefono, come AAAA-MM-GG.
 export function todayISO(now = new Date()) {
   const p = (n) => String(n).padStart(2, "0");
@@ -155,7 +177,7 @@ export function eventsOf(items, today = todayISO()) {
   for (const item of items) {
     const events = Array.isArray(item.ai?.events) ? item.ai.events : [];
     for (const e of events) {
-      if (!e || !text(e.name)) continue;
+      if (!e || !text(e.name) || e.hidden === true) continue;
       const date = isDay(e.date) ? text(e.date) : "";
       const end = date && isDay(e.end_date) && text(e.end_date) > date ? text(e.end_date) : "";
       add(m, `${normalize(e.name)}|${date}`, { name: text(e.name), date, end_date: end, place: text(e.place) }, item);

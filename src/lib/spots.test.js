@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { eventsOf, formatEventDate, hasStreet, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -214,5 +214,17 @@ describe("hideRestaurantPatches", () => {
     const [p] = hideRestaurantPatches([mk("a", "Da Enzo")], "Da Enzo");
     const next = carryStreets([{ name: "Da Enzo", address: "Roma", kind: "ristorante" }], p.patch.ai.places);
     expect(next[0].hidden).toBe(true);
+  });
+});
+
+describe("hideEventPatches", () => {
+  const items = [{ id: "a", ai: { events: [{ name: "Festa", date: "2030-05-01" }, { name: "Altra", date: "2030-06-01" }] } }];
+  it("nasconde e rimette un evento, eventsOf lo salta", () => {
+    const key = eventKey({ name: "Festa", date: "2030-05-01" });
+    const [{ patch }] = hideEventPatches(items, key);
+    const hidden = [{ id: "a", ai: patch.ai }];
+    expect(eventsOf(hidden, "2030-01-01").upcoming.map((e) => e.name)).toEqual(["Altra"]);
+    const [{ patch: back }] = hideEventPatches(hidden, key, false);
+    expect(eventsOf([{ id: "a", ai: back.ai }], "2030-01-01").upcoming).toHaveLength(2);
   });
 });

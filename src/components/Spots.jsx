@@ -1,7 +1,7 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useEffect, useState } from "react";
-import { CalendarPlus, Ellipsis, MapPin, X } from "lucide-react";
+import { Check, CalendarPlus, Ellipsis, MapPin, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
@@ -215,14 +215,37 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
 // Dentellatura del biglietto: dentini gialli (come il talloncino) verso destra.
 const ZIGZAG = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="9" height="12"><polygon points="0,0 9,6 0,12" fill="#ffd60a"/></svg>')}")`;
 
-function EventRows({ events, onOpen }) {
+const CAL_KEY = "sb-calendario";
+function readCal() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(CAL_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function EventRows({ events, onOpen, onDelete }) {
+  const [inCal, setInCal] = useState(readCal);
+  const addToCal = (e) => {
+    downloadIcs([e], "second-brain.ics");
+    const next = new Set(inCal).add(e.key);
+    setInCal(next);
+    try {
+      localStorage.setItem(CAL_KEY, JSON.stringify([...next]));
+    } catch {
+      // Senza memoria del telefono il segno vale solo finché la pagina è aperta.
+    }
+  };
   return (
     <ul className="mt-3.5 space-y-3">
       {events.map((e) => {
         const [day, ...rest] = (e.date ? formatEventDate(e.date, e.end_date) : "—").split(" ");
         const cover = e.items.find((it) => it.image_url || it.file_path) || e.items[0];
+        const aggiunto = inCal.has(e.key);
         return (
-          <li key={e.key} data-biglietto className="flex overflow-hidden rounded-2xl border-[1.5px] border-inchiostro">
+          <li key={e.key} data-biglietto className="overflow-hidden rounded-2xl border-[1.5px] border-inchiostro">
+            <Riga onDelete={onDelete ? () => onDelete(e.key) : undefined}>
+            <div className="flex">
             <div className="flex w-[4.6rem] shrink-0 flex-col items-center justify-center self-stretch bg-[var(--giallo)] px-1 py-3 text-center text-[#0a0a0a]">
               <b className="num text-[0.95rem] font-extrabold leading-tight">{day}</b>
               <span className="num text-[0.8rem] font-bold leading-tight">{rest.join(" ")}</span>
@@ -233,9 +256,14 @@ function EventRows({ events, onOpen }) {
               <SourceLinks items={e.items} onOpen={onOpen} />
               {e.place && <MapsLink name={e.name} where={e.place} plain />}
               {e.date && (
-                <button type="button" className="pillola mt-2 !min-h-[34px] !px-3 !text-[0.8rem]" onClick={() => downloadIcs([e], "second-brain.ics")}>
-                  <CalendarPlus className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
-                  Aggiungi al calendario
+                <button
+                  type="button"
+                  disabled={aggiunto}
+                  className={`pillola mt-2 !min-h-[34px] !px-3 !text-[0.8rem] ${aggiunto ? "!bg-[#e4e2dc] !text-[#8a8780] !border-[#e4e2dc]" : ""}`}
+                  onClick={() => addToCal(e)}
+                >
+                  {aggiunto ? <Check className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" /> : <CalendarPlus className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />}
+                  {aggiunto ? "Aggiunto al calendario" : "Aggiungi al calendario"}
                 </button>
               )}
             </div>
@@ -245,6 +273,8 @@ function EventRows({ events, onOpen }) {
               </div>
             )}
             {!(cover && (cover.image_url || cover.file_path)) && <span className="w-3 shrink-0" aria-hidden="true" />}
+            </div>
+            </Riga>
           </li>
         );
       })}
@@ -261,7 +291,7 @@ function downloadIcs(all, file = "second-brain.ics") {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-export function EventList({ events, onOpen }) {
+export function EventList({ events, onOpen, onDelete }) {
   const { upcoming, undated, past } = events;
   if (!upcoming.length && !undated.length && !past.length) {
     return (
@@ -272,17 +302,17 @@ export function EventList({ events, onOpen }) {
   }
   return (
     <>
-      {upcoming.length > 0 && <EventRows events={upcoming} onOpen={onOpen} />}
+      {upcoming.length > 0 && <EventRows events={upcoming} onOpen={onOpen} onDelete={onDelete} />}
       {undated.length > 0 && (
         <>
           <h3 className="sezione">Data non indicata</h3>
-          <EventRows events={undated} onOpen={onOpen} />
+          <EventRows events={undated} onOpen={onOpen} onDelete={onDelete} />
         </>
       )}
       {past.length > 0 && (
         <div className="opacity-50" data-passati>
           <h3 className="sezione">Passati</h3>
-          <EventRows events={past} onOpen={onOpen} />
+          <EventRows events={past} onOpen={onOpen} onDelete={onDelete} />
         </div>
       )}
     </>
