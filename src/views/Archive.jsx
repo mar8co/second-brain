@@ -11,7 +11,7 @@ import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, RestaurantList } from "../components/Spots.jsx";
 import Gallery from "../components/Gallery.jsx";
-import { docsOf, eventsOf, hideRestaurantPatches, manualStreetPatches, photosOf, restaurantsOf } from "../lib/spots.js";
+import { docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
@@ -77,6 +77,18 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     };
     await apply(true);
     toast("Ristorante eliminato", { action: { label: "Annulla", run: () => apply(false) } });
+  };
+
+  const deleteEvent = async (key) => {
+    const apply = async (hidden) => {
+      try {
+        for (const { id, patch } of hideEventPatches(archive.items, key, hidden)) await archive.update(id, patch);
+      } catch {
+        // Non salvato: la riga resta com'era.
+      }
+    };
+    await apply(true);
+    toast("Evento eliminato", { action: { label: "Annulla", run: () => apply(false) } });
   };
 
   const setParam = (patch) => {
@@ -277,7 +289,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} store={store} onOpen={openItem} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file"} />
             ) : (
-              <EventList events={events} onOpen={openItem} />
+              <EventList events={events} onOpen={openItem} onDelete={deleteEvent} />
             )}
           </>
         ) : results.length === 0 ? (

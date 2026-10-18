@@ -622,6 +622,22 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   expect(ics).toContain("X-APPLE-CALENDAR-COLOR:#ffb5d0");
   expect(ics).toContain("SUMMARY:🎟️ Serata carbonara da Enzo");
   expect(ics).not.toContain("Festa del quartiere");
+  // Dopo l'aggiunta il pulsante diventa grigio e non si può più premere (anche dopo il ricaricamento).
+  const biglCarbonara = page.getByText("Serata carbonara da Enzo").locator("xpath=ancestor::li[1]");
+  await expect(biglCarbonara.getByRole("button", { name: "Aggiunto al calendario" })).toBeDisabled();
+  await page.reload();
+  await expect(page.getByText("Serata carbonara da Enzo").locator("xpath=ancestor::li[1]").getByRole("button", { name: "Aggiunto al calendario" })).toBeDisabled();
+  // Swipe a sinistra sul biglietto: Elimina toglie l'evento, Annulla lo rimette.
+  const nBigl = await page.locator("[data-biglietto]").count();
+  const bg = await page.locator("[data-biglietto]").first().boundingBox();
+  await page.mouse.move(bg.x + bg.width - 20, bg.y + bg.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bg.x + bg.width - 120, bg.y + bg.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.locator("[data-biglietto]").first().getByRole("button", { name: "Elimina", exact: true }).click();
+  await expect(page.locator("[data-biglietto]")).toHaveCount(nBigl - 1);
+  await page.getByRole("button", { name: "Annulla" }).click();
+  await expect(page.locator("[data-biglietto]")).toHaveCount(nBigl);
 
   // Passando a lista le due sezioni non ci sono: resta la lista di sempre.
   await page.getByRole("button", { name: "Categorie", exact: true }).click();
