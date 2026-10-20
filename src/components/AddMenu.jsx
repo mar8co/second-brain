@@ -58,7 +58,7 @@ export default function AddMenu({ archive, navigate, toast }) {
             <FileText className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Foto, video o file
           </button>
           <button type="button" role="menuitem" className={row} onClick={() => choose(() => navigate("/aggiungi"))}>
-            <SquarePen className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Link o nota
+            <SquarePen className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Link o note
           </button>
         </div>
       )}
