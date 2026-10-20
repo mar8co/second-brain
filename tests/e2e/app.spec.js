@@ -1137,3 +1137,15 @@ test("scheda nota: copia a destra sulla riga di Nota; 'Nota copiata ✓' resta 2
   await expect(page.getByRole("button", { name: "Copia nota" })).toBeVisible();
   await expect(msg).toHaveCount(0, { timeout: 8000 });
 });
+
+test("campo di ricerca: la X di cancellazione è rossa #ea4d31", async ({ page }) => {
+  await page.goto("/archivio");
+  await page.locator("#arch-q").fill("prova");
+  const regola = await page.evaluate(() => {
+    for (const sheet of document.styleSheets) {
+      for (const r of sheet.cssRules) if (r.cssText.includes("search-cancel-button")) return r.cssText;
+    }
+    return "";
+  });
+  expect(regola).toContain("ea4d31");
+});
