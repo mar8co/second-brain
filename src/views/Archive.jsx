@@ -288,7 +288,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             {sezione === "ristoranti" ? (
               <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} onDelete={deleteRestaurant} />
             ) : sezione === "foto" || sezione === "file" ? (
-              <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={openItem} onNewNote={() => navigate("/aggiungi?mode=note")} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
+              <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={openItem} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (
               <EventList events={events} onOpen={openItem} onDelete={deleteEvent} />
             )}
@@ -409,26 +409,17 @@ function Periodo({ from, to, onChange }) {
 }
 
 // Box Foto e video / File: i file caricati dalla Chat, con le categorie dell'AI come filtro rapido.
-function FotoBox({ items, notes, store, onOpen, onNewNote, vuoto }) {
+function FotoBox({ items, notes, store, onOpen, vuoto }) {
   const [cat, setCat] = useState("");
   const cats = countBy(items, "categories");
   const list = cat ? items.filter((it) => (it.categories || []).includes(cat)) : items;
-  const nuovaNota = notes && (
-    <button type="button" className="pillola mt-3.5" onClick={onNewNote}>
-      + Nuova nota
-    </button>
-  );
   if (!items.length && !notes?.length) {
     return (
-      <>
-        <EmptyState title={vuoto}>Dal tondo + nella Chat salvi foto, video e documenti; le note le scrivi da qui: li trovi tutti qui.</EmptyState>
-        {nuovaNota}
-      </>
+      <EmptyState title={vuoto}>Dal tondo + nella Chat salvi foto, video, documenti e note: li trovi tutti qui.</EmptyState>
     );
   }
   return (
     <>
-      {nuovaNota}
       {cats.length > 1 && (
         <ul className="fila-chip mt-3.5" aria-label="Categorie dei file">
           <li className="shrink-0">
