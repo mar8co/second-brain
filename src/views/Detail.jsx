@@ -2,6 +2,7 @@
 // e categorie/tag; il resto (dati tecnici, trascrizione, testo letto) è in
 // "Dettagli", chiuso. Elimina è il cestino in alto accanto a Modifica.
 import { useEffect, useState } from "react";
+import { CopyNote } from "../components/ItemCard.jsx";
 import { Trash2 } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import { AiBadge, ChipEditor, EmptyState, ErrorBox, StatusBadge, TypeIcon } from "../components/ui.jsx";
@@ -180,7 +181,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
 
         {item.note && (
           <section>
-            <h2 className="sezione">La tua nota</h2>
+            <h2 className="sezione flex items-center gap-1">La tua nota <CopyNote text={item.note} /></h2>
             <p className="whitespace-pre-wrap text-[1.05rem] font-semibold leading-[1.38]">{item.note}</p>
           </section>
         )}

@@ -3,11 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, PenLine, Plus } from "lucide-react";
 import { ACCEPTED_MIME } from "../lib/constants.js";
-import { saveFiles, uploadMessage } from "../lib/upload.js";
+import { mergeFiles } from "../lib/upload.js";
+import FilePreview from "./FilePreview.jsx";
 
 export default function AddMenu({ archive, navigate, toast }) {
   const [open, setOpen] = useState(false);
   const fileRef = useRef(null);
+  const [pending, setPending] = useState(null);
 
   const root = useRef(null);
   // Finché il menu è aperto, un tocco fuori lo chiude e basta: non arriva a ciò che sta sotto.
@@ -28,13 +30,12 @@ export default function AddMenu({ archive, navigate, toast }) {
     };
   }, [open]);
 
-  const pick = async (e) => {
+  const pick = (e) => {
     const files = [...(e.target.files || [])];
     e.target.value = "";
     if (!files.length) return;
-    toast(files.length === 1 ? "Salvo…" : `Salvo ${files.length} file…`);
-    const r = await saveFiles(files, archive.add);
-    toast(uploadMessage(r));
+    // Prima l'anteprima: si può togliere qualcosa e vedere quanti se ne salvano.
+    setPending(mergeFiles([], files));
   };
 
   // Il tocco non sposta il fuoco nel modulo della chat: la barra e il campo non
@@ -50,6 +51,7 @@ export default function AddMenu({ archive, navigate, toast }) {
   return (
     <div className="piu-barra" ref={root} onMouseDown={keepLayout}>
       <input ref={fileRef} type="file" accept={[...ACCEPTED_MIME, ".md", ".heic", "image/*", "video/*"].join(",")} multiple hidden aria-label="Scegli foto, video o file" onChange={pick} />
+      {pending && <FilePreview initial={pending} archive={archive} toast={toast} onClose={() => setPending(null)} />}
       {open && (
         <div role="menu" aria-label="Aggiungi foto, video o file" className="absolute bottom-[calc(100%+10px)] left-0 z-[2] min-w-[15rem] overflow-hidden rounded-2xl border-[1.5px] border-[#0a0a0a] bg-white text-[#0a0a0a]">
           <button type="button" role="menuitem" className={`${row} border-b border-[rgb(10_10_10/0.15)]`} onClick={() => choose(() => fileRef.current?.click())}>

@@ -16,6 +16,7 @@ import { getChatLog, updateChatLog, useChatLog } from "../lib/chatlog.js";
 import { countBy } from "../lib/search.js";
 import { displayHost, detectType, extractUrl } from "../lib/detect.js";
 import { displayTitle } from "../lib/item.js";
+import { copyText } from "../lib/clipboard.js";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { needsDigest } from "../lib/memory.js";
 
@@ -359,26 +360,6 @@ function useLongPress(onOpen) {
 // Testo di una risposta senza i segni del grassetto e le citazioni [1].
 function plainAnswer(text) {
   return String(text || "").replace(/\*\*/g, "").replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "").trim();
-}
-
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.cssText = "position:fixed;opacity:0;top:0";
-      document.body.appendChild(ta);
-      ta.select();
-      const ok = document.execCommand("copy");
-      ta.remove();
-      return ok;
-    } catch {
-      return false;
-    }
-  }
 }
 
 // Domanda (a destra, nera) e risposta di Second Brain (a sinistra, bianca),

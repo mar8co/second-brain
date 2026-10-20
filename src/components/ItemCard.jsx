@@ -1,7 +1,8 @@
 // Riga dell'elenco: copertina (o il colore dell'elemento con l'icona del tipo),
 // fonte e data in piccolo, titolo grande, in basso stato e categorie. In vista
 // a box, ogni elemento è una copertina con il titolo sotto.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { rememberThumb } from "../lib/thumbs.js";
 import { hasFileCover, useFileUrl } from "../lib/fileurl.js";
 import { displayTitle } from "../lib/item.js";
@@ -9,6 +10,7 @@ import { displayHost, mapTileUrl } from "../lib/detect.js";
 import { itemColor } from "../lib/colors.js";
 import { StatusBadge, TypeIcon } from "./ui.jsx";
 import { formatDate, typeLabel } from "../lib/format.js";
+import { copyText } from "../lib/clipboard.js";
 
 // Copertina in piccolo (Reel, video, link con immagine); se manca o non si
 // carica più (i link delle copertine social scadono) resta il quadrato del
@@ -61,6 +63,38 @@ function LinkThumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
   return <LinkThumbFallback item={item} size={size} rounded={rounded} />;
 }
 
+// Pulsante "copia" accanto alla scritta Nota: copia solo il testo di quella nota.
+// Il segno di spunta compare solo se la copia è riuscita; altrimenti un avviso.
+export function CopyNote({ text }) {
+  const [stato, setStato] = useState(null);
+  const timer = useRef(null);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const copy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyText(text);
+    setStato(ok ? "ok" : "no");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setStato(null), ok ? 1600 : 3000);
+  };
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={stato === "ok" ? "Nota copiata" : "Copia nota"}
+        onClick={copy}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="-my-2 grid h-9 w-9 shrink-0 place-items-center"
+      >
+        {stato === "ok" ? <Check className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" /> : <Copy className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />}
+      </button>
+      <span role="status" className={stato ? "shrink-0 font-bold" : "sr-only"}>
+        {stato === "ok" ? "Nota copiata" : stato === "no" ? "Copia non riuscita" : ""}
+      </span>
+    </>
+  );
+}
+
 export function ItemCard({ item, onOpen }) {
   const title = displayTitle(item);
   const site = item.site_name || (item.url ? displayHost(item.url) : item.file_name ? "File caricato" : typeLabel(item.type));
@@ -82,6 +116,7 @@ export function ItemCard({ item, onOpen }) {
         <p className="micro flex items-center gap-1.5">
           <span className="sr-only">{typeLabel(item.type)} · </span>
           <span className="truncate">{source}</span>
+          {item.type === "note" && item.note && <CopyNote text={item.note} />}
           <span aria-hidden="true">·</span>
           <time className="num shrink-0" dateTime={item.created_at}>{formatDate(item.created_at)}</time>
         </p>

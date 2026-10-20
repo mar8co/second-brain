@@ -395,6 +395,7 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
 test("carica un file di testo dal + della chat: testo estratto e cercabile", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Scegli foto, video o file").setInputFiles({ name: "appunti.md", mimeType: "text/markdown", buffer: Buffer.from("# Docker\nComando utile: docker compose up -d") });
+  await page.getByRole("button", { name: /^Salva \d+ (foto|file)$/ }).click();
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.goto("/archivio?q=compose");
   await expect(page.getByText("appunti.md")).toBeVisible();
@@ -403,7 +404,8 @@ test("carica un file di testo dal + della chat: testo estratto e cercabile", asy
 test("file non ammesso dal +: errore chiaro, niente salvataggio", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Scegli foto, video o file").setInputFiles({ name: "virus.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") });
-  await expect(page.getByText(/Tipo di file non supportato/)).toBeVisible();
+  await page.getByRole("button", { name: /^Salva \d+ (foto|file)$/ }).click();
+  await expect(page.getByText(/Tipo di file non supportato/).first()).toBeVisible();
 });
 
 test("Aggiungi ha solo Link e Nota (i file si aggiungono dal +)", async ({ page }) => {
@@ -781,11 +783,13 @@ test("chat: il tondo + accanto al campo apre Foto, video o file e Link; un file 
   const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await chooser.setFiles({ name: "schermata.png", mimeType: "image/png", buffer: png });
+  await page.getByRole("button", { name: /^Salva \d+ (foto|file)$/ }).click();
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   // Anche un video, dallo stesso pulsante.
   await piu.click();
   const [chooser2] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
   await chooser2.setFiles({ name: "clip.mp4", mimeType: "video/mp4", buffer: Buffer.from("00000018667479706d703432", "hex") });
+  await page.getByRole("button", { name: /^Salva \d+ (foto|file)$/ }).click();
   await expect(page.getByText("Salvato nell'archivio").first()).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
   await expect(page.getByText("schermata.png").first()).toBeVisible();
@@ -803,6 +807,7 @@ test("Archivio a box: il box Foto e video mostra la foto salvata", async ({ page
   const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await chooser.setFiles({ name: "vestito.png", mimeType: "image/png", buffer: png });
+  await page.getByRole("button", { name: /^Salva \d+ (foto|file)$/ }).click();
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
   // La foto ha la sua copertina anche nel box della categoria.
@@ -817,6 +822,7 @@ test("Archivio a box: i box fissi Foto e video e File hanno le stesse dimensioni
   await page.getByRole("button", { name: "Aggiungi foto, video o file" }).click();
   const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
   await chooser.setFiles({ name: "nota.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF") });
+  await page.getByRole("button", { name: /^Salva \d+ (foto|file)$/ }).click();
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
   const size = async (name) => (await page.getByRole("button", { name: new RegExp(`^${name},`) }).boundingBox());
@@ -984,4 +990,95 @@ test("chat: incollando un file nel campo viene salvato come dal +", async ({ pag
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.goto("/archivio?q=zafferano");
   await expect(page.getByText("incollato.md")).toBeVisible();
+});
+
+
+test("più foto insieme: anteprima, si toglie una, si salvano le altre e restano dopo la riapertura", async ({ page }) => {
+  await page.goto("/");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await page.getByRole("button", { name: "Aggiungi foto, video o file" }).click();
+  const [chooser] = await Promise.all([page.waitForEvent("filechooser"), page.getByRole("menuitem", { name: "Foto, video o file" }).click()]);
+  await chooser.setFiles([
+    { name: "uno.png", mimeType: "image/png", buffer: png },
+    { name: "due.png", mimeType: "image/png", buffer: Buffer.concat([png, Buffer.from(" ")]) },
+    { name: "tre.png", mimeType: "image/png", buffer: Buffer.concat([png, Buffer.from("  ")]) },
+  ]);
+  const dialog = page.getByRole("dialog", { name: "Anteprima prima di salvare" });
+  await expect(dialog.getByRole("heading", { name: "3 foto da salvare" })).toBeVisible();
+  await expect(dialog.locator("img")).toHaveCount(3);
+  await dialog.getByRole("button", { name: "Togli due.png" }).click();
+  await expect(dialog.getByRole("heading", { name: "2 foto da salvare" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Salva 2 foto" }).click();
+  await expect(page.getByText("2 salvati nell'archivio")).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await page.goto("/archivio?sezione=foto");
+  await expect(page.getByRole("link", { name: "uno.png" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "tre.png" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "due.png" })).toHaveCount(0);
+});
+
+test("anteprima: un file non ammesso resta per riprovare, l'altro è salvato", async ({ page }) => {
+  await page.goto("/");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await page.getByLabel("Scegli foto, video o file").setInputFiles([
+    { name: "ok.png", mimeType: "image/png", buffer: png },
+    { name: "virus.exe", mimeType: "application/x-msdownload", buffer: Buffer.from("MZ") },
+  ]);
+  const dialog = page.getByRole("dialog", { name: "Anteprima prima di salvare" });
+  await dialog.getByRole("button", { name: "Salva 2 file" }).click();
+  await expect(dialog.getByText(/Tipo di file non supportato/)).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Togli ok.png" })).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Togli virus.exe" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Chiudi" }).click();
+  await page.goto("/archivio?q=ok.png");
+  await expect(page.getByText("ok.png").first()).toBeVisible();
+});
+
+test("note: il pulsante copia mette negli appunti solo il testo della propria nota", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const testi = ["Prima nota breve", "Seconda nota\n\nCon più paragrafi, emoji 🍝 e caratteri speciali: <b>&\"'</b>\n\n\nFine."];
+  for (const [i, t] of testi.entries()) {
+    await page.goto("/aggiungi");
+    await page.getByRole("tab", { name: "Nota" }).click();
+    await page.getByLabel(/^Titolo/).fill(`Titolo ${i}`);
+    await page.getByLabel("Testo").fill(t);
+    await page.getByRole("button", { name: "Salva", exact: true }).click();
+    await expect(page).toHaveURL(/\/elemento\//);
+  }
+  await page.goto("/archivio");
+  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Lista" }).click();
+  const copie = page.getByRole("button", { name: "Copia nota" });
+  await expect(copie).toHaveCount(2);
+  const url0 = page.url();
+  for (const [i, t] of testi.entries()) {
+    const riga = page.locator("ul.righe > li").filter({ hasText: `Titolo ${i}` });
+    await riga.getByRole("button", { name: "Copia nota" }).click();
+    await expect(riga.getByText("Nota copiata")).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(t);
+  }
+  // Il tocco sul pulsante non apre la scheda.
+  expect(page.url()).toBe(url0);
+});
+
+test("note: se la copia non riesce lo dice e non dichiara di aver copiato", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: () => Promise.reject(new Error("negato")) }, configurable: true });
+    document.execCommand = () => false;
+  });
+  await page.goto("/aggiungi");
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel(/^Titolo/).fill("Nota rifiutata");
+  await page.getByLabel("Testo").fill("contenuto");
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  await page.getByRole("button", { name: "Copia nota" }).click();
+  await expect(page.getByText("Copia non riuscita")).toBeVisible();
+  await expect(page.getByText("Nota copiata")).toHaveCount(0);
+});
+
+test("condivisione di più file: lo script del service worker è servito", async ({ request }) => {
+  const res = await request.get("/share-target-sw.js");
+  expect(res.ok()).toBeTruthy();
+  expect(await res.text()).toContain("/condividi");
 });

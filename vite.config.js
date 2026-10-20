@@ -74,11 +74,20 @@ export default defineConfig(({ mode }) => {
             { src: "/icons/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
           ],
           shortcuts: [{ name: "Aggiungi", short_name: "Aggiungi", url: "/aggiungi" }],
+          // Android/Chrome: compare nel menu Condividi per foto, video e file (anche più
+          // insieme). Su iPhone le app installate non possono essere destinazione.
+          share_target: {
+            action: "/condividi",
+            method: "POST",
+            enctype: "multipart/form-data",
+            params: { files: [{ name: "files", accept: ["image/*", "video/*", "application/pdf", "text/plain", "text/markdown"] }] },
+          },
         },
         workbox: {
           // Solo la "shell" dell'app in cache. Le chiamate /api e Supabase vanno
           // sempre in rete: i dati non vengono serviti da cache vecchie.
           globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+          importScripts: ["share-target-sw.js"],
           globIgnores: ["**/pdf.worker*"],
           navigateFallback: "/index.html",
           navigateFallbackDenylist: [/^\/api\//],

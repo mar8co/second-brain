@@ -39,3 +39,13 @@ describe("uploadMessage", () => {
     expect(uploadMessage({ saved: [], errors: ["a.exe: Tipo di file non supportato."] })).toBe("a.exe: Tipo di file non supportato.");
   });
 });
+
+import { mergeFiles } from "./upload.js";
+describe("mergeFiles", () => {
+  it("non duplica lo stesso file e tiene l'ordine di scelta", () => {
+    const a = new File(["a"], "a.png", { type: "image/png", lastModified: 1 });
+    const b = new File(["bb"], "b.png", { type: "image/png", lastModified: 2 });
+    const a2 = new File(["a"], "a.png", { type: "image/png", lastModified: 1 });
+    expect(mergeFiles([a], [a2, b]).map((f) => f.name)).toEqual(["a.png", "b.png"]);
+  });
+});
