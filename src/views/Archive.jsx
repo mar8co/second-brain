@@ -11,7 +11,7 @@ import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, RestaurantList } from "../components/Spots.jsx";
 import Gallery from "../components/Gallery.jsx";
-import { docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, photosOf, restaurantsOf } from "../lib/spots.js";
+import { docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, notesOf, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
@@ -117,13 +117,14 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const events = useMemo(() => eventsOf(matches), [matches]);
   const photos = useMemo(() => photosOf(matches), [matches]);
   const docs = useMemo(() => docsOf(matches), [matches]);
+  const notes = useMemo(() => notesOf(matches), [matches]);
   const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
   const plural = (n, uno, molti) => (n === 1 ? `1 ${uno}` : `${n} ${molti}`);
   const fissi = [
     { id: "ristoranti", name: "Ristoranti", Icon: Utensils, items: restaurants, sub: restaurants.length ? plural(restaurants.length, "locale", "locali") : "Ancora nessuno" },
     { id: "eventi", name: "Eventi", Icon: CalendarDays, items: [], sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : plural(eventsTotal, "evento", "eventi") },
     { id: "foto", name: "Foto e video", Icon: Images, items: photos, sub: photos.length ? plural(photos.length, "file", "file") : "Ancora nessuno" },
-    { id: "file", name: "File", Icon: FileText, items: docs, sub: docs.length ? plural(docs.length, "file", "file") : "Ancora nessuno" },
+    { id: "file", name: "File e note", Icon: FileText, items: [...docs, ...notes], sub: docs.length + notes.length ? [docs.length ? plural(docs.length, "file", "file") : "", notes.length ? plural(notes.length, "nota", "note") : ""].filter(Boolean).join(" · ") : "Ancora nessuno" },
   ].map((t) => ({ ...t, kind: "fisso", color: BOX_FIXED[t.id] }));
   const [ordineSalvato, setOrdineSalvato] = useState(readOrder);
   const [ordina, setOrdina] = useState(false);
@@ -132,7 +133,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     const all = [...fissi, ...boxes.map(([name, its]) => ({ id: `c:${name}`, kind: "categoria", name, items: its, sub: plural(its.length, "contenuto", "contenuti"), color: categoryColor(name, nomi) }))];
     const byId = new Map(all.map((t) => [t.id, t]));
     return orderBoxes(all.map((t) => t.id), ordineSalvato).map((id) => byId.get(id));
-  }, [boxes, items, restaurants, events, photos, docs, ordineSalvato]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [boxes, items, restaurants, events, photos, docs, notes, ordineSalvato]); // eslint-disable-line react-hooks/exhaustive-deps
   const moveTile = (id, dir) => {
     const next = moveBox(tiles.map((t) => t.id), id, dir);
     setOrdineSalvato(next);
@@ -287,7 +288,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             {sezione === "ristoranti" ? (
               <RestaurantList restaurants={restaurants} onOpen={openItem} onStreet={saveStreet} onDelete={deleteRestaurant} />
             ) : sezione === "foto" || sezione === "file" ? (
-              <FotoBox items={sezione === "foto" ? photos : docs} store={store} onOpen={openItem} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file"} />
+              <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={openItem} onNewNote={() => navigate("/aggiungi?mode=note")} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (
               <EventList events={events} onOpen={openItem} onDelete={deleteEvent} />
             )}
@@ -408,13 +409,26 @@ function Periodo({ from, to, onChange }) {
 }
 
 // Box Foto e video / File: i file caricati dalla Chat, con le categorie dell'AI come filtro rapido.
-function FotoBox({ items, store, onOpen, vuoto }) {
+function FotoBox({ items, notes, store, onOpen, onNewNote, vuoto }) {
   const [cat, setCat] = useState("");
   const cats = countBy(items, "categories");
   const list = cat ? items.filter((it) => (it.categories || []).includes(cat)) : items;
-  if (!items.length) return <EmptyState title={vuoto}>Dal tondo + nella Chat salvi foto, video e documenti: li trovi qui.</EmptyState>;
+  const nuovaNota = notes && (
+    <button type="button" className="pillola mt-3.5" onClick={onNewNote}>
+      + Nuova nota
+    </button>
+  );
+  if (!items.length && !notes?.length) {
+    return (
+      <>
+        <EmptyState title={vuoto}>Dal tondo + nella Chat salvi foto, video e documenti; le note le scrivi da qui: li trovi tutti qui.</EmptyState>
+        {nuovaNota}
+      </>
+    );
+  }
   return (
     <>
+      {nuovaNota}
       {cats.length > 1 && (
         <ul className="fila-chip mt-3.5" aria-label="Categorie dei file">
           <li className="shrink-0">
@@ -429,7 +443,13 @@ function FotoBox({ items, store, onOpen, vuoto }) {
           ))}
         </ul>
       )}
-      <Gallery items={list} store={store} onOpen={onOpen} />
+      {list.length > 0 && <Gallery items={list} store={store} onOpen={onOpen} />}
+      {notes?.length > 0 && (
+        <>
+          <h3 className="sezione">Note</h3>
+          <ItemList items={notes} onOpen={onOpen} />
+        </>
+      )}
     </>
   );
 }

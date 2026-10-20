@@ -827,25 +827,25 @@ test("Archivio a box: i box fissi Foto e video e File hanno le stesse dimensioni
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
   const size = async (name) => (await page.getByRole("button", { name: new RegExp(`^${name},`) }).boundingBox());
   const r = await size("Ristoranti");
-  for (const n of ["Eventi", "Foto e video", "File"]) {
+  for (const n of ["Eventi", "Foto e video", "File e note"]) {
     const b = await size(n);
     expect(Math.abs(b.width - r.width)).toBeLessThan(2);
     expect(Math.abs(b.height - r.height)).toBeLessThan(2);
   }
   // Riordino: File passa prima di Foto e video.
-  const x0 = (await size("File")).y * 1000 + (await size("File")).x;
+  const x0 = (await size("File e note")).y * 1000 + (await size("File e note")).x;
   await page.getByRole("button", { name: "Ordina" }).click();
-  await page.getByRole("button", { name: "Sposta File prima" }).click();
-  await page.getByRole("button", { name: "Sposta File prima" }).click();
+  await page.getByRole("button", { name: "Sposta File e note prima" }).click();
+  await page.getByRole("button", { name: "Sposta File e note prima" }).click();
   await page.getByRole("button", { name: "Fine" }).click();
-  const x1 = (await size("File")).y * 1000 + (await size("File")).x;
+  const x1 = (await size("File e note")).y * 1000 + (await size("File e note")).x;
   expect(x1).toBeLessThan(x0);
   await page.reload();
-  const x2 = (await size("File")).y * 1000 + (await size("File")).x;
+  const x2 = (await size("File e note")).y * 1000 + (await size("File e note")).x;
   expect(x2).toBe(x1);
   // Il box File mostra il documento.
-  await page.getByRole("button", { name: /^File,/ }).click();
-  await expect(page.getByRole("heading", { name: "File", level: 1 })).toBeVisible();
+  await page.getByRole("button", { name: /^File e note,/ }).click();
+  await expect(page.getByRole("heading", { name: "File e note", level: 1 })).toBeVisible();
   await expect(page.getByRole("link", { name: /nota\.pdf/ })).toBeVisible();
 });
 
@@ -1081,4 +1081,34 @@ test("condivisione di più file: lo script del service worker è servito", async
   const res = await request.get("/share-target-sw.js");
   expect(res.ok()).toBeTruthy();
   expect(await res.text()).toContain("/condividi");
+});
+
+test("box File e note: le note stanno con i file, c'è Nuova nota; data a destra e copia in basso con i tag", async ({ page }) => {
+  await page.goto("/aggiungi");
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel(/^Titolo/).fill("Idea per il weekend");
+  await page.getByLabel("Testo").fill("Gita al lago");
+  await page.getByRole("textbox", { name: "Categorie" }).fill("Tempo libero");
+  await page.getByRole("textbox", { name: "Categorie" }).press("Enter");
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  await page.goto("/archivio");
+  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Box" }).click();
+  await page.getByRole("button", { name: /^File e note,/ }).click();
+  await expect(page.getByRole("heading", { name: "File e note", level: 1 })).toBeVisible();
+  const riga = page.locator("ul.righe > li").filter({ hasText: "Idea per il weekend" });
+  await expect(riga).toBeVisible();
+  // La data sta a destra della riga; la copia in basso a destra, accanto ai tag.
+  const rb = await riga.boundingBox();
+  const data = await riga.locator("time").boundingBox();
+  expect(data.x + data.width).toBeGreaterThan(rb.x + rb.width - 12);
+  const copia = await riga.getByRole("button", { name: "Copia nota" }).boundingBox();
+  const tag = await riga.getByText("Tempo libero").boundingBox();
+  expect(copia.x).toBeGreaterThan(tag.x + tag.width);
+  expect(copia.x + copia.width).toBeGreaterThan(rb.x + rb.width - 12);
+  expect(Math.abs(copia.y + copia.height / 2 - (tag.y + tag.height / 2))).toBeLessThan(14);
+  // Nuova nota porta alla pagina Nota.
+  await page.getByRole("button", { name: "+ Nuova nota" }).click();
+  await expect(page).toHaveURL(/\/aggiungi\?mode=note/);
+  await expect(page.getByRole("tab", { name: "Nota" })).toHaveAttribute("aria-selected", "true");
 });

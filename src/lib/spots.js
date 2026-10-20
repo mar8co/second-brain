@@ -207,3 +207,6 @@ export function formatEventDate(date, end, today = todayISO()) {
 const isMedia = (it) => /^(image|video)\//.test(it.file_mime || "");
 export const photosOf = (items) => (items || []).filter((it) => it.file_path && isMedia(it));
 export const docsOf = (items) => (items || []).filter((it) => it.file_path && !isMedia(it));
+
+// Le note scritte a mano (senza file): stanno nel box "File e note".
+export const notesOf = (items) => (items || []).filter((it) => it.type === "note" && !it.file_path);

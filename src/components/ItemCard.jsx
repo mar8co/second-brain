@@ -78,7 +78,10 @@ export function CopyNote({ text }) {
     timer.current = setTimeout(() => setStato(null), ok ? 1600 : 3000);
   };
   return (
-    <>
+    <span className="inline-flex shrink-0 items-center">
+      <span role="status" className={stato ? "font-bold" : "sr-only"}>
+        {stato === "ok" ? "Nota copiata" : stato === "no" ? "Copia non riuscita" : ""}
+      </span>
       <button
         type="button"
         aria-label={stato === "ok" ? "Nota copiata" : "Copia nota"}
@@ -88,10 +91,7 @@ export function CopyNote({ text }) {
       >
         {stato === "ok" ? <Check className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" /> : <Copy className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />}
       </button>
-      <span role="status" className={stato ? "shrink-0 font-bold" : "sr-only"}>
-        {stato === "ok" ? "Nota copiata" : stato === "no" ? "Copia non riuscita" : ""}
-      </span>
-    </>
+    </span>
   );
 }
 
@@ -115,10 +115,8 @@ export function ItemCard({ item, onOpen }) {
       <div className="min-w-0 flex-1">
         <p className="micro flex items-center gap-1.5">
           <span className="sr-only">{typeLabel(item.type)} · </span>
-          <span className="truncate">{source}</span>
-          {item.type === "note" && item.note && <CopyNote text={item.note} />}
-          <span aria-hidden="true">·</span>
-          <time className="num shrink-0" dateTime={item.created_at}>{formatDate(item.created_at)}</time>
+          <span className="min-w-0 flex-1 truncate">{source}</span>
+          <time className="num ml-auto shrink-0" dateTime={item.created_at}>{formatDate(item.created_at)}</time>
         </p>
         <h3 className="mt-0.5 line-clamp-2 text-[1.15rem] font-extrabold leading-[1.08] tracking-[-0.035em]">{title}</h3>
         {snippet && <p className="mt-1 line-clamp-2 text-[0.9rem] font-medium leading-snug text-tenue">{snippet}</p>}
@@ -130,6 +128,11 @@ export function ItemCard({ item, onOpen }) {
           {(item.categories || []).slice(0, 3).map((c) => (
             <span key={c} className="cartellino">{c}</span>
           ))}
+          {item.type === "note" && item.note && (
+            <span className="ml-auto">
+              <CopyNote text={item.note} />
+            </span>
+          )}
         </p>
       </div>
     </a>
