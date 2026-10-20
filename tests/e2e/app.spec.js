@@ -964,6 +964,38 @@ test("chat: tenendo premuto su un messaggio compare Copia messaggio e il testo v
   expect(copiato).not.toMatch(/\*\*|\[\d+\]/);
 });
 
+test("chat: il testo dei messaggi si può selezionare (una parola) e la pillola Copia messaggio resta; un tocco fuori la chiude", async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("Cosa ho salvato sul limone?");
+  await box.press("Enter");
+  await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
+  await page.waitForTimeout(800);
+  const domanda = page.locator("ol p", { hasText: "Cosa ho salvato sul limone?" });
+  const stili = await domanda.evaluate((el) => {
+    const c = window.getComputedStyle(el);
+    return c.userSelect || c.webkitUserSelect;
+  });
+  expect(stili).not.toBe("none");
+  // Doppio clic su una parola: la seleziona.
+  const b = await domanda.boundingBox();
+  await page.mouse.dblclick(b.x + 40, b.y + b.height / 2);
+  const sel = await page.evaluate(() => String(window.getSelection()).trim());
+  expect(sel.length).toBeGreaterThan(0);
+  expect(sel.length).toBeLessThan("Cosa ho salvato sul limone?".length);
+  // Pressione lunga: compare la pillola; un tocco fuori la chiude.
+  await page.mouse.move(b.x + 20, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.waitForTimeout(650);
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Copia messaggio" })).toBeVisible();
+  await page.mouse.click(4, 200);
+  await expect(page.getByRole("button", { name: "Copia messaggio" })).toHaveCount(0);
+});
+
 test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni saltati", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
