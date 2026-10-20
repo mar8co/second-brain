@@ -1083,7 +1083,7 @@ test("condivisione di più file: lo script del service worker è servito", async
   expect(await res.text()).toContain("/condividi");
 });
 
-test("box File e note: le note stanno con i file, c'è Nuova nota; data a destra e copia in basso con i tag", async ({ page }) => {
+test("box File e note: le note stanno con i file, niente pulsante Nuova nota; data a destra e copia in basso con i tag", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
   await page.getByLabel(/^Titolo/).fill("Idea per il weekend");
@@ -1107,10 +1107,8 @@ test("box File e note: le note stanno con i file, c'è Nuova nota; data a destra
   expect(copia.x).toBeGreaterThan(tag.x + tag.width);
   expect(copia.x + copia.width).toBeGreaterThan(rb.x + rb.width - 12);
   expect(Math.abs(copia.y + copia.height / 2 - (tag.y + tag.height / 2))).toBeLessThan(14);
-  // Nuova nota porta alla pagina Nota.
-  await page.getByRole("button", { name: "+ Nuova nota" }).click();
-  await expect(page).toHaveURL(/\/aggiungi\?mode=note/);
-  await expect(page.getByRole("tab", { name: "Nota" })).toHaveAttribute("aria-selected", "true");
+  // Nessun pulsante "+ Nuova nota" nel box.
+  await expect(page.getByRole("button", { name: "+ Nuova nota" })).toHaveCount(0);
 });
 
 
