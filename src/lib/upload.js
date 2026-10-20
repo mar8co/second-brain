@@ -6,10 +6,12 @@ import { extractFileText, fileMime, isImage, isVideo, validateFile, withMime } f
 export async function saveFiles(files, add) {
   const saved = [];
   const errors = [];
+  const failed = []; // i file non salvati, per riprovare
   for (const f of files) {
     const err = validateFile(f);
     if (err) {
       errors.push(`${f.name || "File"}: ${err}`);
+      failed.push(f);
       continue;
     }
     try {
@@ -30,13 +32,28 @@ export async function saveFiles(files, add) {
       saved.push(await add(item, upload));
     } catch (e) {
       errors.push(`${f.name || "File"}: ${e.message || "salvataggio non riuscito"}`);
+      failed.push(f);
     }
   }
-  return { saved, errors };
+  return { saved, errors, failed };
 }
 
 export function uploadMessage({ saved, errors }) {
   if (!saved.length) return errors[0] || "Nessun file salvato";
   const ok = saved.length === 1 ? "Salvato nell'archivio" : `${saved.length} salvati nell'archivio`;
   return errors.length ? `${ok}; ${errors.length === 1 ? "1 non salvato" : `${errors.length} non salvati`}` : ok;
+}
+
+// Unisce una nuova scelta a quella già in corso senza doppioni (stesso nome,
+// dimensione e data di modifica): l'ordine resta quello in cui li ha scelti.
+export function mergeFiles(current, incoming) {
+  const key = (f) => `${f.name}|${f.size}|${f.lastModified}`;
+  const seen = new Set(current.map(key));
+  const out = [...current];
+  for (const f of incoming) {
+    if (seen.has(key(f))) continue;
+    seen.add(key(f));
+    out.push(f);
+  }
+  return out;
 }

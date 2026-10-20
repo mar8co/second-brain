@@ -13,6 +13,8 @@ import { FileStoreContext } from "./lib/fileurl.js";
 import { createLocalStore } from "./lib/store/local.js";
 import { createRemoteStore } from "./lib/store/remote.js";
 import { startChatSync, stopChatSync } from "./lib/chatlog.js";
+import { takeSharedFiles } from "./lib/shared.js";
+import FilePreview from "./components/FilePreview.jsx";
 import Chat from "./views/Chat.jsx";
 import Archive from "./views/Archive.jsx";
 import Add from "./views/Add.jsx";
@@ -55,6 +57,17 @@ function Shell({ auth }) {
     timer.current = setTimeout(() => setToastMsg(null), action ? 5000 : 2400);
   }, []);
 
+  // File arrivati dal menu Condividi di Android: anteprima prima di salvarli.
+  const [condivisi, setCondivisi] = useState(null);
+  useEffect(() => {
+    if (query.get("condivisi") !== "1") return;
+    takeSharedFiles().then((files) => {
+      if (files.length) setCondivisi(files);
+      else toast("Nessun file ricevuto dalla condivisione");
+    });
+    navigate("/", { replace: true });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openItem = useCallback((it) => navigate(`/elemento/${it.id}`), [navigate]);
   const common = { archive, query, navigate, back, openItem, toast, ai: aiStatus.ai };
 
@@ -78,6 +91,7 @@ function Shell({ auth }) {
   return (
     <FileStoreContext.Provider value={store}>
       {view}
+      {condivisi && <FilePreview initial={condivisi} archive={archive} toast={toast} onClose={() => setCondivisi(null)} />}
       {main && <BottomNav path={path} navigate={navigate} />}
       <div role="status" aria-live="polite">
         {toastMsg && (
