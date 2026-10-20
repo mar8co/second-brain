@@ -772,7 +772,7 @@ test("chat: il tondo + accanto al campo apre Foto, video o file e Link; un file 
   // Non c'è più nella barra in basso.
   await expect(page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("button")).toHaveCount(0);
   await piu.click();
-  await expect(page.getByRole("menuitem")).toHaveText(["Foto, video o file", "Link o nota"]);
+  await expect(page.getByRole("menuitem")).toHaveText(["Foto, video o file", "Link o note"]);
   // Un tocco fuori (anche sopra la barra) chiude il menu senza attivare quello che sta sotto.
   const arch = await page.getByRole("link", { name: "Archivio", exact: true }).boundingBox();
   await page.mouse.click(arch.x + arch.width / 2, arch.y + arch.height / 2);
