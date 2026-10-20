@@ -181,7 +181,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
 
         {item.note && (
           <section>
-            <h2 className="sezione !justify-start !items-center !gap-1">La tua nota <CopyNote text={item.note} /></h2>
+            <h2 className="sezione !items-center">La tua nota <CopyNote text={item.note} /></h2>
             <p className="whitespace-pre-wrap text-[1.05rem] font-semibold leading-[1.38]">{item.note}</p>
           </section>
         )}
