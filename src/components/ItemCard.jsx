@@ -66,30 +66,37 @@ function LinkThumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
 // Pulsante "copia" accanto alla scritta Nota: copia solo il testo di quella nota.
 // Il segno di spunta compare solo se la copia è riuscita; altrimenti un avviso.
 export function CopyNote({ text }) {
-  const [stato, setStato] = useState(null);
+  // Messaggio e icona sono due stati separati: l'icona resta sempre quella di copia,
+  // il messaggio (con la spunta) resta per 20 secondi.
+  const [msg, setMsg] = useState(null);
   const timer = useRef(null);
   useEffect(() => () => clearTimeout(timer.current), []);
   const copy = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     const ok = await copyText(text);
-    setStato(ok ? "ok" : "no");
+    setMsg(ok ? "ok" : "no");
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => setStato(null), ok ? 1600 : 3000);
+    timer.current = setTimeout(() => setMsg(null), 20000);
   };
   return (
-    <span className="inline-flex shrink-0 items-center">
-      <span role="status" className={stato ? "font-bold" : "sr-only"}>
-        {stato === "ok" ? "Nota copiata" : stato === "no" ? "Copia non riuscita" : ""}
+    <span className="inline-flex shrink-0 items-center gap-1">
+      <span role="status" className={msg ? "inline-flex items-center gap-1 whitespace-nowrap font-bold" : "sr-only"}>
+        {msg === "ok" && (
+          <>
+            Nota copiata <Check className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" />
+          </>
+        )}
+        {msg === "no" && "Copia non riuscita"}
       </span>
       <button
         type="button"
-        aria-label={stato === "ok" ? "Nota copiata" : "Copia nota"}
+        aria-label="Copia nota"
         onClick={copy}
         onPointerDown={(e) => e.stopPropagation()}
         className="-my-2 grid h-9 w-9 shrink-0 place-items-center"
       >
-        {stato === "ok" ? <Check className="h-4 w-4" strokeWidth={2.8} aria-hidden="true" /> : <Copy className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />}
+        <Copy className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
       </button>
     </span>
   );

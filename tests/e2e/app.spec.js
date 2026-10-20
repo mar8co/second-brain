@@ -1112,3 +1112,30 @@ test("box File e note: le note stanno con i file, c'è Nuova nota; data a destra
   await expect(page).toHaveURL(/\/aggiungi\?mode=note/);
   await expect(page.getByRole("tab", { name: "Nota" })).toHaveAttribute("aria-selected", "true");
 });
+
+
+test("scheda nota: copia a destra sulla riga di Nota; 'Nota copiata ✓' resta 20 secondi mentre l'icona resta quella di copia", async ({ page, context }) => {
+  test.setTimeout(60_000);
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("/aggiungi");
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel(/^Titolo/).fill("Nota lunga");
+  await page.getByLabel("Testo").fill("contenuto da copiare");
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  const titolo = await page.getByText("La tua nota", { exact: true }).boundingBox();
+  const btn = page.getByRole("button", { name: "Copia nota" });
+  const b0 = await btn.boundingBox();
+  expect(b0.x + b0.width).toBeGreaterThan(page.viewportSize().width - 30);
+  expect(Math.abs(b0.y + b0.height / 2 - (titolo.y + titolo.height / 2))).toBeLessThan(14);
+  await btn.click();
+  const msg = page.getByRole("status").filter({ hasText: "Nota copiata" });
+  await expect(msg).toBeVisible();
+  // Messaggio e icona sulla stessa riga; l'icona resta quella di copia.
+  const m = await msg.boundingBox();
+  expect(Math.abs(m.y + m.height / 2 - (b0.y + b0.height / 2))).toBeLessThan(14);
+  await page.waitForTimeout(15_000);
+  await expect(msg).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copia nota" })).toBeVisible();
+  await expect(msg).toHaveCount(0, { timeout: 8000 });
+});
