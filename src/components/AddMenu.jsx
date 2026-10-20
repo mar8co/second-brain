@@ -1,7 +1,7 @@
 // Tondo + accanto al campo della chat: un piccolo menu per aggiungere foto, video,
 // file o scrivere a mano. Foto, video e file si salvano subito, senza cambiare schermata.
 import { useEffect, useRef, useState } from "react";
-import { FileText, PenLine, Plus } from "lucide-react";
+import { FileText, Plus, SquarePen } from "lucide-react";
 import { ACCEPTED_MIME } from "../lib/constants.js";
 import { mergeFiles } from "../lib/upload.js";
 import FilePreview from "./FilePreview.jsx";
@@ -58,7 +58,7 @@ export default function AddMenu({ archive, navigate, toast }) {
             <FileText className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Foto, video o file
           </button>
           <button type="button" role="menuitem" className={row} onClick={() => choose(() => navigate("/aggiungi"))}>
-            <PenLine className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Link o nota
+            <SquarePen className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Link o nota
           </button>
         </div>
       )}
