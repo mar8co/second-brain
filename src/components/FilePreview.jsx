@@ -2,6 +2,7 @@
 // app). Si può togliere qualcosa, aggiungerne altri e vedere quanti se ne salvano.
 // Quelli non salvati restano qui per riprovare; il resto è già nell'archivio.
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { FileText, Film, X } from "lucide-react";
 import { fileMime, isImage, isVideo } from "../lib/files.js";
 import { mergeFiles, saveFiles, uploadMessage } from "../lib/upload.js";
@@ -60,7 +61,8 @@ export default function FilePreview({ initial, archive, toast, onClose }) {
     if (more.length) setFiles((cur) => mergeFiles(cur, more));
   };
 
-  return (
+  // Fuori dalla barra della chat: così sta sopra la barra in basso e non ne eredita il livello.
+  return createPortal(
     <div className="fixed inset-0 z-[80] flex items-end bg-[rgb(10_10_10/0.45)]" role="dialog" aria-modal="true" aria-label="Anteprima prima di salvare">
       <div className="max-h-[85vh] w-full overflow-y-auto rounded-t-3xl border-[1.5px] border-b-0 border-[#0a0a0a] bg-white p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] text-[#0a0a0a]">
         <div className="flex items-center justify-between gap-3">
@@ -83,7 +85,7 @@ export default function FilePreview({ initial, archive, toast, onClose }) {
                   aria-label={`Togli ${f.name}`}
                   disabled={saving}
                   onClick={() => setFiles((cur) => cur.filter((x) => x !== f))}
-                  className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-full border-[1.5px] border-[#0a0a0a] bg-white"
+                  className="absolute -right-1 -top-1 grid h-7 w-7 place-items-center rounded-full border-[1.5px] border-[#ea4d31] bg-white text-[#ea4d31]"
                 >
                   <X className="h-4 w-4" strokeWidth={3} aria-hidden="true" />
                 </button>
@@ -93,16 +95,17 @@ export default function FilePreview({ initial, archive, toast, onClose }) {
             ))}
           </ul>
         )}
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button type="button" className="bottone" disabled={!n || saving} onClick={save}>
-            {saving ? "Salvo…" : Object.keys(errors).length ? `Riprova (${n})` : `Salva ${n} ${unita}`}
-          </button>
-          <label className={`pillola cursor-pointer ${saving ? "opacity-50" : ""}`}>
-            + Aggiungi altri
+        <div className="mt-5 flex gap-2">
+          <label className={`pillola flex-1 cursor-pointer justify-center ${saving ? "opacity-50" : ""}`}>
+            + Aggiungi altre
             <input key={seq} type="file" multiple hidden disabled={saving} aria-label="Aggiungi altri file" accept="image/*,video/*,.pdf,.txt,.md,.csv,.json,.heic" onChange={(e) => { add(e); setSeq((x) => x + 1); }} />
           </label>
+          <button type="button" className="bottone flex-1" disabled={!n || saving} onClick={save}>
+            {saving ? "Salvo…" : Object.keys(errors).length ? `Riprova (${n})` : `Salva ${n} ${unita}`}
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
