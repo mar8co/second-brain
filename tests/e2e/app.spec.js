@@ -996,6 +996,26 @@ test("chat: il testo dei messaggi si può selezionare (una parola) e la pillola 
   await expect(page.getByRole("button", { name: "Copia messaggio" })).toHaveCount(0);
 });
 
+test("chat: i link nella risposta sono sottolineati e cliccabili, anche senza https; il punto finale resta fuori", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  await page.route("**/api/ai", async (route) => {
+    if (route.request().postDataJSON()?.action !== "ask") return route.continue();
+    return route.fulfill({
+      json: { answer: "Trovi tutto su developer.apple.com/design. Oppure su https://example.com/guida, grazie.", sufficient: true, sources: [], quotes: {}, consulted: 1 },
+    });
+  });
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("dove sono le linee guida?");
+  await box.press("Enter");
+  const apple = page.getByRole("link", { name: "developer.apple.com/design" });
+  await expect(apple).toHaveAttribute("href", "https://developer.apple.com/design");
+  await expect(apple).toHaveAttribute("target", "_blank");
+  await expect(apple).toHaveCSS("text-decoration-line", "underline");
+  await expect(page.getByRole("link", { name: "https://example.com/guida" })).toHaveAttribute("href", "https://example.com/guida");
+});
+
 test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni saltati", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
