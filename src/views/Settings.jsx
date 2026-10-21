@@ -45,7 +45,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
 
   return (
     <Page>
-      <Testata onBack={() => back("/")} />
+      <Testata onBack={() => back("/")} right={syncMode ? <Notifiche toast={toast} /> : null} />
       <h1 className="titolo-home">Impostazioni</h1>
       {syncMode && session?.user?.email && <p className="micro -mt-2 text-[0.9rem] font-semibold">{session.user.email}</p>}
 
@@ -93,7 +93,6 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
         </button>
       </Section>
 
-      {syncMode && <Notifiche toast={toast} />}
 
       {syncMode && (
         <details className="group border-y-[1.5px] border-inchiostro">

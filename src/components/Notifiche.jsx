@@ -1,6 +1,8 @@
-// Interruttore dei promemoria degli eventi (notifiche push). Solo con
+// Campanella dei promemoria degli eventi (notifiche push), in alto a destra
+// in Impostazioni. Solo con
 // l'archivio sincronizzato e un browser che le supporta.
 import { useContext, useEffect, useState } from "react";
+import { Bell, BellOff } from "lucide-react";
 import { FileStoreContext } from "../lib/fileurl.js";
 import { disablePush, enablePush, isIos, isStandalone, pushEnabled, pushSupported } from "../lib/push.js";
 
@@ -19,15 +21,10 @@ export default function Notifiche({ toast }) {
 
   const supported = pushSupported();
   const needsHome = isIos() && !isStandalone();
-  const hint = !supported
-    ? "Questo browser non supporta le notifiche."
-    : needsHome
-      ? "Su iPhone aggiungi prima l'app alla schermata Home e aprila da lì."
-      : on
-        ? "Ricevi una notifica la mattina degli eventi di oggi e di domani."
-        : "Una notifica la mattina degli eventi di oggi e di domani.";
 
   const toggle = async () => {
+    if (!supported) return toast("Questo browser non supporta le notifiche.");
+    if (needsHome) return toast("Su iPhone aggiungi prima l'app alla schermata Home e aprila da lì.");
     setBusy(true);
     try {
       if (on) {
@@ -37,7 +34,7 @@ export default function Notifiche({ toast }) {
       } else {
         await enablePush(store);
         setOn(true);
-        toast("Promemoria attivati");
+        toast("Promemoria attivati: una notifica la mattina degli eventi di oggi e di domani");
       }
     } catch (e) {
       toast(e.message || "Operazione non riuscita");
@@ -46,16 +43,18 @@ export default function Notifiche({ toast }) {
     }
   };
 
+  const Icona = on ? Bell : BellOff;
   return (
-    <section>
-      <h2 className="sezione">Promemoria</h2>
-      <button type="button" role="switch" aria-checked={on} className="riga-interruttore border-y border-riga" onClick={toggle} disabled={!supported || busy}>
-        <span>
-          <b className="block font-extrabold tracking-[-0.02em]">Eventi in arrivo</b>
-          <span className="micro">{hint}</span>
-        </span>
-        <i aria-hidden="true" />
-      </button>
-    </section>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label="Promemoria degli eventi"
+      className={`tondo !border-2 ${on ? "!bg-[#ffb5d0]" : ""}`}
+      onClick={toggle}
+      disabled={busy}
+    >
+      <Icona className="h-[18px] w-[18px]" fill={on ? "currentColor" : "none"} strokeWidth={2.6} aria-hidden="true" />
+    </button>
   );
 }

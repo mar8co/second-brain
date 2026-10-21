@@ -1146,7 +1146,7 @@ test("promemoria: lo script delle notifiche è servito e in modalità locale l'i
   expect(await res.text()).toContain("notificationclick");
   await page.goto("/impostazioni");
   await expect(page.getByRole("heading", { name: "Archivio", exact: true })).toBeVisible();
-  await expect(page.getByRole("switch", { name: /Eventi in arrivo/ })).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: /Promemoria degli eventi/ })).toHaveCount(0);
 });
 
 test("condivisione di più file: lo script del service worker è servito", async ({ request }) => {
