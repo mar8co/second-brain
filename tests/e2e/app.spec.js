@@ -931,7 +931,7 @@ test("chat: salendo compare la freccetta per tornare in basso", async ({ page })
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.scrollY - window.innerHeight)).toBeLessThan(60);
 });
 
-test("chat: tenendo premuto su un messaggio compare Copia messaggio e il testo viene copiato", async ({ page }) => {
+test("chat: l'icona copia in basso a destra copia domanda e risposta; il testo resta selezionabile", async ({ page }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
@@ -941,55 +941,21 @@ test("chat: tenendo premuto su un messaggio compare Copia messaggio e il testo v
   await box.press("Enter");
   await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
   await page.waitForTimeout(800);
-  const premi = async (loc) => {
-    const b = await loc.boundingBox();
-    await page.mouse.move(b.x + 20, b.y + b.height / 2);
-    await page.mouse.down();
-    await page.waitForTimeout(650);
-    await page.mouse.up();
-  };
-  // Un tocco breve non apre nulla.
-  const domanda = page.locator("ol p", { hasText: "Cosa ho salvato sul limone?" });
-  await domanda.click();
-  await expect(page.getByRole("button", { name: "Copia messaggio" })).toHaveCount(0);
-  await premi(domanda);
-  await page.getByRole("button", { name: "Copia messaggio" }).click();
+  await page.getByRole("button", { name: "Copia domanda" }).click();
   await expect(page.getByText("Messaggio copiato")).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Cosa ho salvato sul limone?");
-  // Anche la risposta si copia, senza grassetti né citazioni.
-  await premi(page.locator("[data-risposta] .card-bianca").last());
-  await page.getByRole("button", { name: "Copia messaggio" }).click();
+  // La risposta si copia senza grassetti né citazioni.
+  await page.getByRole("button", { name: "Copia risposta" }).click();
   const copiato = await page.evaluate(() => navigator.clipboard.readText());
   expect(copiato.length).toBeGreaterThan(10);
   expect(copiato).not.toMatch(/\*\*|\[\d+\]/);
-});
-
-test("chat: tenendo premuto esce solo Copia messaggio (nessuna selezione); una parola si seleziona con il doppio tocco; un tocco fuori chiude la pillola", async ({ page }) => {
-  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-  await addLink(page, `${FIX}/ricetta`);
-  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
-  await page.goto("/");
-  const box = page.getByLabel("Chiedi alla tua memoria");
-  await box.fill("Cosa ho salvato sul limone?");
-  await box.press("Enter");
-  await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
-  await page.waitForTimeout(800);
+  // Nessuna pillola con la pressione lunga; una parola si seleziona.
   const domanda = page.locator("ol p", { hasText: "Cosa ho salvato sul limone?" });
-  // Doppio clic su una parola: la seleziona.
   const b = await domanda.boundingBox();
   await page.mouse.dblclick(b.x + 40, b.y + b.height / 2);
   const sel = await page.evaluate(() => String(window.getSelection()).trim());
   expect(sel.length).toBeGreaterThan(0);
   expect(sel.length).toBeLessThan("Cosa ho salvato sul limone?".length);
-  // Pressione lunga: compare la pillola, senza selezione; un tocco fuori la chiude.
-  await page.mouse.click(4, 200);
-  await page.evaluate(() => window.getSelection().removeAllRanges());
-  await page.mouse.move(b.x + 20, b.y + b.height / 2);
-  await page.mouse.down();
-  await page.waitForTimeout(650);
-  await page.mouse.up();
-  await expect(page.getByRole("button", { name: "Copia messaggio" })).toBeVisible();
-  await page.mouse.click(4, 200);
   await expect(page.getByRole("button", { name: "Copia messaggio" })).toHaveCount(0);
 });
 
