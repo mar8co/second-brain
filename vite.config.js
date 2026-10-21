@@ -89,7 +89,7 @@ export default defineConfig(({ mode }) => {
           // Solo la "shell" dell'app in cache. Le chiamate /api e Supabase vanno
           // sempre in rete: i dati non vengono serviti da cache vecchie.
           globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
-          importScripts: ["share-target-sw.js"],
+          importScripts: ["share-target-sw.js", "push-sw.js"],
           globIgnores: ["**/pdf.worker*"],
           navigateFallback: "/index.html",
           navigateFallbackDenylist: [/^\/api\//],

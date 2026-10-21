@@ -271,3 +271,26 @@ create policy "chat_log_own" on public.chat_log
   for all to authenticated
   using (user_id = (select auth.uid()))
   with check (user_id = (select auth.uid()));
+
+-- ---------------------------------------------------------------------------
+-- Notifiche push dei promemoria (eventi di oggi e di domani). Una riga per
+-- dispositivo; ognuno vede e gestisce solo le proprie. L'invio giornaliero
+-- (Vercel Cron) legge le righe con la chiave di servizio.
+-- ---------------------------------------------------------------------------
+create table if not exists public.push_subscriptions (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  endpoint    text not null unique check (length(endpoint) <= 2000),
+  p256dh      text not null check (length(p256dh) <= 200),
+  auth        text not null check (length(auth) <= 100),
+  created_at  timestamptz not null default now()
+);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists "push_select_own" on public.push_subscriptions;
+create policy "push_select_own" on public.push_subscriptions for select to authenticated using (user_id = (select auth.uid()));
+drop policy if exists "push_insert_own" on public.push_subscriptions;
+create policy "push_insert_own" on public.push_subscriptions for insert to authenticated with check (user_id = (select auth.uid()));
+drop policy if exists "push_update_own" on public.push_subscriptions;
+create policy "push_update_own" on public.push_subscriptions for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
+drop policy if exists "push_delete_own" on public.push_subscriptions;
+create policy "push_delete_own" on public.push_subscriptions for delete to authenticated using (user_id = (select auth.uid()));

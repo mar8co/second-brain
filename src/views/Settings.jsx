@@ -2,6 +2,7 @@
 // account; il resto (privacy, installazione) in "Informazioni e privacy", chiuso.
 import { DatabaseBackup, LogOut, RotateCw, Tags } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
+import Notifiche from "../components/Notifiche.jsx";
 import QuickShare from "../components/QuickShare.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
@@ -91,6 +92,8 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
           <i aria-hidden="true" />
         </button>
       </Section>
+
+      {syncMode && <Notifiche toast={toast} />}
 
       {syncMode && (
         <details className="group border-y-[1.5px] border-inchiostro">

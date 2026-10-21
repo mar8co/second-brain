@@ -122,6 +122,17 @@ export function createRemoteStore(supabase) {
       return data.signedUrl;
     },
 
+    // Notifiche push di questo dispositivo (tabella push_subscriptions, solo le proprie).
+    async savePushSubscription({ endpoint, p256dh, auth }) {
+      const { error } = await supabase.from("push_subscriptions").upsert({ endpoint, p256dh, auth }, { onConflict: "endpoint" });
+      check(error, "Iscrizione alle notifiche non riuscita");
+    },
+
+    async removePushSubscription(endpoint) {
+      const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+      check(error, "Disiscrizione non riuscita");
+    },
+
     async fileUrl(item) {
       if (!item.file_path) return null;
       const c = signed.get(item.id);
