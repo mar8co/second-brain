@@ -1190,7 +1190,7 @@ test("scheda nota: copia a destra sulla riga di Nota; 'Nota copiata ✓' resta 2
   await expect(msg).toHaveCount(0, { timeout: 8000 });
 });
 
-test("campo di ricerca: la X di cancellazione è rossa #ea4d31", async ({ page }) => {
+test("campo di ricerca: la X di cancellazione è nera e spessa", async ({ page }) => {
   await page.goto("/archivio");
   await page.locator("#arch-q").fill("prova");
   const regola = await page.evaluate(() => {
@@ -1199,5 +1199,5 @@ test("campo di ricerca: la X di cancellazione è rossa #ea4d31", async ({ page }
     }
     return "";
   });
-  expect(regola).toContain("ea4d31");
+  expect(regola).toContain("0a0a0a");
 });
