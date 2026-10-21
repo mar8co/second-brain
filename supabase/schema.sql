@@ -46,6 +46,22 @@ create index if not exists items_user_created_idx on public.items (user_id, crea
 -- Colonne aggiunte dopo la prima versione (per i database già creati).
 alter table public.items add column if not exists author text check (author is null or length(author) <= 200);
 alter table public.items add column if not exists published_at timestamptz;
+-- Ricerca per significato (Gemini Embedding, 768 dimensioni): vettore di ogni
+-- elemento e funzione che trova i più vicini a una domanda. La funzione gira
+-- con i permessi di chi la chiama: la sicurezza per riga (RLS) resta valida.
+create extension if not exists vector with schema extensions;
+alter table public.items add column if not exists embedding extensions.vector(768);
+create or replace function public.match_items(q extensions.vector(768), k int default 12)
+returns table (id uuid, score double precision)
+language sql stable security invoker set search_path = ''
+as $$
+  select i.id, 1 - (i.embedding operator(extensions.<=>) q) as score
+  from public.items i
+  where i.embedding is not null
+  order by i.embedding operator(extensions.<=>) q
+  limit least(greatest(k, 1), 50)
+$$;
+
 
 -- updated_at automatico.
 create or replace function public.touch_updated_at() returns trigger

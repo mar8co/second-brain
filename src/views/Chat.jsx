@@ -3,7 +3,7 @@
 // salvati, con le fonti citate [1] [2] e il passaggio da cui viene. I
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
-import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Copy, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { Thumb } from "../components/ItemCard.jsx";
@@ -17,6 +17,8 @@ import { countBy } from "../lib/search.js";
 import { displayHost, detectType, extractUrl } from "../lib/detect.js";
 import { displayTitle } from "../lib/item.js";
 import { copyText } from "../lib/clipboard.js";
+import { api } from "../lib/api.js";
+import { FileStoreContext } from "../lib/fileurl.js";
 import { LINK_SOURCE, isLink, linkParts } from "../lib/linkify.js";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { needsDigest } from "../lib/memory.js";
@@ -130,13 +132,22 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     toast(uploadMessage(r));
   };
 
+  // Ricerca per significato (solo con l'archivio sincronizzato).
+  const store = useContext(FileStoreContext);
+  const semantic = store?.matchItems
+    ? async (question) => {
+        const { vectors } = await api.embed([question], "RETRIEVAL_QUERY");
+        return store.matchItems(vectors[0], 12);
+      }
+    : null;
+
   const ask = async (question) => {
     // I turni precedenti servono per le domande di seguito ("e quanto costa?").
     const history = recentTurns(getChatLog());
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     updateChatLog((cur) => [...cur, { id, at: new Date().toISOString(), q: question, pending: true }]);
     // La risposta arriva anche se nel frattempo si è passati a un'altra schermata.
-    const result = await askArchive(items, question, { ai, history });
+    const result = await askArchive(items, question, { ai, history, semantic });
     updateChatLog((cur) => cur.map((m) => (m.id === id ? { ...m, pending: false, result } : m)));
   };
 
