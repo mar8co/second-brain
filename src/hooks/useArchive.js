@@ -1,8 +1,8 @@
 // Stato dell'archivio: elenco, operazioni e elaborazione in background.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { classifyItem, processItem } from "../lib/process.js";
+import { classifyItem, processItem, recategorizeItem } from "../lib/process.js";
 import { AI_LIMIT, needsReread, reanalysisReason, rereadLog, runUpkeep } from "../lib/memory.js";
-import { withoutAiFailure } from "../lib/enrich.js";
+import { hasContent, withoutAiFailure } from "../lib/enrich.js";
 import { DEFAULT_CATEGORIES } from "../lib/constants.js";
 
 const byDate = (a, b) => new Date(b.created_at) - new Date(a.created_at);
@@ -338,8 +338,59 @@ export function useArchive(store, { ai }) {
     return { done, total: list.length, failed, stopped };
   }, [store, upsert, runProcess]);
 
+  // "Ricategorizza tutto": rifà la scheda dell'AI di ogni elemento con contenuto
+  // e riassegna le categorie secondo le regole attuali (togliendo solo quelle
+  // che l'AI aveva assegnato, non quelle scelte dall'utente). Uno alla volta,
+  // con una pausa, e si ferma al limite gratuito dell'AI.
+  const [recategorizing, setRecategorizing] = useState(null);
+  const recategorizeAll = useCallback(async () => {
+    const u = upkeep.current;
+    if (!aiRef.current || u.reanalyzing || u.recategorizing) return null;
+    const list = itemsRef.current.filter((it) => hasContent(it) && it.status !== "processing" && !busy.current.has(it.id) && !(it.file_path && store.mode !== "sync"));
+    if (!list.length) return { done: 0, total: 0, failed: 0, stopped: null };
+    u.recategorizing = true;
+    let done = 0;
+    let failed = 0;
+    let stopped = null;
+    setRecategorizing({ done, total: list.length });
+    try {
+      for (const listed of list) {
+        if (!aiRef.current) {
+          stopped = "ai";
+          break;
+        }
+        const current = () => itemsRef.current.find((x) => x.id === listed.id) || null;
+        const item = current();
+        if (!item || busy.current.has(item.id)) {
+          done += 1;
+          continue;
+        }
+        busy.current.add(item.id);
+        try {
+          const out = await recategorizeItem(item, { store, categories: catRef.current, current });
+          if (out) upsert(out);
+        } catch (e) {
+          if (e?.status === 429) {
+            stopped = "limit";
+            break;
+          }
+          failed += 1;
+        } finally {
+          busy.current.delete(item.id);
+        }
+        done += 1;
+        setRecategorizing({ done, total: list.length });
+        await new Promise((r) => setTimeout(r, 2500));
+      }
+    } finally {
+      u.recategorizing = false;
+      setRecategorizing(null);
+    }
+    return { done, total: list.length, failed, stopped };
+  }, [store, upsert]);
+
   // Gli elementi in attesa di eliminazione non si vedono da nessuna parte.
   const visible = useMemo(() => (hidden.size ? items.filter((x) => !hidden.has(x.id)) : items), [items, hidden]);
 
-  return { items: visible, loading, error, reload, add, update, remove, removeSoon, reprocess, classify, categories, reanalysis, reanalyzable, reanalyzeAll };
+  return { items: visible, loading, error, reload, add, update, remove, removeSoon, reprocess, classify, categories, reanalysis, reanalyzable, reanalyzeAll, recategorizing, recategorizeAll };
 }

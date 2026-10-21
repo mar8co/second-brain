@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 const extract = vi.hoisted(() => vi.fn());
 const classify = vi.hoisted(() => vi.fn(async () => ({ summary: "", categories: [], tags: [] })));
 vi.mock("./api.js", () => ({ api: { extract, classify } }));
-const { classifyItem, processItem, waitForServer } = await import("./process.js");
+const { classifyItem, processItem, recategorized, waitForServer } = await import("./process.js");
 const { extractionPatch, withoutAiFailure } = await import("./enrich.js");
 
 const item = { id: "0b8a3c5e-1f2d-4c3b-9a8e-7d6c5b4a3f21", url: "https://www.instagram.com/reel/C9abc/", categories: [], tags: [] };
@@ -261,5 +261,21 @@ describe("rilettura automatica in modalità locale", () => {
     const last = local.updates.at(-1);
     expect(last).not.toHaveProperty("categories");
     expect(last.ai).toMatchObject({ applied: true, categories: ["Nuova"] });
+  });
+});
+
+describe("recategorized", () => {
+  it("toglie le categorie assegnate dall'AI con la scheda precedente e aggiunge le nuove", () => {
+    const item = { categories: ["Lavoro", "Preferiti"], tags: ["a"], ai: { applied: true, categories: ["Lavoro"] } };
+    expect(recategorized(item, { categories: ["Cibo"], tags: ["a", "b"] })).toEqual({ categories: ["Preferiti", "Cibo"], tags: ["a", "b"] });
+  });
+  it("se le categorie non erano assegnate dall'AI non toglie nulla", () => {
+    const item = { categories: ["Lavoro"], tags: [], ai: { applied: false, categories: ["Lavoro"] } };
+    expect(recategorized(item, { categories: ["Cibo"], tags: [] }).categories).toEqual(["Lavoro", "Cibo"]);
+  });
+  it("non duplica e tiene al massimo 10 categorie", () => {
+    const item = { categories: [], tags: [] };
+    const cats = Array.from({ length: 14 }, (_, i) => `C${i}`);
+    expect(recategorized(item, { categories: cats, tags: [] }).categories).toHaveLength(10);
   });
 });

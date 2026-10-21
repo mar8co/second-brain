@@ -1,6 +1,6 @@
 // Impostazioni: archivio (rianalizza, aggiungi), AI, salvataggio rapido da iPhone, dati e
 // account; il resto (privacy, installazione) in "Informazioni e privacy", chiuso.
-import { DatabaseBackup, LogOut, RotateCw } from "lucide-react";
+import { DatabaseBackup, LogOut, RotateCw, Tags } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import QuickShare from "../components/QuickShare.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -17,13 +17,21 @@ function Section({ title, children }) {
 
 export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back }) {
   usePageColor(PAGE.settings);
-  const { reanalysis, reanalyzable, reanalyzeAll } = archive;
+  const { reanalysis, reanalyzable, reanalyzeAll, recategorizing, recategorizeAll } = archive;
   const reanalyze = async () => {
     const r = await reanalyzeAll();
     if (!r) return;
     if (r.stopped === "limit") toast(`Fermo: limite gratuito dell'AI raggiunto (${r.done} su ${r.total})`);
     else if (r.failed) toast(`Rianalizzati ${r.done - r.failed} su ${r.total}, ${r.failed} da riprovare`);
     else toast(r.done === 1 ? "1 elemento rianalizzato" : `${r.done} elementi rianalizzati`);
+  };
+  const recategorize = async () => {
+    const r = await recategorizeAll();
+    if (!r) return;
+    if (!r.total) toast("Niente da ricategorizzare");
+    else if (r.stopped === "limit") toast(`Fermo: limite gratuito dell'AI raggiunto (${r.done} su ${r.total})`);
+    else if (r.failed) toast(`Ricategorizzati ${r.done - r.failed} su ${r.total}, ${r.failed} da riprovare`);
+    else toast(r.done === 1 ? "1 elemento ricategorizzato" : `${r.done} elementi ricategorizzati`);
   };
   const exportJson = () => {
     const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), items: archive.items }, null, 2)], { type: "application/json" });
@@ -58,6 +66,11 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
             </button>
           )}
         </div>
+        <button type="button" className="pillola w-full justify-center" disabled={!aiStatus.ai || Boolean(recategorizing) || archive.items.length === 0} onClick={recategorize}>
+          <Tags className={`h-4 w-4${recategorizing ? " gira" : ""}`} strokeWidth={2.6} aria-hidden="true" />
+          {recategorizing ? <span className="num">Ricategorizzo {recategorizing.done}/{recategorizing.total}</span> : "Ricategorizza tutto"}
+        </button>
+        <p className="micro">Riassegna le categorie di tutto l'archivio con le regole attuali. Quelle scelte da te restano.</p>
       </Section>
 
       <Section title="AI">
