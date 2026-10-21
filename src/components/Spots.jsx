@@ -133,12 +133,15 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
   return (
     <>
       {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
-    <ul className="righe">
-      {restaurants.map((r) => (
-        <li key={r.key} className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
+    <ul className="mt-3.5 space-y-3.5">
+      {restaurants.map((r) => {
+        const cover = r.items.find((it) => it.image_url || it.file_path);
+        return (
+        <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
           <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
-          <div className="flex items-center gap-3 py-4">
-          <div className="min-w-0 flex-1">
+          <div className="rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]">
+          {cover && <Thumb item={cover} size="h-32 w-full" rounded="rounded-t-[14px]" />}
+          <div className="min-w-0 px-4 py-3.5">
           <p className={NAME_BIG}>{r.name}</p>
           <SourceLinks
             items={r.items}
@@ -199,14 +202,11 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
             />
           )}
           </div>
-          {(() => {
-            const cover = r.items.find((it) => it.image_url || it.file_path);
-            return cover ? <Thumb item={cover} size="h-[4.5rem] w-[4.5rem]" rounded="rounded-xl" /> : null;
-          })()}
           </div>
           </Riga>
         </li>
-      ))}
+        );
+      })}
     </ul>
     </>
   );
