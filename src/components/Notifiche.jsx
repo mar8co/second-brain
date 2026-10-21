@@ -1,4 +1,4 @@
-// Campanella dei promemoria degli eventi (notifiche push), in alto a destra
+// Campanella delle notifiche degli eventi (notifiche push), in alto a destra
 // in Impostazioni. Solo con
 // l'archivio sincronizzato e un browser che le supporta.
 import { useContext, useEffect, useState } from "react";
@@ -30,11 +30,11 @@ export default function Notifiche({ toast }) {
       if (on) {
         await disablePush(store);
         setOn(false);
-        toast("Promemoria disattivati");
+        toast("Notifiche disattivate");
       } else {
         await enablePush(store);
         setOn(true);
-        toast("Promemoria attivati: una notifica la mattina degli eventi di oggi e di domani");
+        toast("Notifiche attivate");
       }
     } catch (e) {
       toast(e.message || "Operazione non riuscita");
@@ -49,7 +49,7 @@ export default function Notifiche({ toast }) {
       type="button"
       role="switch"
       aria-checked={on}
-      aria-label="Promemoria degli eventi"
+      aria-label="Notifiche"
       className={`tondo !border-2 ${on ? "!bg-[#ffb5d0]" : ""}`}
       onClick={toggle}
       disabled={busy}

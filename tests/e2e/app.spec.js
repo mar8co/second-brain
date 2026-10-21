@@ -1137,13 +1137,13 @@ test("note: se la copia non riesce lo dice e non dichiara di aver copiato", asyn
   await expect(page.getByText("Nota copiata")).toHaveCount(0);
 });
 
-test("promemoria: lo script delle notifiche è servito e in modalità locale l'interruttore non compare", async ({ page, request }) => {
+test("notifiche: lo script delle notifiche è servito e in modalità locale l'interruttore non compare", async ({ page, request }) => {
   const res = await request.get("/push-sw.js");
   expect(res.ok()).toBeTruthy();
   expect(await res.text()).toContain("notificationclick");
   await page.goto("/impostazioni");
   await expect(page.getByRole("heading", { name: "Archivio", exact: true })).toBeVisible();
-  await expect(page.getByRole("switch", { name: /Promemoria degli eventi/ })).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: "Notifiche" })).toHaveCount(0);
 });
 
 test("condivisione di più file: lo script del service worker è servito", async ({ request }) => {
