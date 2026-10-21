@@ -43,6 +43,39 @@ export async function classifyItem(item, { store, categories, apply = false, kee
   });
 }
 
+// Categorie dopo una nuova classificazione "in blocco": si tolgono quelle che
+// l'AI aveva assegnato con la scheda precedente (solo se erano assegnate
+// dall'AI, quindi non quelle scelte dall'utente) e si aggiungono le nuove.
+// Tag: solo aggiunte.
+export function recategorized(item, r) {
+  const old = item.ai?.applied ? item.ai.categories || [] : [];
+  const kept = (item.categories || []).filter((c) => !old.includes(c));
+  const categories = [...kept, ...(r.categories || []).filter((c) => !kept.includes(c))].slice(0, 10);
+  const tags = [...(item.tags || []), ...(r.tags || []).filter((t) => !(item.tags || []).includes(t))];
+  return { categories, tags };
+}
+
+// Rifà la scheda dell'AI di un elemento e ne aggiorna le categorie secondo
+// le regole attuali (vedi recategorized). Restituisce l'elemento scritto, o
+// l'elemento attuale se nel frattempo è cambiato, o null se non esiste più.
+export async function recategorizeItem(item, { store, categories, current }) {
+  const r = await api.classify(aiPayload(item), categories);
+  if (current) {
+    const sent = item;
+    item = current();
+    if (!item) return null;
+    const same = (k) => (item[k] ?? null) === (sent[k] ?? null);
+    const changed = item.status === "processing" || !["title", "description", "note", "extracted_text", "author"].every(same) || (item.ai?.generated_at ?? null) !== (sent.ai?.generated_at ?? null);
+    if (changed) return item;
+  }
+  const detail = withoutAiFailure(item.status_detail);
+  return store.update(item.id, {
+    ...(detail !== (item.status_detail ?? null) ? { status_detail: detail } : {}),
+    ai: aiFromDigest(r, { applied: true, previous: item.ai }),
+    ...recategorized(item, r),
+  });
+}
+
 // Attende che il server finisca la lettura in background (stato diverso da
 // "in elaborazione"). Se l'app va in background il controllo riprende al ritorno.
 export async function waitForServer(id, { store, onUpdate, everyMs = 4000, maxMs = 330_000, now = Date.now, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) }) {

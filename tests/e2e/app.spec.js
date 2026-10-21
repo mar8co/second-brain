@@ -1016,6 +1016,17 @@ test("chat: i link nella risposta sono sottolineati e cliccabili, anche senza ht
   await expect(page.getByRole("link", { name: "https://example.com/guida" })).toHaveAttribute("href", "https://example.com/guida");
 });
 
+test("Impostazioni: Ricategorizza tutto rifà le categorie di ogni elemento e lo dice", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/impostazioni");
+  const bottone = page.getByRole("button", { name: "Ricategorizza tutto" });
+  await expect(bottone).toBeEnabled();
+  await bottone.click();
+  await expect(page.getByText("1 elemento ricategorizzato")).toBeVisible();
+  await expect(bottone).toBeEnabled();
+});
+
 test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni saltati", async ({ page }) => {
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
