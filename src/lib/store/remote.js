@@ -2,7 +2,7 @@
 // Le regole RLS (supabase/schema.sql) garantiscono che ogni utente veda solo
 // le proprie righe e i propri file.
 
-import { newId, sanitizeItem } from "../item.js";
+import { COLUMNS, newId, sanitizeItem } from "../item.js";
 import { storedPath } from "../thumbs.js";
 
 const BUCKET = "files";
@@ -19,6 +19,8 @@ export function safeFileName(name) {
 }
 
 export function createRemoteStore(supabase) {
+  // Tutte le colonne tranne il vettore della ricerca per significato (pesante).
+  const COLS = COLUMNS.join(",");
   const signed = new Map(); // id → { url, exp }
   const signedPaths = new Map(); // percorso → { url, exp }
 
@@ -41,7 +43,7 @@ export function createRemoteStore(supabase) {
       for (let from = 0; ; from += 1000) {
         const { data, error } = await supabase
           .from("items")
-          .select("*")
+          .select(COLS)
           .order("created_at", { ascending: false })
           .range(from, from + 999);
         check(error, "Impossibile caricare l'archivio");
@@ -66,14 +68,14 @@ export function createRemoteStore(supabase) {
         check(error, "Caricamento del file non riuscito");
         Object.assign(row, { file_path: path, file_name: file.name, file_mime: file.type, file_size: file.size });
       }
-      const { data, error } = await supabase.from("items").insert(row).select().single();
+      const { data, error } = await supabase.from("items").insert(row).select(COLS).single();
       if (error && path) await supabase.storage.from(BUCKET).remove([path]);
       check(error, "Salvataggio non riuscito");
       return data;
     },
 
     async get(id) {
-      const { data, error } = await supabase.from("items").select("*").eq("id", id).single();
+      const { data, error } = await supabase.from("items").select(COLS).eq("id", id).single();
       check(error, "Impossibile leggere l'elemento");
       return data;
     },
@@ -83,7 +85,7 @@ export function createRemoteStore(supabase) {
       delete clean.id;
       delete clean.created_at;
       delete clean.updated_at;
-      const { data, error } = await supabase.from("items").update(clean).eq("id", id).select().single();
+      const { data, error } = await supabase.from("items").update(clean).eq("id", id).select(COLS).single();
       check(error, "Modifica non riuscita");
       return data;
     },
@@ -94,6 +96,19 @@ export function createRemoteStore(supabase) {
       const { error } = await supabase.from("items").delete().eq("id", item.id);
       check(error, "Eliminazione non riuscita");
       signed.delete(item.id);
+    },
+
+    // Ricerca per significato: il vettore (768 numeri) di un elemento e gli
+    // elementi più vicini a un vettore. Il database lo calcola (match_items).
+    async setEmbedding(id, vector) {
+      const { error } = await supabase.from("items").update({ embedding: `[${vector.join(",")}]` }).eq("id", id);
+      check(error, "Salvataggio del vettore non riuscito");
+    },
+
+    async matchItems(vector, k = 12) {
+      const { data, error } = await supabase.rpc("match_items", { q: `[${vector.join(",")}]`, k });
+      check(error, "Ricerca per significato non riuscita");
+      return (data || []).map((r) => r.id);
     },
 
     // Indirizzo firmato di un file dell'archivio dato il percorso (miniature copiate).

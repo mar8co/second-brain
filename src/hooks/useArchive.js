@@ -5,6 +5,7 @@ import { AI_LIMIT, needsReread, reanalysisReason, rereadLog, runUpkeep } from ".
 import { hasContent, withoutAiFailure } from "../lib/enrich.js";
 import { api } from "../lib/api.js";
 import { storedUrl, thumbsToSave } from "../lib/thumbs.js";
+import { EMBED_BATCH, embeddingText, needsEmbedding } from "../lib/embed.js";
 import { DEFAULT_CATEGORIES } from "../lib/constants.js";
 
 const byDate = (a, b) => new Date(b.created_at) - new Date(a.created_at);
@@ -339,6 +340,38 @@ export function useArchive(store, { ai }) {
     }
     return { done, total: list.length, failed, stopped };
   }, [store, upsert, runProcess]);
+
+  // Ricerca per significato: un gruppo di elementi alla volta riceve il suo
+  // vettore (Gemini Embedding, gratuito). Si ferma al limite gratuito (6 ore)
+  // o a un errore (10 minuti) e riprende da solo.
+  const embedBusy = useRef(false);
+  const embedPause = useRef(0);
+  const [embedRound, setEmbedRound] = useState(0);
+  useEffect(() => {
+    if (store?.mode !== "sync" || !store.setEmbedding || !ai || loading || embedBusy.current || Date.now() < embedPause.current) return;
+    const list = items.filter(needsEmbedding).slice(0, EMBED_BATCH);
+    if (!list.length) return;
+    embedBusy.current = true;
+    (async () => {
+      const { vectors } = await api.embed(list.map(embeddingText));
+      for (let i = 0; i < list.length; i++) {
+        const cur = itemsRef.current.find((x) => x.id === list[i].id);
+        if (!cur || !vectors[i]) continue;
+        await store.setEmbedding(cur.id, vectors[i]);
+        upsert(await store.update(cur.id, { ai: { ...(cur.ai || {}), emb_at: new Date().toISOString() } }));
+      }
+      return list.length === EMBED_BATCH;
+    })()
+      .then((more) => {
+        if (more) setEmbedRound((n) => n + 1);
+      })
+      .catch((e) => {
+        embedPause.current = Date.now() + (e?.status === 429 ? 6 * 60 * 60_000 : 10 * 60_000);
+      })
+      .finally(() => {
+        embedBusy.current = false;
+      });
+  }, [store, ai, loading, items, upsert, embedRound]);
 
   // Copia durevole delle miniature dei link (le copertine dei social scadono):
   // una alla volta, in silenzio, solo con l'archivio sincronizzato. Al massimo

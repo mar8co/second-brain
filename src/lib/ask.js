@@ -119,7 +119,7 @@ export function recentTurns(log, now = Date.now()) {
 // Risultato: { kind, answer?, sources: [id], quotes: { id: estratto }, candidates: [id], consulted?, total?, error? }
 //   kind: "answer" | "insufficient" | "none" | "noai" | "error"
 //   Nella risposta [n] è la fonte sources[n - 1].
-export async function askArchive(items, question, { ai, history = [] }) {
+export async function askArchive(items, question, { ai, history = [], semantic = null }) {
   const ranked = retrieveForQuestion(items, question, items.length);
   const ids = ranked.slice(0, 12).map((c) => c.id);
   if (!ai) return ranked.length ? { kind: "noai", sources: [], candidates: ids } : { kind: "none", sources: [], candidates: [] };
@@ -133,7 +133,19 @@ export async function askArchive(items, question, { ai, history = [] }) {
       // Archivio grande: l'AI sceglie dalle schede cosa leggere per intero,
       // insieme alle fonti della risposta precedente e agli elementi con le
       // parole della domanda (anche di quella precedente).
-      const context = history.length ? retrieveForQuestion(items, [question, history.at(-1).q].join(" "), items.length) : ranked;
+      let context = history.length ? retrieveForQuestion(items, [question, history.at(-1).q].join(" "), items.length) : ranked;
+      // Ricerca per significato (se disponibile): gli elementi più vicini
+      // alla domanda vengono prima di quelli con le sole parole in comune.
+      let near = [];
+      try {
+        near = ((await semantic?.(question)) || []).map((id) => byId.get(id)).filter(Boolean);
+      } catch {
+        /* ricerca per significato non disponibile: restano le parole della domanda */
+      }
+      if (near.length) {
+        const seen = new Set(near.map((i) => i.id));
+        context = [...near, ...context.filter((i) => !seen.has(i.id))];
+      }
       memory = memoryFor(items, context);
       let picked = [];
       try {

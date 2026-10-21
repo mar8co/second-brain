@@ -682,6 +682,51 @@ export const AI_BODY_BYTES = 2_100_000;
 // il tempo di provare un altro modello se il primo è sovraccarico.
 const CLASSIFY_MS = 27_000;
 const ASK_MS = 42_000;
+// Vettori per la ricerca per significato (Gemini Embedding, piano gratuito).
+// 768 dimensioni, normalizzate (con meno dimensioni del massimo vanno
+// riportate a lunghezza 1). Una richiesta per gruppo di testi.
+export const EMBED_DIMS = 768;
+const EMBED_MS = 20_000;
+export const EMBED_TASKS = new Set(["RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY"]);
+
+export async function embedTexts({ env, texts, taskType = "RETRIEVAL_DOCUMENT", fetchImpl = fetch }) {
+  const model = env.GEMINI_EMBED_MODEL || "gemini-embedding-001";
+  const apiBase = env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
+  const url = `${apiBase}/v1beta/models/${encodeURIComponent(model)}:batchEmbedContents`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), EMBED_MS);
+  let res;
+  let data;
+  try {
+    res = await fetchImpl(url, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        requests: texts.map((t) => ({ model: `models/${model}`, content: { parts: [{ text: t }] }, taskType, outputDimensionality: EMBED_DIMS })),
+      }),
+    });
+    data = await res.json().catch(() => null);
+  } catch {
+    throw new AiError(502, "Impossibile contattare il servizio AI: riprova tra poco.");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (res.status === 429) throw new AiError(429, "Limite gratuito del servizio AI raggiunto: riprova più tardi.");
+  if (!res.ok) {
+    const msg = googleMessage(data);
+    throw new AiError(502, `Vettori non disponibili (${res.status}).${msg ? ` Dettaglio: ${msg}` : ""}`);
+  }
+  const list = Array.isArray(data?.embeddings) ? data.embeddings : [];
+  if (list.length !== texts.length) throw new AiError(502, "Risposta dei vettori incompleta.");
+  return list.map((e) => {
+    const v = Array.isArray(e?.values) ? e.values.map(Number) : [];
+    if (v.length !== EMBED_DIMS || v.some((x) => !Number.isFinite(x))) throw new AiError(502, "Vettore non valido.");
+    const norm = Math.hypot(...v) || 1;
+    return v.map((x) => x / norm);
+  });
+}
+
 const SELECT_MS = 22_000;
 
 export async function handleAi({ authHeader, body, env, fetchImpl }) {
@@ -739,6 +784,12 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
       const { prompt, refs } = prepareSelect(question, memory, { history: body?.history });
       const { out } = await callGemini({ env, prompt, schema: SELECT_SCHEMA, maxTokens: 2048, fetchImpl, deadline: Date.now() + SELECT_MS });
       return { status: 200, json: sanitizeSelect(out, refs) };
+    }
+    if (action === "embed") {
+      const texts = (Array.isArray(body?.texts) ? body.texts : []).filter((t) => typeof t === "string" && t.trim()).slice(0, 16).map((t) => t.slice(0, 2500));
+      if (!texts.length) return { status: 400, json: { error: "Testi mancanti." } };
+      const taskType = EMBED_TASKS.has(body?.taskType) ? body.taskType : "RETRIEVAL_DOCUMENT";
+      return { status: 200, json: { vectors: await embedTexts({ env, texts, taskType, fetchImpl }) } };
     }
     return { status: 400, json: { error: "Azione non valida." } };
   } catch (e) {
