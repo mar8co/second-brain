@@ -964,7 +964,7 @@ test("chat: tenendo premuto su un messaggio compare Copia messaggio e il testo v
   expect(copiato).not.toMatch(/\*\*|\[\d+\]/);
 });
 
-test("chat: il testo dei messaggi si può selezionare (una parola) e la pillola Copia messaggio resta; un tocco fuori la chiude", async ({ page }) => {
+test("chat: tenendo premuto esce solo Copia messaggio (nessuna selezione); una parola si seleziona con il doppio tocco; un tocco fuori chiude la pillola", async ({ page }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await addLink(page, `${FIX}/ricetta`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
@@ -975,18 +975,15 @@ test("chat: il testo dei messaggi si può selezionare (una parola) e la pillola 
   await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
   await page.waitForTimeout(800);
   const domanda = page.locator("ol p", { hasText: "Cosa ho salvato sul limone?" });
-  const stili = await domanda.evaluate((el) => {
-    const c = window.getComputedStyle(el);
-    return c.userSelect || c.webkitUserSelect;
-  });
-  expect(stili).not.toBe("none");
   // Doppio clic su una parola: la seleziona.
   const b = await domanda.boundingBox();
   await page.mouse.dblclick(b.x + 40, b.y + b.height / 2);
   const sel = await page.evaluate(() => String(window.getSelection()).trim());
   expect(sel.length).toBeGreaterThan(0);
   expect(sel.length).toBeLessThan("Cosa ho salvato sul limone?".length);
-  // Pressione lunga: compare la pillola; un tocco fuori la chiude.
+  // Pressione lunga: compare la pillola, senza selezione; un tocco fuori la chiude.
+  await page.mouse.click(4, 200);
+  await page.evaluate(() => window.getSelection().removeAllRanges());
   await page.mouse.move(b.x + 20, b.y + b.height / 2);
   await page.mouse.down();
   await page.waitForTimeout(650);
