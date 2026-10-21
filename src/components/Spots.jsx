@@ -140,7 +140,11 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
         <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
           <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
           <div className="rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]">
-          {cover && <Thumb item={cover} size="h-32 w-full" rounded="rounded-t-[14px]" />}
+          {cover && (
+            <div className="copertina-ferma">
+              <Thumb item={cover} size="h-32 w-full" rounded="rounded-t-[14px]" />
+            </div>
+          )}
           <div className="min-w-0 px-4 py-3.5">
           <p className={NAME_BIG}>{r.name}</p>
           <SourceLinks

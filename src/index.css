@@ -126,6 +126,9 @@ button { cursor: pointer; }
     width: 36px; height: 36px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
     border: 1.5px solid var(--inchiostro); background: transparent; font-size: 1.2rem; font-weight: 500; line-height: 1; padding: 0;
   }
+  /* Copertine dei locali: niente anteprima o menu di iOS tenendo premuto. */
+  .copertina-ferma { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+  .copertina-ferma img, .copertina-ferma video { pointer-events: none; -webkit-touch-callout: none; }
   .tondo.nero { background: var(--inchiostro); color: var(--sfondo); }
   .pieno .tondo.nero { background: #0a0a0a; color: #fff; }
   .tondo:disabled { opacity: 0.35; }
