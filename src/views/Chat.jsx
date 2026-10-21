@@ -100,17 +100,6 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   }, [log, loading]);
 
   // Freccetta per tornare in fondo, come su WhatsApp: compare quando si è saliti.
-  const [copia, setCopia] = useState(null);
-  // Un tocco fuori dalla pillola la chiude; non c'è un velo a schermo intero,
-  // così si possono ancora trascinare le maniglie della selezione del testo.
-  useEffect(() => {
-    if (!copia) return undefined;
-    const fuori = (e) => {
-      if (!e.target.closest?.("[data-pillola-copia]")) setCopia(null);
-    };
-    document.addEventListener("pointerdown", fuori, true);
-    return () => document.removeEventListener("pointerdown", fuori, true);
-  }, [copia]);
   const [lontano, setLontano] = useState(false);
   useEffect(() => {
     const onScroll = () => {
@@ -246,32 +235,13 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
                     <span className="cartellino">{dayLabel(msg.at)}</span>
                   </p>
                 )}
-                <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} onCopy={(text, pt) => setCopia({ text, ...pt })} />
+                <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} onCopy={async (text) => toast((await copyText(text)) ? "Messaggio copiato" : "Copia non riuscita")} />
               </li>
             ))}
           </ol>
         )}
         <div ref={endRef} />
       </main>
-
-      {copia && (
-        <>
-          <button
-            type="button"
-            data-pillola-copia
-            className="fixed z-[60] inline-flex items-center gap-2 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none] rounded-full border-[1.5px] border-inchiostro bg-[var(--superficie)] px-4 py-2.5 text-[0.95rem] font-extrabold tracking-[-0.02em]"
-            style={{ left: Math.min(Math.max(copia.x, 80), window.innerWidth - 80), top: Math.min(copia.y + 28, window.innerHeight - 140), transform: "translateX(-50%)" }}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={async () => {
-              const ok = await copyText(copia.text);
-              setCopia(null);
-              toast(ok ? "Messaggio copiato" : "Copia non riuscita");
-            }}
-          >
-            <Copy className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" /> Copia messaggio
-          </button>
-        </>
-      )}
 
       <form ref={formRef} onSubmit={send} className="chat-composer fixed inset-x-0 bottom-0 z-10">
         {lontano && (
@@ -348,59 +318,18 @@ function useSopraTastiera(ref) {
   }, [ref]);
 }
 
-// Pressione lunga (o tasto destro) su un messaggio: chiama onOpen con il punto
-// premuto. Si annulla se il dito si muove (scorrimento).
-function useLongPress(onOpen) {
-  const t = useRef(0);
-  const start = useRef(null);
-  const stop = () => {
-    clearTimeout(t.current);
-    start.current = null;
-  };
-  return {
-    onPointerDown: (e) => {
-      if (e.pointerType === "mouse" && e.button !== 0) return;
-      start.current = { x: e.clientX, y: e.clientY };
-      const { clientX: x, clientY: y } = e;
-      clearTimeout(t.current);
-      t.current = setTimeout(() => onOpen({ x, y }), 450);
-    },
-    onPointerMove: (e) => {
-      const s0 = start.current;
-      if (s0 && Math.hypot(e.clientX - s0.x, e.clientY - s0.y) > 10) stop();
-    },
-    onPointerUp: stop,
-    onPointerCancel: stop,
-    onPointerLeave: stop,
-    // Tenendo premuto esce solo la pillola "Copia messaggio": niente selezione
-    // né menu di sistema insieme. Una parola si seleziona con il doppio tocco.
-    onContextMenu: (e) => {
-      e.preventDefault();
-      stop();
-      onOpen({ x: e.clientX, y: e.clientY });
-    },
-    onDoubleClick: selectWordAt,
-  };
-}
-
-// Doppio tocco su un messaggio: da quel momento il testo è selezionabile e la
-// parola toccata resta selezionata (la pressione lunga non seleziona nulla).
-function selectWordAt(e) {
-  const el = e.currentTarget;
-  el.style.webkitUserSelect = "text";
-  el.style.userSelect = "text";
-  const sel = window.getSelection?.();
-  const range = document.caretRangeFromPoint?.(e.clientX, e.clientY);
-  if (!sel || !range || !sel.modify) return;
-  sel.removeAllRanges();
-  sel.addRange(range);
-  sel.modify("move", "backward", "word");
-  sel.modify("extend", "forward", "word");
-}
-
 // Testo di una risposta senza i segni del grassetto e le citazioni [1].
 function plainAnswer(text) {
   return String(text || "").replace(/\*\*/g, "").replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "").trim();
+}
+
+// Icona "copia" in basso a destra di un messaggio.
+function CopyIcon({ label, onClick }) {
+  return (
+    <button type="button" aria-label={label} onClick={onClick} className="-mr-1 grid h-8 w-8 place-items-center">
+      <Copy className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+    </button>
+  );
 }
 
 // Domanda (a destra, nera) e risposta di Second Brain (a sinistra, bianca),
@@ -414,21 +343,20 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
     const s = sources[n - 1];
     if (s?.item) onOpen(s.item);
   };
-  const pressQ = useLongPress((pt) => onCopy(msg.q, pt));
-  const pressA = useLongPress((pt) => {
-    const t = plainAnswer(r?.answer);
-    if (t) onCopy(t, pt);
-  });
+  const answerText = plainAnswer(r?.answer);
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <p {...pressQ} className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]">
+        <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
           {msg.q}
           <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
         </p>
       </div>
+      <div className="-mt-1 flex justify-end pr-1">
+        <CopyIcon label="Copia domanda" onClick={() => onCopy(msg.q)} />
+      </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
-        <div {...pressA} className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]">
+        <div className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5 [-webkit-user-select:text] [user-select:text]">
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
@@ -455,6 +383,11 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
           )}
           {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
           {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
+          {answerText && !msg.pending && (
+            <div className="-mb-2 mt-1 flex justify-end">
+              <CopyIcon label="Copia risposta" onClick={() => onCopy(answerText)} />
+            </div>
+          )}
         </div>
       </div>
     </div>
