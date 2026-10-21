@@ -57,6 +57,7 @@ export const api = {
   ask: (question, items, memory = [], total = items.length + memory.length, history = []) =>
     post("/api/ai", { action: "ask", question, items, memory, total, history }, { timeoutMs: 45000 }),
   // Via di un locale dal nome (OpenStreetMap) → { query, found: { street } | null }.
+  pushKey: () => post("/api/push", { action: "key" }, { timeoutMs: 15000 }),
   geo: (place) => post("/api/geo", { place }, { timeoutMs: 15000 }),
   thumb: (id, url) => post("/api/thumb", { id, url }, { timeoutMs: 20000 }),
   // Archivi grandi: quali elementi leggere per intero → { ids }.
