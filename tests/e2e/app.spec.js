@@ -513,7 +513,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const fil = await page.getByRole("button", { name: "Filtri" }).boundingBox();
   expect(Math.abs(fil.y - cat.y)).toBeLessThan(4);
   expect(fil.x + fil.width).toBeGreaterThan(page.viewportSize().width - 30);
-  const righe = page.locator("ul.righe > li");
+  const righe = page.locator("li[data-scheda-locale]");
   await expect(righe).toHaveCount(2);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Ristoranti");
   // Il titolo sta sulla riga dell'icona Impostazioni anche dentro un box.
@@ -533,7 +533,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(bar.getByRole("link", { name: /^Roma/ })).toHaveCount(0);
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
   await page.reload();
-  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
+  await expect(page.locator("li[data-scheda-locale]").first().getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
   // Le sedi si scrivono a mano dall'icona tonda accanto al nome (anche più di una);
   // valgono più di quella trovata (qui il Bar) e restano dopo il ricaricamento.
   await expect(bar.getByRole("button", { name: /Scrivi la via|Modifica la via/ })).toHaveCount(0);
@@ -564,11 +564,11 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(bar.getByRole("link", { name: /Via Prova 5, Roma/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Via%20Prova%205%2C%20Roma$/);
   await expect(bar.getByRole("link", { name: /Via Seconda 7, Milano/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Via%20Seconda%207%2C%20Milano$/);
   await page.reload();
-  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
-  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Via Seconda 7, Milano/ })).toBeVisible();
-  await expect(page.locator("ul.righe > li").first().getByRole("link", { name: /Piazza di San Calisto/ })).toHaveCount(0);
+  await expect(page.locator("li[data-scheda-locale]").first().getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
+  await expect(page.locator("li[data-scheda-locale]").first().getByRole("link", { name: /Via Seconda 7, Milano/ })).toBeVisible();
+  await expect(page.locator("li[data-scheda-locale]").first().getByRole("link", { name: /Piazza di San Calisto/ })).toHaveCount(0);
   // Togliendo una sede resta l'altra.
-  await page.locator("ul.righe > li").first().getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
+  await page.locator("li[data-scheda-locale]").first().getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
   await page.getByRole("menuitem", { name: "Modifica via" }).click();
   await page.getByRole("button", { name: "Togli l'indirizzo 2 di Bar San Calisto" }).click();
   await page.getByRole("button", { name: "Salva" }).click();
@@ -687,7 +687,7 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await addLink(page, `${FIX}/trastevere`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.goto("/archivio?sezione=ristoranti");
-  const bar = page.locator("ul.righe > li").first();
+  const bar = page.locator("li[data-scheda-locale]").first();
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toBeVisible();
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
   await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via", "Elimina"]);
@@ -714,7 +714,7 @@ test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, c
   await addLink(page, `${FIX}/trastevere`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.goto("/archivio?sezione=ristoranti");
-  const righe = page.locator("ul.righe > li");
+  const righe = page.locator("li[data-scheda-locale]");
   await expect(righe).toHaveCount(2);
   const bar = righe.first();
   // I puntini stanno a destra di "Scheda".
@@ -739,7 +739,7 @@ test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, c
   await expect(righe).toHaveCount(1);
   // Resta eliminato dopo il ricaricamento (i contenuti restano nell'archivio).
   await page.reload();
-  await expect(page.locator("ul.righe > li")).toHaveCount(1);
+  await expect(page.locator("li[data-scheda-locale]")).toHaveCount(1);
 });
 
 test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il campo resta in fondo", async ({ page }) => {
