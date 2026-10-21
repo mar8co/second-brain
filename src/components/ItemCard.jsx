@@ -3,8 +3,8 @@
 // a box, ogni elemento è una copertina con il titolo sotto.
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy } from "lucide-react";
-import { rememberThumb } from "../lib/thumbs.js";
-import { hasFileCover, useFileUrl } from "../lib/fileurl.js";
+import { isStoredThumb, rememberThumb } from "../lib/thumbs.js";
+import { hasFileCover, useCoverUrl, useFileUrl } from "../lib/fileurl.js";
 import { displayTitle } from "../lib/item.js";
 import { displayHost, mapTileUrl } from "../lib/detect.js";
 import { itemColor } from "../lib/colors.js";
@@ -44,7 +44,8 @@ function LinkThumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
   // Se il CDN non risponde subito si riprova una volta dopo un attimo.
   const [tries, setTries] = useState(0);
   // Senza copertina propria, i posti con coordinate mostrano la loro mappa.
-  const url = item.image_url || (item.type === "place" ? mapTileUrl(item.place) : null);
+  const cover = useCoverUrl(item);
+  const url = item.image_url ? cover : item.type === "place" ? mapTileUrl(item.place) : null;
   if (url && tries < 2 && /^https?:\/\//.test(url)) {
     return (
       <img
@@ -53,7 +54,7 @@ function LinkThumb({ item, size = "h-14 w-14", rounded = "rounded-xl" }) {
         alt=""
         loading="lazy"
         referrerPolicy="no-referrer"
-        onLoad={() => rememberThumb(url)}
+        onLoad={() => !isStoredThumb(item.image_url) && rememberThumb(url)}
         onError={() => (tries === 0 ? setTimeout(() => setTries(1), 1500) : setTries(2))}
         className={`${size} shrink-0 ${rounded} object-cover`}
         style={{ background: itemColor(item) }}

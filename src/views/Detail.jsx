@@ -13,6 +13,7 @@ import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
 import { STATUSES, TYPES } from "../lib/constants.js";
 import { isImage, isVideo } from "../lib/files.js";
+import { useCoverUrl } from "../lib/fileurl.js";
 import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
 import { mapsUrl, restaurantsOf } from "../lib/spots.js";
 
@@ -22,6 +23,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
   const [fileUrl, setFileUrl] = useState(null);
+  const coverUrl = useCoverUrl(item);
   const [transcript, setTranscript] = useState("");
   const [openedAt] = useState(() => Date.now());
   // La scheda ha il colore dell'elemento, lo stesso della sua riga in Archivio.
@@ -103,8 +105,8 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
     <video src={fileUrl} controls playsInline preload="metadata" className="w-full rounded-[18px] bg-[#0a0a0a]" aria-label={item.title || item.file_name || "Video salvato"} />
   ) : showImage ? (
     <img src={fileUrl} alt={item.title || item.file_name || "Immagine salvata"} className="w-full rounded-[18px]" />
-  ) : item.image_url ? (
-    <img src={item.image_url} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-80 w-full rounded-[18px] object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
+  ) : coverUrl ? (
+    <img src={coverUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="max-h-80 w-full rounded-[18px] object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
   ) : null;
   // Lo stato spiega cosa è andato storto solo quando qualcosa non è andato bene.
   const problem = item.status !== "analyzed" && item.status !== "saved";

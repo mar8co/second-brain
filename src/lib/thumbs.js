@@ -20,3 +20,18 @@ export async function rememberThumb(url, { cacheStorage = globalThis.caches, doF
     return false;
   }
 }
+
+// Copia durevole della miniatura nell'archivio (Storage, cartella "miniature"):
+// i link delle copertine dei Reel e dei post scadono. Nel campo image_url resta
+// "sb-storage:<percorso>" al posto dell'indirizzo del CDN.
+export const STORED_PREFIX = "sb-storage:";
+export const isStoredThumb = (url) => typeof url === "string" && url.startsWith(STORED_PREFIX);
+export const storedPath = (url) => (isStoredThumb(url) ? url.slice(STORED_PREFIX.length) : null);
+export const storedUrl = (path) => `${STORED_PREFIX}${path}`;
+
+// Miniature ancora da copiare: indirizzo http(s) e, su questo dispositivo, meno
+// di due tentativi già fatti (il CDN può aver già fatto scadere il link).
+export const MAX_THUMB_TRIES = 2;
+export function thumbsToSave(items, tries = {}) {
+  return items.filter((it) => /^https?:\/\//.test(it.image_url || "") && !it.file_path && (tries[it.id] || 0) < MAX_THUMB_TRIES);
+}

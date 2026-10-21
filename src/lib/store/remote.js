@@ -3,6 +3,7 @@
 // le proprie righe e i propri file.
 
 import { newId, sanitizeItem } from "../item.js";
+import { storedPath } from "../thumbs.js";
 
 const BUCKET = "files";
 
@@ -19,6 +20,7 @@ export function safeFileName(name) {
 
 export function createRemoteStore(supabase) {
   const signed = new Map(); // id → { url, exp }
+  const signedPaths = new Map(); // percorso → { url, exp }
 
   async function uid() {
     const { data } = await supabase.auth.getUser();
@@ -87,10 +89,22 @@ export function createRemoteStore(supabase) {
     },
 
     async remove(item) {
-      if (item.file_path) await supabase.storage.from(BUCKET).remove([item.file_path]);
+      const paths = [item.file_path, storedPath(item.image_url)].filter(Boolean);
+      if (paths.length) await supabase.storage.from(BUCKET).remove(paths);
       const { error } = await supabase.from("items").delete().eq("id", item.id);
       check(error, "Eliminazione non riuscita");
       signed.delete(item.id);
+    },
+
+    // Indirizzo firmato di un file dell'archivio dato il percorso (miniature copiate).
+    async signedUrl(path) {
+      if (!path) return null;
+      const c = signedPaths.get(path);
+      if (c && c.exp > Date.now() + 60_000) return c.url;
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+      if (error) return null;
+      signedPaths.set(path, { url: data.signedUrl, exp: Date.now() + 3600_000 });
+      return data.signedUrl;
     },
 
     async fileUrl(item) {
