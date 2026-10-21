@@ -17,6 +17,7 @@ import { countBy } from "../lib/search.js";
 import { displayHost, detectType, extractUrl } from "../lib/detect.js";
 import { displayTitle } from "../lib/item.js";
 import { copyText } from "../lib/clipboard.js";
+import { LINK_SOURCE, isLink, linkParts } from "../lib/linkify.js";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { needsDigest } from "../lib/memory.js";
 
@@ -468,7 +469,7 @@ export function AnswerText({ text, count, onCite }) {
 }
 
 function Inline({ text, count, onCite }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|\[\d+(?:,\s*\d+)*\])/g);
+  const parts = text.split(new RegExp(`(\\*\\*[^*]+\\*\\*|\\[\\d+(?:,\\s*\\d+)*\\]|${LINK_SOURCE})`, "gi"));
   return parts.map((part, i) => {
     if (/^\*\*[^*]+\*\*$/.test(part)) {
       return (
@@ -493,6 +494,17 @@ function Inline({ text, count, onCite }) {
               {n}
             </button>
           ))}
+        </Fragment>
+      );
+    }
+    if (isLink(part)) {
+      const { url, href, rest } = linkParts(part);
+      return (
+        <Fragment key={i}>
+          <a href={href} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 [overflow-wrap:anywhere]">
+            {url}
+          </a>
+          {rest}
         </Fragment>
       );
     }
