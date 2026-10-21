@@ -372,13 +372,30 @@ function useLongPress(onOpen) {
     onPointerUp: stop,
     onPointerCancel: stop,
     onPointerLeave: stop,
-    // Il menu del sistema (selezione di una parola, Copia) resta attivo: qui si
-    // aggiunge soltanto la pillola "Copia messaggio".
+    // Tenendo premuto esce solo la pillola "Copia messaggio": niente selezione
+    // né menu di sistema insieme. Una parola si seleziona con il doppio tocco.
     onContextMenu: (e) => {
+      e.preventDefault();
       stop();
       onOpen({ x: e.clientX, y: e.clientY });
     },
+    onDoubleClick: selectWordAt,
   };
+}
+
+// Doppio tocco su un messaggio: da quel momento il testo è selezionabile e la
+// parola toccata resta selezionata (la pressione lunga non seleziona nulla).
+function selectWordAt(e) {
+  const el = e.currentTarget;
+  el.style.webkitUserSelect = "text";
+  el.style.userSelect = "text";
+  const sel = window.getSelection?.();
+  const range = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+  if (!sel || !range || !sel.modify) return;
+  sel.removeAllRanges();
+  sel.addRange(range);
+  sel.modify("move", "backward", "word");
+  sel.modify("extend", "forward", "word");
 }
 
 // Testo di una risposta senza i segni del grassetto e le citazioni [1].
@@ -405,13 +422,13 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <p {...pressQ} className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
+        <p {...pressQ} className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]">
           {msg.q}
           <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
         </p>
       </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
-        <div {...pressA} className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5 [-webkit-user-select:text] [user-select:text]">
+        <div {...pressA} className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]">
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
