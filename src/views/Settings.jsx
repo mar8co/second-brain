@@ -115,7 +115,7 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
         </Section>
       )}
 
-      <details className="group mt-6 border-y-[1.5px] border-inchiostro">
+      <details className={`group ${syncMode ? "border-b-[1.5px]" : "mt-6 border-y-[1.5px]"} border-inchiostro`}>
         <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 py-2 text-[0.95rem] font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden">
           <span>Informazioni e privacy</span>
           <span aria-hidden="true" className="text-[1.3rem] font-bold leading-none">
