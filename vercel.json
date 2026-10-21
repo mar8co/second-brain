@@ -6,7 +6,8 @@
     "api/ai.js": { "maxDuration": 60 },
     "api/extract.js": { "maxDuration": 300 },
     "api/share.js": { "maxDuration": 300 },
-    "api/geo.js": { "maxDuration": 15 }
+    "api/geo.js": { "maxDuration": 15 },
+    "api/thumb.js": { "maxDuration": 20 }
   },
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "headers": [

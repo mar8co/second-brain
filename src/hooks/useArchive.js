@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { classifyItem, processItem, recategorizeItem } from "../lib/process.js";
 import { AI_LIMIT, needsReread, reanalysisReason, rereadLog, runUpkeep } from "../lib/memory.js";
 import { hasContent, withoutAiFailure } from "../lib/enrich.js";
+import { api } from "../lib/api.js";
+import { storedUrl, thumbsToSave } from "../lib/thumbs.js";
 import { DEFAULT_CATEGORIES } from "../lib/constants.js";
 
 const byDate = (a, b) => new Date(b.created_at) - new Date(a.created_at);
@@ -337,6 +339,55 @@ export function useArchive(store, { ai }) {
     }
     return { done, total: list.length, failed, stopped };
   }, [store, upsert, runProcess]);
+
+  // Copia durevole delle miniature dei link (le copertine dei social scadono):
+  // una alla volta, in silenzio, solo con l'archivio sincronizzato. Al massimo
+  // due tentativi per elemento su questo dispositivo.
+  const thumbsBusy = useRef(false);
+  const thumbsLive = useRef(true);
+  const [thumbRound, setThumbRound] = useState(0);
+  useEffect(() => {
+    thumbsLive.current = true;
+    return () => {
+      thumbsLive.current = false;
+    };
+  }, [store]);
+  useEffect(() => {
+    if (store?.mode !== "sync" || loading || thumbsBusy.current) return;
+    const KEY = "sb-miniature-tentativi";
+    let tries = {};
+    try {
+      tries = JSON.parse(localStorage.getItem(KEY) || "{}") || {};
+    } catch {
+      /* archivio del browser non disponibile: si conta solo in questa sessione */
+    }
+    const list = thumbsToSave(items, tries).slice(0, 12);
+    if (!list.length) return;
+    thumbsBusy.current = true;
+    (async () => {
+      for (const it of list) {
+        if (!thumbsLive.current) break;
+        tries[it.id] = (tries[it.id] || 0) + 1;
+        try {
+          localStorage.setItem(KEY, JSON.stringify(tries));
+        } catch {
+          /* come sopra */
+        }
+        try {
+          const { path } = await api.thumb(it.id, it.image_url);
+          const cur = itemsRef.current.find((x) => x.id === it.id);
+          if (path && cur && cur.image_url === it.image_url) upsert(await store.update(it.id, { image_url: storedUrl(path) }));
+        } catch (e) {
+          if (e?.status === 401) break;
+        }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    })().finally(() => {
+      thumbsBusy.current = false;
+      // Ne restano altre: nuovo giro.
+      if (thumbsLive.current && list.length === 12) setThumbRound((n) => n + 1);
+    });
+  }, [store, loading, items, upsert, thumbRound]);
 
   // "Ricategorizza tutto": rifà la scheda dell'AI di ogni elemento con contenuto
   // e riassegna le categorie secondo le regole attuali (togliendo solo quelle

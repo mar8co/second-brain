@@ -31,3 +31,24 @@ describe("rememberThumb", () => {
     expect(await rememberThumb("https://cdn.example/d.jpg", { cacheStorage: cs, doFetch: async () => { throw new Error("rete"); } })).toBe(false);
   });
 });
+
+describe("miniature copiate nell'archivio", () => {
+  it("riconosce il percorso salvato", async () => {
+    const { isStoredThumb, storedPath, storedUrl } = await import("./thumbs.js");
+    expect(isStoredThumb("sb-storage:u/miniature/a.jpg")).toBe(true);
+    expect(isStoredThumb("https://cdn/x.jpg")).toBe(false);
+    expect(storedPath(storedUrl("u/miniature/a.jpg"))).toBe("u/miniature/a.jpg");
+    expect(storedPath("https://cdn/x.jpg")).toBeNull();
+  });
+  it("copia solo link con indirizzo http(s) e meno di due tentativi", async () => {
+    const { thumbsToSave } = await import("./thumbs.js");
+    const items = [
+      { id: "a", image_url: "https://cdn/a.jpg" },
+      { id: "b", image_url: "sb-storage:u/miniature/b.jpg" },
+      { id: "c", image_url: "https://cdn/c.jpg", file_path: "u/c/x.png" },
+      { id: "d", image_url: "https://cdn/d.jpg" },
+      { id: "e", image_url: null },
+    ];
+    expect(thumbsToSave(items, { d: 2 }).map((i) => i.id)).toEqual(["a"]);
+  });
+});

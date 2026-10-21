@@ -141,6 +141,7 @@ export async function safeFetch(rawUrl, opts = {}) {
     maxBytes = 2 * 1024 * 1024,
     maxRedirects = 5,
     allowPrivate = false,
+    binary = false,
     accept = "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.5",
   } = opts;
   let url;
@@ -178,6 +179,10 @@ export async function safeFetch(rawUrl, opts = {}) {
       if (/^(text\/|application\/(xhtml\+xml|json|ld\+json))/i.test(contentType) || !contentType) {
         const { buf, truncated } = await readLimited(res, maxBytes);
         out.text = decode(buf, contentType);
+        out.truncated = truncated;
+      } else if (binary && /^image\//i.test(contentType)) {
+        const { buf, truncated } = await readLimited(res, maxBytes);
+        out.buf = buf;
         out.truncated = truncated;
       } else {
         await res.body?.cancel().catch(() => {});
