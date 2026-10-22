@@ -31,8 +31,8 @@ export const setGalleria = (list) => write([...new Set(list)]);
 export function vicini(id) {
   const list = read();
   const i = list.indexOf(id);
-  if (i < 0) return { prev: null, next: null };
-  return { prev: list[i - 1] ?? null, next: list[i + 1] ?? null };
+  if (i < 0) return { prev: null, next: null, pos: 0, tot: 0 };
+  return { prev: list[i - 1] ?? null, next: list[i + 1] ?? null, pos: i + 1, tot: list.length };
 }
 
 export const togliDallaGalleria = (id) => write(read().filter((x) => x !== id));
