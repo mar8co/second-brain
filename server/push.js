@@ -109,3 +109,34 @@ export async function handlePushCron({ authHeader, env, now = new Date(), send =
   }
   return { status: 200, json: { users: byUser.size, sent, removed, failed } };
 }
+
+// Notifica di prova ai dispositivi dell'utente (tenendo premuta la campanella).
+export async function handlePushTest({ authHeader, env, send = (sub, payload, opts) => webpush.sendNotification(sub, payload, opts), db }) {
+  const auth = await verifyRequest({ authHeader, env });
+  if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
+  if (!env.SUPABASE_SERVICE_ROLE_KEY || !env.SUPABASE_URL) return { status: 503, json: { error: "Notifiche non configurate: manca SUPABASE_SERVICE_ROLE_KEY sul server." } };
+  const admin = db || createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const keys = vapidKeys(env.SUPABASE_SERVICE_ROLE_KEY);
+  const opts = { vapidDetails: { subject: env.VAPID_SUBJECT || "https://second-brain-qqwi.vercel.app", publicKey: keys.publicKey, privateKey: keys.privateKey }, TTL: 300 };
+  const { data: subs, error } = await admin.from("push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", auth.userId);
+  if (error) return { status: 502, json: { error: `Iscrizioni non leggibili: ${error.message}` } };
+  if (!subs?.length) return { status: 200, json: { sent: 0, failed: 0, removed: 0, devices: 0 } };
+  const payload = JSON.stringify({ title: "Notifica di prova", body: "Se la vedi, le notifiche funzionano.", url: "/impostazioni" });
+  let sent = 0;
+  let failed = 0;
+  let removed = 0;
+  let code = null;
+  for (const s of subs) {
+    try {
+      await send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, opts);
+      sent += 1;
+    } catch (e) {
+      code = e?.statusCode || code;
+      if (e?.statusCode === 404 || e?.statusCode === 410) {
+        await admin.from("push_subscriptions").delete().eq("id", s.id);
+        removed += 1;
+      } else failed += 1;
+    }
+  }
+  return { status: 200, json: { sent, failed, removed, devices: subs.length, code } };
+}

@@ -58,6 +58,7 @@ export const api = {
     post("/api/ai", { action: "ask", question, items, memory, total, history }, { timeoutMs: 45000 }),
   // Via di un locale dal nome (OpenStreetMap) → { query, found: { street } | null }.
   pushKey: () => post("/api/push", { action: "key" }, { timeoutMs: 15000 }),
+  pushTest: () => post("/api/push", { action: "test" }, { timeoutMs: 20000 }),
   embed: (texts, taskType = "RETRIEVAL_DOCUMENT") => post("/api/ai", { action: "embed", texts, taskType }, { timeoutMs: 25000 }),
   geo: (place) => post("/api/geo", { place }, { timeoutMs: 15000 }),
   thumb: (id, url) => post("/api/thumb", { id, url }, { timeoutMs: 20000 }),
