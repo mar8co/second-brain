@@ -3,7 +3,7 @@
 // "Dettagli", chiuso. Elimina è il cestino in alto accanto a Modifica.
 import { useEffect, useRef, useState } from "react";
 import { CopyNote } from "../components/ItemCard.jsx";
-import { Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import { AiBadge, ChipEditor, EmptyState, ErrorBox, StatusBadge, TypeIcon } from "../components/ui.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -149,6 +149,13 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           </>
         }
       />
+      {[["prev", prev, "left-0.5", ChevronLeft], ["next", next, "right-0.5", ChevronRight]].map(([k, to, pos, Ico]) =>
+        to ? (
+          <button key={k} type="button" aria-label={k === "prev" ? "Precedente" : "Successivo"} onClick={() => navigate(`/elemento/${to}`, { replace: true })} className={`fixed top-1/2 z-10 -translate-y-1/2 p-1 text-inchiostro opacity-30 ${pos}`}>
+            <Ico className="h-5 w-5" strokeWidth={2.5} />
+          </button>
+        ) : null
+      )}
       <article onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {cover && <div className="mb-4">{cover}</div>}
         <header>
