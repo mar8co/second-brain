@@ -92,9 +92,6 @@ export default function QuickShare({ toast }) {
         >
           {busy ? "Un momento…" : info.createdAt ? "Crea un nuovo codice" : "Crea codice"}
         </button>
-        <a className="bottone chiaro" href="https://www.icloud.com/shortcuts/a1375a33253b4547a66a52a0a33ad13e" target="_blank" rel="noreferrer">
-          Installa il comando
-        </a>
         {info.createdAt && (
           <button
             type="button"
@@ -105,6 +102,9 @@ export default function QuickShare({ toast }) {
             Disattiva
           </button>
         )}
+        <a className="bottone chiaro" href="https://www.icloud.com/shortcuts/a1375a33253b4547a66a52a0a33ad13e" target="_blank" rel="noreferrer">
+          Installa il comando
+        </a>
       </div>
       <ol className="list-decimal space-y-1.5 pl-5">
         <li><strong>Installa il comando</strong>: tocca il pulsante, poi <strong>Aggiungi comando</strong> nell'app Comandi.</li>
