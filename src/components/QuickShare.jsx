@@ -92,6 +92,9 @@ export default function QuickShare({ toast }) {
         >
           {busy ? "Un momento…" : info.createdAt ? "Crea un nuovo codice" : "Crea codice"}
         </button>
+        <a className="bottone chiaro" href="https://www.icloud.com/shortcuts/a1375a33253b4547a66a52a0a33ad13e" target="_blank" rel="noreferrer">
+          Installa il comando
+        </a>
         {info.createdAt && (
           <button
             type="button"
@@ -103,11 +106,15 @@ export default function QuickShare({ toast }) {
           </button>
         )}
       </div>
+      <ol className="list-decimal space-y-1.5 pl-5">
+        <li><strong>Installa il comando</strong>: tocca il pulsante, poi <strong>Aggiungi comando</strong> nell'app Comandi.</li>
+        <li><strong>Crea il codice</strong> qui sopra e tocca <strong>Copia codice</strong>.</li>
+        <li>In Comandi apri il comando, nell'azione <strong>Ottieni contenuti di URL</strong> incolla il codice nel campo <code>token</code>.</li>
+        <li>Per salvare: da un link tocca Condividi → <strong>Comandi</strong> → il tuo comando.</li>
+      </ol>
       {ask && <Domanda {...ask} color="#ffffff" onClose={() => setAsk(null)} />}
       <details className="group border-t border-riga pb-1">
-        <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden"><span>Come creare il Comando Rapido</span><Segno /></summary>
-        <a className="bottone chiaro mt-2 inline-flex" href="https://www.icloud.com/shortcuts/a1375a33253b4547a66a52a0a33ad13e" target="_blank" rel="noreferrer">Installa il comando pronto</a>
-        <p className="mt-2">Dopo l'installazione incolla il tuo codice nel campo <code>token</code>. Oppure crealo a mano:</p>
+        <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden"><span>Oppure crea il Comando a mano</span><Segno /></summary>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5">
           <li>App Comandi → <strong>+</strong> → tocca ⓘ e attiva <strong>Mostra nel foglio di condivisione</strong> (tipi: URL e Testo).</li>
           <li>
