@@ -350,7 +350,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
         <div className="relative max-w-[85%]">
           <p className="whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] py-2.5 pl-3.5 pr-10 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
             {msg.q}
-            <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
+            <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]" dateTime={msg.at}>{timeOf(msg.at)}</time>
           </p>
           <CopyIcon label="Copia domanda" onClick={() => onCopy(msg.q)} className="text-white" />
         </div>
