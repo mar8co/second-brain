@@ -1,8 +1,9 @@
 // Campanella delle notifiche degli eventi (notifiche push), in alto a destra
 // in Impostazioni. Solo con
 // l'archivio sincronizzato e un browser che le supporta.
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Bell, BellOff } from "lucide-react";
+import { api } from "../lib/api.js";
 import { FileStoreContext } from "../lib/fileurl.js";
 import { disablePush, enablePush, isIos, isStandalone, pushEnabled, pushSupported } from "../lib/push.js";
 
@@ -17,12 +18,40 @@ export default function Notifiche({ toast }) {
       alive = false;
     };
   }, []);
+  const lungo = useRef({ timer: null, fatto: false });
   if (!store?.savePushSubscription) return null;
 
   const supported = pushSupported();
   const needsHome = isIos() && !isStandalone();
 
+  // Tenendo premuto parte una notifica di prova, per capire se arrivano.
+  const prova = async () => {
+    if (!on) return toast("Prima attiva le notifiche, poi tieni premuto per la prova.");
+    try {
+      const r = await api.pushTest();
+      if (r.sent > 0) toast("Notifica di prova inviata: se non arriva, controlla Impostazioni del telefono > Notifiche");
+      else if (!r.devices) toast("Nessun dispositivo iscritto: spegni e riaccendi la campanella.");
+      else if (r.removed) toast("L'iscrizione era scaduta: riaccendi la campanella e riprova.");
+      else toast(`Invio non riuscito${r.code ? ` (codice ${r.code})` : ""}.`);
+    } catch (e) {
+      toast(e.message || "Prova non riuscita");
+    }
+  };
+  const giu = () => {
+    lungo.current.fatto = false;
+    clearTimeout(lungo.current.timer);
+    lungo.current.timer = setTimeout(() => {
+      lungo.current.fatto = true;
+      prova();
+    }, 700);
+  };
+  const su = () => clearTimeout(lungo.current.timer);
+
   const toggle = async () => {
+    if (lungo.current.fatto) {
+      lungo.current.fatto = false;
+      return;
+    }
     if (!supported) return toast("Questo browser non supporta le notifiche.");
     if (needsHome) return toast("Su iPhone aggiungi prima l'app alla schermata Home e aprila da lì.");
     setBusy(true);
@@ -52,6 +81,11 @@ export default function Notifiche({ toast }) {
       aria-label="Notifiche"
       className={`tondo !border-2 ${on ? "!bg-[#ffb5d0]" : ""}`}
       onClick={toggle}
+      onPointerDown={giu}
+      onPointerUp={su}
+      onPointerLeave={su}
+      onPointerCancel={su}
+      onContextMenu={(e) => e.preventDefault()}
       disabled={busy}
     >
       <Icona className="h-[18px] w-[18px]" fill={on ? "currentColor" : "none"} strokeWidth={2.6} aria-hidden="true" />

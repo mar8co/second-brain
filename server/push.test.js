@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { dueEvents, handlePushCron, handlePushKey, reminderPayload, romeDays, vapidKeys } from "./push.js";
+import { dueEvents, handlePushCron, handlePushKey, handlePushTest, reminderPayload, romeDays, vapidKeys } from "./push.js";
 
 const items = [
   { id: "1", ai: { events: [{ name: "Workshop AI", date: "2026-10-22", place: "Roma" }, { name: "Concerto", date: "2026-10-23" }, { name: "Passato", date: "2026-10-01" }, { name: "Nascosto", date: "2026-10-22", hidden: true }] } },
@@ -74,5 +74,33 @@ describe("handlePushKey", () => {
     expect(r.status).toBe(200);
     expect(r.json.publicKey).toBe(vapidKeys("role").publicKey);
     expect((await handlePushKey({ authHeader: "", env: { ALLOW_NO_AUTH: "1" } })).status).toBe(503);
+  });
+});
+
+describe("handlePushTest", () => {
+  const env = { ALLOW_NO_AUTH: "1", SUPABASE_URL: "http://x", SUPABASE_SERVICE_ROLE_KEY: "role" };
+  const dbFor = (subs) => ({
+    deleted: [],
+    from() {
+      const self = this;
+      return {
+        select: () => ({ eq: async () => ({ data: subs, error: null }) }),
+        delete: () => ({ eq: async (_c, id) => { self.deleted.push(id); return {}; } }),
+      };
+    },
+  });
+  it("manda la prova a ogni dispositivo e dice quanti", async () => {
+    const send = vi.fn(async () => {});
+    const r = await handlePushTest({ authHeader: "", env, send, db: dbFor([{ id: "a", endpoint: "e/a", p256dh: "p", auth: "q" }]) });
+    expect(r.json).toMatchObject({ sent: 1, failed: 0, devices: 1 });
+    expect(JSON.parse(send.mock.calls[0][1]).title).toBe("Notifica di prova");
+  });
+  it("senza iscrizioni risponde devices 0; con iscrizione scaduta la toglie", async () => {
+    expect((await handlePushTest({ authHeader: "", env, db: dbFor([]) })).json.devices).toBe(0);
+    const db = dbFor([{ id: "b", endpoint: "e/b", p256dh: "p", auth: "q" }]);
+    const send = vi.fn(async () => { throw Object.assign(new Error("gone"), { statusCode: 410 }); });
+    const r = await handlePushTest({ authHeader: "", env, send, db });
+    expect(r.json).toMatchObject({ sent: 0, removed: 1, code: 410 });
+    expect(db.deleted).toEqual(["b"]);
   });
 });
