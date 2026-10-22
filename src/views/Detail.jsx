@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import { AiBadge, ChipEditor, EmptyState, ErrorBox, StatusBadge, TypeIcon } from "../components/ui.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
-import { itemColor, PAGE } from "../lib/colors.js";
+import { PAGE, detailBox } from "../lib/colors.js";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { displayTitle } from "../lib/item.js";
 import { displayHost } from "../lib/detect.js";
@@ -28,7 +28,8 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const [transcript, setTranscript] = useState("");
   const [openedAt] = useState(() => Date.now());
   // La scheda ha il colore dell'elemento, lo stesso della sua riga in Archivio.
-  usePageColor(item ? itemColor(item) : PAGE.archive);
+  const box = item ? detailBox(item, archive.items) : null;
+  usePageColor(box ? box.bg : PAGE.archive, { scuro: box?.fg === "#ffffff" });
 
   useEffect(() => {
     let alive = true;
@@ -224,50 +225,26 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
 
         {/* Riepilogo dell'AI: sempre etichettato e da verificare */}
         {item.ai ? (
-          <section>
-            <h2 className="sezione">Riepilogo</h2>
-            <AiBadge>{item.ai.applied ? "Categorie e tag assegnati dall'AI · da verificare" : "Generato dall'AI · da verificare"}</AiBadge>
-            {item.ai.summary ? <p className="mt-2.5 font-medium leading-snug">{item.ai.summary}</p> : <p className="mt-2.5 font-medium text-tenue">Dati insufficienti per un riassunto.</p>}
+          <div className="mt-5 space-y-3">
             {points.length > 0 && (
-              <div className="mt-4">
-                <h3 className="micro mb-1 font-semibold">Punti chiave</h3>
-                <ul className="righe">
+              <section className="rounded-[18px] bg-[var(--superficie)] p-4">
+                <h2 className="sezione">Punti chiave</h2>
+                <ul className="righe mt-1">
                   {points.map((p, i) => <li key={i} className="py-1.5 font-semibold leading-snug">{p}</li>)}
                 </ul>
-              </div>
+              </section>
             )}
-          </section>
+            <section className="rounded-[18px] bg-[var(--superficie)] p-4">
+              <h2 className="sezione">Riepilogo</h2>
+              <AiBadge>{item.ai.applied ? "Categorie e tag assegnati dall'AI · da verificare" : "Generato dall'AI · da verificare"}</AiBadge>
+              {item.ai.summary ? <p className="mt-2.5 font-medium leading-snug">{item.ai.summary}</p> : <p className="mt-2.5 font-medium text-tenue">Dati insufficienti per un riassunto.</p>}
+            </section>
+          </div>
         ) : ai && item.status !== "processing" ? (
           <button type="button" className="bottone chiaro largo mt-6" disabled={!!busy} onClick={() => run("classify", () => archive.classify(item))}>
             {busy === "classify" ? "Analizzo…" : "Proponi categorie e tag con l'AI"}
           </button>
         ) : null}
-
-        {/* Categorie e tag senza titolo; le proposte dell'AI sono pillole da toccare. */}
-        {(item.categories?.length > 0 || item.tags?.length > 0 || aiCats.length > 0 || aiTags.length > 0) && (
-          <section className="mt-5">
-            <ul className="flex flex-wrap gap-1.5" aria-label="Categorie e tag">
-              {(item.categories || []).map((c) => <li key={c} className="pillola attiva">{c}</li>)}
-              {(item.tags || []).map((t) => <li key={t} className="pillola">#{t}</li>)}
-            </ul>
-            {(aiCats.length > 0 || aiTags.length > 0) && (
-              <div className="mt-3">
-                <p className="micro mb-1.5 font-semibold">Proposte dell'AI (tocca per aggiungere)</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {aiCats.map((c) => (
-                    <button key={`c-${c}`} type="button" className="pillola" onClick={() => acceptAi([c], [])}>+ {c}</button>
-                  ))}
-                  {aiTags.map((t) => (
-                    <button key={`t-${t}`} type="button" className="pillola" onClick={() => acceptAi([], [t])}>+ #{t}</button>
-                  ))}
-                </div>
-                <button type="button" className="link mt-1" onClick={() => acceptAi(aiCats, aiTags)}>
-                  Accetta tutte
-                </button>
-              </div>
-            )}
-          </section>
-        )}
 
         {error && <div className="mt-4"><ErrorBox>{error}</ErrorBox></div>}
 
@@ -339,6 +316,32 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
                 {busy === "classify" ? "Rigenero…" : "Rigenera il riepilogo"}
               </button>
             )}
+
+        {/* Categorie e tag senza titolo; le proposte dell'AI sono pillole da toccare. */}
+        {(item.categories?.length > 0 || item.tags?.length > 0 || aiCats.length > 0 || aiTags.length > 0) && (
+          <section className="border-t border-riga pt-4">
+            <ul className="flex flex-wrap gap-1.5" aria-label="Categorie e tag">
+              {(item.categories || []).map((c) => <li key={c} className="pillola attiva">{c}</li>)}
+              {(item.tags || []).map((t) => <li key={t} className="pillola">#{t}</li>)}
+            </ul>
+            {(aiCats.length > 0 || aiTags.length > 0) && (
+              <div className="mt-3">
+                <p className="micro mb-1.5 font-semibold">Proposte dell'AI (tocca per aggiungere)</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {aiCats.map((c) => (
+                    <button key={`c-${c}`} type="button" className="pillola" onClick={() => acceptAi([c], [])}>+ {c}</button>
+                  ))}
+                  {aiTags.map((t) => (
+                    <button key={`t-${t}`} type="button" className="pillola" onClick={() => acceptAi([], [t])}>+ #{t}</button>
+                  ))}
+                </div>
+                <button type="button" className="link mt-1" onClick={() => acceptAi(aiCats, aiTags)}>
+                  Accetta tutte
+                </button>
+              </div>
+            )}
+          </section>
+        )}
           </div>
         </details>
       </article>

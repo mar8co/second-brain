@@ -46,6 +46,16 @@
   color-scheme: light;
 }
 
+/* Schede su blu o nero (colore del box): testo bianco. */
+.pieno-scuro {
+  --inchiostro: #ffffff;
+  --tenue: rgb(255 255 255 / 0.75);
+  --riga: rgb(255 255 255 / 0.25);
+  --superficie: rgb(255 255 255 / 0.14);
+}
+body.pieno-scuro .bottone, body.pieno-scuro .pillola.attiva, body.pieno-scuro .tondo.nero { background: #ffffff; color: #0a0a0a; }
+body.pieno-scuro .bottone.chiaro { background: transparent; color: #ffffff; }
+
 /* Nessuna barra di scorrimento visibile, mai: si scorre lo stesso. */
 * { scrollbar-width: none; }
 *::-webkit-scrollbar { display: none; width: 0; height: 0; }
