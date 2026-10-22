@@ -8,7 +8,8 @@ import { ArrowDown, ArrowUp, Copy, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { Thumb } from "../components/ItemCard.jsx";
 import AddMenu from "../components/AddMenu.jsx";
-import { saveFiles, uploadMessage } from "../lib/upload.js";
+import { mergeFiles } from "../lib/upload.js";
+import FilePreview from "../components/FilePreview.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { askArchive, recentTurns } from "../lib/ask.js";
@@ -111,14 +112,14 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     return () => window.removeEventListener("scroll", onScroll);
   }, [log]);
 
-  // Immagine (o file) incollata nel campo: salvata come dal "+", senza altri passaggi.
-  const pasteFiles = async (e) => {
+  // Immagine (o file) incollata nel campo: come dal "+", prima l'anteprima con
+  // "Aggiungi altre" e "Salva", senza archiviare subito.
+  const [incollati, setIncollati] = useState(null);
+  const pasteFiles = (e) => {
     const files = [...(e.clipboardData?.files || [])];
     if (!files.length) return;
     e.preventDefault();
-    toast(files.length === 1 ? "Salvo…" : `Salvo ${files.length} file…`);
-    const r = await saveFiles(files, archive.add);
-    toast(uploadMessage(r));
+    setIncollati(mergeFiles([], files));
   };
 
   // Ricerca per significato (solo con l'archivio sincronizzato).
@@ -243,6 +244,8 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
         <div ref={endRef} />
       </main>
 
+      {incollati && <FilePreview initial={incollati} archive={archive} toast={toast} onClose={() => setIncollati(null)} />}
+
       <form ref={formRef} onSubmit={send} className="chat-composer fixed inset-x-0 bottom-0 z-10">
         {lontano && (
           <button
@@ -348,11 +351,10 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
     <div className="space-y-2">
       <div className="flex justify-end">
         <div className="relative max-w-[85%]">
-          <p className="whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] py-2.5 pl-3.5 pr-10 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
+          <p className="whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
             {msg.q}
             <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]" dateTime={msg.at}>{timeOf(msg.at)}</time>
           </p>
-          <CopyIcon label="Copia domanda" onClick={() => onCopy(msg.q)} className="text-white" />
         </div>
       </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
