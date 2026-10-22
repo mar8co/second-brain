@@ -73,7 +73,6 @@ body {
   font: 500 16px/1.35 var(--font);
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
-  transition: background-color 0.25s;
 }
 
 button, input, textarea, select { font: inherit; color: inherit; }
