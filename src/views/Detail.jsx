@@ -150,7 +150,6 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
         }
       />
       <article onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        {cover && <div className="mb-4">{cover}</div>}
         <header>
           <p className="micro flex items-center gap-1.5 font-semibold">
             <TypeIcon type={item.type} className="h-3.5 w-3.5" />
@@ -176,6 +175,8 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
             </button>
           )}
         </section>
+
+        {cover && <div className="mt-4">{cover}</div>}
 
         <div className="mt-5 space-y-3">
           {item.url && (
