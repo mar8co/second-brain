@@ -1,7 +1,7 @@
 // Scheda di un elemento: copertina, titolo, link all'originale, riepilogo dell'AI
 // e categorie/tag; il resto (dati tecnici, trascrizione, testo letto) è in
 // "Dettagli", chiuso. Elimina è il cestino in alto accanto a Modifica.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CopyNote } from "../components/ItemCard.jsx";
 import { Trash2 } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
@@ -16,6 +16,7 @@ import { isImage, isVideo } from "../lib/files.js";
 import { useCoverUrl } from "../lib/fileurl.js";
 import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
 import { mapsUrl, restaurantsOf } from "../lib/spots.js";
+import { togliDallaGalleria, vicini } from "../lib/galleria.js";
 
 export default function Detail({ id, archive, store, ai, back, navigate, toast }) {
   const item = archive.items.find((x) => x.id === id);
@@ -36,6 +37,25 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
       alive = false;
     };
   }, [item?.id, item?.file_path, store]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Aperta dalla galleria: lo swipe a sinistra/destra passa al successivo/precedente.
+  const { prev, next } = vicini(id);
+  const touch = useRef(null);
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    // Non sui comandi del video né sui campi di testo.
+    touch.current = e.target.closest?.("video, input, textarea, select") ? null : { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e) => {
+    const s0 = touch.current;
+    touch.current = null;
+    if (!s0 || !e.changedTouches[0]) return;
+    const dx = e.changedTouches[0].clientX - s0.x;
+    const dy = e.changedTouches[0].clientY - s0.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    const to = dx < 0 ? next : prev;
+    if (to) navigate(`/elemento/${to}`, { replace: true });
+  };
 
   const luoghi = item ? restaurantsOf([item]).flatMap((r) => r.streets.map((a) => ({ r, a }))).slice(0, 12) : [];
 
@@ -67,7 +87,10 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   // Eliminazione subito, con "Annulla" per qualche secondo.
   const remove = () => {
     const undo = archive.removeSoon(item);
-    navigate("/archivio", { replace: true });
+    // Dalla galleria si passa al successivo (o al precedente se era l'ultimo).
+    const to = next || prev;
+    togliDallaGalleria(item.id);
+    navigate(to ? `/elemento/${to}` : "/archivio", { replace: true });
     toast("Elemento eliminato", { action: { label: "Annulla", run: undo } });
   };
 
@@ -126,7 +149,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           </>
         }
       />
-      <article>
+      <article onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         {cover && <div className="mb-4">{cover}</div>}
         <header>
           <p className="micro flex items-center gap-1.5 font-semibold">

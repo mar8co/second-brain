@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText, Play } from "lucide-react";
 import { isImage, isVideo } from "../lib/files.js";
+import { setGalleria } from "../lib/galleria.js";
 
 function Tile({ item, store, onOpen }) {
   const video = isVideo(item.file_mime);
@@ -63,7 +64,15 @@ export default function Gallery({ items, store, onOpen }) {
   return (
     <ul className="grid grid-cols-3 gap-1.5 pt-3.5">
       {items.map((it) => (
-        <Tile key={it.id} item={it} store={store} onOpen={onOpen} />
+        <Tile
+          key={it.id}
+          item={it}
+          store={store}
+          onOpen={(x) => {
+            setGalleria(items.map((y) => y.id));
+            onOpen(x);
+          }}
+        />
       ))}
     </ul>
   );
