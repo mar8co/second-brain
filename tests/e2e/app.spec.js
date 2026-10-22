@@ -1066,8 +1066,8 @@ test("foto: lo swipe passa alla foto successiva/precedente e, eliminandone una, 
   const swipe = (dx) =>
     page.locator("article").evaluate((el, d) => {
       const mk = (x, type) => {
-        const t = new Touch({ identifier: 1, target: el, clientX: x, clientY: 300 });
-        el.dispatchEvent(new TouchEvent(type, { touches: type === "touchend" ? [] : [t], changedTouches: [t], bubbles: true }));
+        const t = new window.Touch({ identifier: 1, target: el, clientX: x, clientY: 300 });
+        el.dispatchEvent(new window.TouchEvent(type, { touches: type === "touchend" ? [] : [t], changedTouches: [t], bubbles: true }));
       };
       mk(200, "touchstart");
       mk(200 + d, "touchend");
