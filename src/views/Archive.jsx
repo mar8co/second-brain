@@ -111,10 +111,11 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const closeBox = (patch) => (window.history.state?.box ? window.history.back() : setParam(patch));
 
   // Ricorda l'elenco visibile: la scheda aperta si scorre con lo swipe.
-  const apri = (list) => (it) => {
-    setGalleria(list.map((x) => x.id));
+  const apri = (list, colore = null) => (it, ids) => {
+    setGalleria(ids || list.map((x) => x.id), colore);
     openItem(it);
   };
+  const nomiCat = [...new Set(items.flatMap((it) => it.categories || []))].sort((a, b) => a.localeCompare(b, "it"));
   const results = useMemo(() => searchItems(items, q, filters), [items, q, filters.type, filters.category, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
   // Per i box: i risultati di ricerca e filtri, ma senza il filtro Categoria.
   const matches = useMemo(() => searchItems(items, q, { ...filters, category: "" }), [items, q, filters.type, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -292,11 +293,11 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : sezione ? (
           <>
             {sezione === "ristoranti" ? (
-              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items))} onStreet={saveStreet} onDelete={deleteRestaurant} />
+              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onDelete={deleteRestaurant} />
             ) : sezione === "foto" || sezione === "file" ? (
-              <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes])} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
+              <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes], sezione === "foto" ? BOX_FIXED.foto : BOX_FIXED.file)} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (
-              <EventList events={events} onOpen={apri([...events.upcoming, ...events.undated, ...events.past].flatMap((e) => e.items))} onDelete={deleteEvent} />
+              <EventList events={events} onOpen={apri([...events.upcoming, ...events.undated, ...events.past].flatMap((e) => e.items), BOX_FIXED.eventi)} onDelete={deleteEvent} />
             )}
           </>
         ) : results.length === 0 ? (
@@ -321,9 +322,9 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : (
           <>
             {vista === "lista" ? (
-              <ItemList items={results} onOpen={apri(results)} onDelete={removeFromList} />
+              <ItemList items={results} onOpen={apri(results, { bg: "#ffffff", fg: "#0a0a0a" })} onDelete={removeFromList} />
             ) : filters.category ? (
-              <ItemGrid items={results} onOpen={apri(results)} />
+              <ItemGrid items={results} onOpen={apri(results, categoryColor(filters.category, nomiCat))} />
             ) : (
               <CategoryBoxes tiles={tiles} onOpen={openTile} ordina={ordina} onMove={moveTile} />
             )}
