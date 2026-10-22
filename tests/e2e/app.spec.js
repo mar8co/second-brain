@@ -878,10 +878,12 @@ test("chat: appena invii, si vede la risposta in preparazione sopra il campo, no
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.goto("/");
   const box = page.getByLabel("Chiedi alla tua memoria");
-  for (const q of ["Cosa ho salvato sul limone?", "Raccontami la ricetta lunga con il limone"]) {
+  const domande = ["Cosa ho salvato sul limone?", "Raccontami la ricetta lunga con il limone"];
+  for (const [i, q] of domande.entries()) {
     await box.fill(q);
     await box.press("Enter");
-    await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
+    // Si aspetta la risposta di questa domanda, non quella della precedente.
+    await expect(page.getByText("Risposta dai tuoi contenuti")).toHaveCount(i + 1);
   }
   await page.route("**/api/ai", async (route) => {
     await new Promise((r) => setTimeout(r, 3000));
