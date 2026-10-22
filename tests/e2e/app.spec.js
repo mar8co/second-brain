@@ -523,6 +523,12 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const g2 = await page.getByRole("button", { name: "Impostazioni" }).boundingBox();
   expect(g2.y).toBeLessThan(t2.y + t2.height);
   await expect(righe.first()).toContainText("Bar San Calisto");
+  // Un tocco sulla card apre la scheda, che ha il rosso del box Ristoranti.
+  await righe.first().getByText("Bar San Calisto").first().click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 59, 28)");
+  await page.goBack();
+  await expect(righe).toHaveCount(2);
   const enzo = righe.filter({ hasText: "Da Enzo al 29" });
   await expect(enzo).toContainText("Via dei Vascellari 29, Roma");
   // L'indirizzo con la via completa è il testo del link a Maps (nome e via nella ricerca).
