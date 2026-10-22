@@ -878,10 +878,12 @@ test("chat: appena invii, si vede la risposta in preparazione sopra il campo, no
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.goto("/");
   const box = page.getByLabel("Chiedi alla tua memoria");
-  for (const q of ["Cosa ho salvato sul limone?", "Raccontami la ricetta lunga con il limone"]) {
+  const domande = ["Cosa ho salvato sul limone?", "Raccontami la ricetta lunga con il limone"];
+  for (const [i, q] of domande.entries()) {
     await box.fill(q);
     await box.press("Enter");
-    await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
+    // Si aspetta la risposta di questa domanda, non quella della precedente.
+    await expect(page.getByText("Risposta dai tuoi contenuti")).toHaveCount(i + 1);
   }
   await page.route("**/api/ai", async (route) => {
     await new Promise((r) => setTimeout(r, 3000));
@@ -941,10 +943,8 @@ test("chat: l'icona copia in basso a destra copia domanda e risposta; il testo r
   await box.press("Enter");
   await expect(page.getByText("Risposta dai tuoi contenuti").last()).toBeVisible();
   await page.waitForTimeout(800);
-  await page.getByRole("button", { name: "Copia domanda" }).click();
-  await expect(page.getByText("Messaggio copiato")).toBeVisible();
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Cosa ho salvato sul limone?");
-  // La risposta si copia senza grassetti né citazioni.
+  // Sui tuoi messaggi non c'è l'icona; la risposta si copia senza grassetti né citazioni.
+  await expect(page.getByRole("button", { name: "Copia domanda" })).toHaveCount(0);
   await page.getByRole("button", { name: "Copia risposta" }).click();
   const copiato = await page.evaluate(() => navigator.clipboard.readText());
   expect(copiato.length).toBeGreaterThan(10);
@@ -1006,13 +1006,16 @@ test("Aggiungi: più link incollati insieme, ognuno salvato a parte e i doppioni
   await expect(page).toHaveURL(/\/elemento\//);
 });
 
-test("chat: incollando un file nel campo viene salvato come dal +", async ({ page }) => {
+test("chat: incollando un file nel campo compare l'anteprima, e solo con Salva viene archiviato", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("Chiedi alla tua memoria").evaluate((el) => {
     const dt = new window.DataTransfer();
     dt.items.add(new window.File(["# Pagina\nTesto incollato con la parola zafferano"], "incollato.md", { type: "text/markdown" }));
     el.dispatchEvent(new window.ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
   });
+  await expect(page.getByText("Aggiungi altre")).toBeVisible();
+  await expect(page.getByText("Salvato nell'archivio")).toHaveCount(0);
+  await page.getByRole("button", { name: /^Salva 1/ }).click();
   await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
   await page.goto("/archivio?q=zafferano");
   await expect(page.getByText("incollato.md")).toBeVisible();
