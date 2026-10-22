@@ -21,8 +21,28 @@ export function safeFileName(name) {
 export function createRemoteStore(supabase) {
   // Tutte le colonne tranne il vettore della ricerca per significato (pesante).
   const COLS = COLUMNS.join(",");
-  const signed = new Map(); // id → { url, exp }
-  const signedPaths = new Map(); // percorso → { url, exp }
+  // Indirizzi firmati salvati sul telefono: restano uguali tra un'apertura e l'altra, così
+  // il browser riusa le foto già scaricate invece di riscaricarle.
+  const persist = (key) => {
+    const m = new Map();
+    try {
+      for (const [k, v] of JSON.parse(localStorage.getItem(key) || "[]")) m.set(k, v);
+    } catch { /* senza archivio locale si riparte da zero */ }
+    const set = m.set.bind(m);
+    m.set = (k, v) => {
+      set(k, v);
+      try {
+        const now = Date.now();
+        localStorage.setItem(key, JSON.stringify([...m].filter(([, x]) => x.exp > now).slice(-400)));
+      } catch { /* quota piena: resta solo in memoria */ }
+      return m;
+    };
+    return m;
+  };
+  const signed = persist("sb-url-file"); // id → { url, exp }
+  const signedPaths = persist("sb-url-miniature"); // percorso → { url, exp }
+  const VALIDITA = 7 * 86400; // secondi
+  const RINNOVO = 86400_000; // si rinnova quando manca meno di un giorno
 
   async function uid() {
     const { data } = await supabase.auth.getUser();
@@ -115,10 +135,10 @@ export function createRemoteStore(supabase) {
     async signedUrl(path) {
       if (!path) return null;
       const c = signedPaths.get(path);
-      if (c && c.exp > Date.now() + 60_000) return c.url;
-      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
+      if (c && c.exp > Date.now() + RINNOVO) return c.url;
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, VALIDITA);
       if (error) return null;
-      signedPaths.set(path, { url: data.signedUrl, exp: Date.now() + 3600_000 });
+      signedPaths.set(path, { url: data.signedUrl, exp: Date.now() + VALIDITA * 1000 });
       return data.signedUrl;
     },
 
@@ -136,10 +156,10 @@ export function createRemoteStore(supabase) {
     async fileUrl(item) {
       if (!item.file_path) return null;
       const c = signed.get(item.id);
-      if (c && c.exp > Date.now() + 60_000) return c.url;
-      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(item.file_path, 3600);
+      if (c && c.exp > Date.now() + RINNOVO) return c.url;
+      const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(item.file_path, VALIDITA);
       if (error) return null;
-      signed.set(item.id, { url: data.signedUrl, exp: Date.now() + 3600_000 });
+      signed.set(item.id, { url: data.signedUrl, exp: Date.now() + VALIDITA * 1000 });
       return data.signedUrl;
     },
   };
