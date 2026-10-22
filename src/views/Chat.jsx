@@ -381,13 +381,13 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
           {answered && r.total > r.consulted && (
             <p className="micro mt-2">Ho consultato <span className="num">{r.consulted}</span> contenuti su <span className="num">{r.total}</span>: quelli più vicini alla domanda e i più recenti.</p>
           )}
-          {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
-          {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
           {answerText && !msg.pending && (
-            <div className="-mb-2 mt-1 flex justify-end">
+            <div className="-mb-1 -mt-1 flex justify-end">
               <CopyIcon label="Copia risposta" onClick={() => onCopy(answerText)} />
             </div>
           )}
+          {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
+          {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
         </div>
       </div>
     </div>
