@@ -323,10 +323,10 @@ function plainAnswer(text) {
   return String(text || "").replace(/\*\*/g, "").replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "").trim();
 }
 
-// Icona "copia" in basso a destra di un messaggio.
-function CopyIcon({ label, onClick }) {
+// Icona "copia" in alto a destra di un messaggio (il contenitore è relative).
+function CopyIcon({ label, onClick, className = "" }) {
   return (
-    <button type="button" aria-label={label} onClick={onClick} className="-mr-1 grid h-8 w-8 place-items-center">
+    <button type="button" aria-label={label} onClick={onClick} className={`absolute right-1 top-1 grid h-8 w-8 place-items-center ${className}`}>
       <Copy className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
     </button>
   );
@@ -347,16 +347,16 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
-        <p className="max-w-[85%] whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
-          {msg.q}
-          <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
-        </p>
-      </div>
-      <div className="-mt-1 flex justify-end pr-1">
-        <CopyIcon label="Copia domanda" onClick={() => onCopy(msg.q)} />
+        <div className="relative max-w-[85%]">
+          <p className="whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] py-2.5 pl-3.5 pr-10 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
+            {msg.q}
+            <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60" dateTime={msg.at}>{timeOf(msg.at)}</time>
+          </p>
+          <CopyIcon label="Copia domanda" onClick={() => onCopy(msg.q)} className="text-white" />
+        </div>
       </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
-        <div className="card-bianca vignetta w-full max-w-[94%] px-4 py-3.5 [-webkit-user-select:text] [user-select:text]">
+        <div className={`card-bianca vignetta relative w-full max-w-[94%] py-3.5 pl-4 [-webkit-user-select:text] [user-select:text] ${r?.kind === "answer" ? "pr-4" : "pr-11"}`}>
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
@@ -381,11 +381,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
           {answered && r.total > r.consulted && (
             <p className="micro mt-2">Ho consultato <span className="num">{r.consulted}</span> contenuti su <span className="num">{r.total}</span>: quelli più vicini alla domanda e i più recenti.</p>
           )}
-          {answerText && !msg.pending && (
-            <div className="-mb-1 -mt-1 flex justify-end">
-              <CopyIcon label="Copia risposta" onClick={() => onCopy(answerText)} />
-            </div>
-          )}
+          {answerText && !msg.pending && <CopyIcon label="Copia risposta" onClick={() => onCopy(answerText)} className="!top-2.5" />}
           {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
           {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
         </div>
