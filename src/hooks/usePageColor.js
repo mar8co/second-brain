@@ -3,11 +3,12 @@
 // perché quello del body in quel momento è ancora in transizione.
 import { useLayoutEffect } from "react";
 
-export function usePageColor(color, { pieno = true } = {}) {
+export function usePageColor(color, { pieno = true, scuro = false } = {}) {
   useLayoutEffect(() => {
     const body = document.body;
     body.style.setProperty("--sfondo", color);
     body.classList.toggle("pieno", pieno);
+    body.classList.toggle("pieno-scuro", pieno && scuro);
     const prova = document.createElement("i");
     prova.style.cssText = `position:absolute;visibility:hidden;background:${color}`;
     body.append(prova);
@@ -21,5 +22,6 @@ export function usePageColor(color, { pieno = true } = {}) {
       metas = [m];
     }
     for (const m of metas) m.content = reale;
-  }, [color, pieno]);
+      return () => body.classList.remove("pieno-scuro");
+  }, [color, pieno, scuro]);
 }

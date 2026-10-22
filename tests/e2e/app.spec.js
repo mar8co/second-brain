@@ -251,6 +251,8 @@ test("contenuti salvati senza AI: rielaborati da soli all'apertura dell'app", as
   await page.goto(url);
   await expect(page.getByText("Punti chiave")).toBeVisible();
   await expect(page.getByText("Ricetta veloce di pasta al limone.")).toBeVisible();
+  // Categorie e tag stanno in fondo, dentro "Dettagli".
+  await page.getByText("Dettagli", { exact: true }).click();
   await expect(page.locator("li.pillola", { hasText: "Ricette" })).toBeVisible();
 });
 

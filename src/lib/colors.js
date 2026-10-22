@@ -53,3 +53,12 @@ export function boxStyle({ bg, fg }) {
   const chiaro = fg === "#ffffff";
   return { background: bg, color: fg, "--tenue": chiaro ? "rgb(255 255 255 / 0.75)" : "rgb(10 10 10 / 0.7)", boxShadow: chiaro ? "none" : undefined };
 }
+
+// Colore della scheda = colore del box in cui sta l'elemento in Archivio: foto e
+// video blu, file e note nero, altrimenti la sua prima categoria (alfabetica).
+export function detailBox(item, allItems = []) {
+  if (item.file_path) return /^(image|video)\//.test(item.file_mime || "") ? BOX_FIXED.foto : BOX_FIXED.file;
+  const nomi = [...new Set(allItems.flatMap((it) => it.categories || []))].sort((a, b) => a.localeCompare(b, "it"));
+  const prima = [...(item.categories || [])].sort((a, b) => a.localeCompare(b, "it"))[0];
+  return prima ? categoryColor(prima, nomi) : { bg: "#ffffff", fg: "#0a0a0a" };
+}
