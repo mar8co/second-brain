@@ -4,6 +4,8 @@
 
 const KEY = "sb-galleria";
 let ids = null;
+let box = null;
+const BKEY = "sb-galleria-box";
 
 function read() {
   if (ids) return ids;
@@ -25,7 +27,28 @@ function write(next) {
   }
 }
 
-export const setGalleria = (list) => write([...new Set(list)]);
+export function setGalleria(list, colore = null) {
+  box = colore;
+  try {
+    globalThis.sessionStorage?.setItem(BKEY, JSON.stringify(colore));
+  } catch {
+    /* solo in questa sessione */
+  }
+  write([...new Set(list)]);
+}
+
+// Colore del box da cui si è aperta la scheda: resta lo stesso mentre si scorre.
+export function coloreGalleria(id) {
+  if (!read().includes(id)) return null;
+  if (!box) {
+    try {
+      box = JSON.parse(globalThis.sessionStorage?.getItem(BKEY) || "null");
+    } catch {
+      box = null;
+    }
+  }
+  return box;
+}
 
 // Elemento precedente e successivo di `id` nell'elenco; null se non c'è o l'elenco non lo contiene.
 export function vicini(id) {

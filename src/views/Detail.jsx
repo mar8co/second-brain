@@ -16,7 +16,7 @@ import { isImage, isVideo } from "../lib/files.js";
 import { useCoverUrl } from "../lib/fileurl.js";
 import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
 import { mapsUrl, restaurantsOf } from "../lib/spots.js";
-import { togliDallaGalleria, vicini } from "../lib/galleria.js";
+import { coloreGalleria, togliDallaGalleria, vicini } from "../lib/galleria.js";
 
 export default function Detail({ id, archive, store, ai, back, navigate, toast }) {
   const item = archive.items.find((x) => x.id === id);
@@ -28,7 +28,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const [transcript, setTranscript] = useState("");
   const [openedAt] = useState(() => Date.now());
   // La scheda ha il colore dell'elemento, lo stesso della sua riga in Archivio.
-  const box = item ? detailBox(item, archive.items) : null;
+  const box = item ? coloreGalleria(item.id) || detailBox(item, archive.items) : null;
   usePageColor(box ? box.bg : PAGE.archive, { scuro: box?.fg === "#ffffff" });
 
   useEffect(() => {
