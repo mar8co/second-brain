@@ -181,7 +181,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
       <Page>
         {/* Il titolo grande sta sulla stessa riga dell'icona Impostazioni. */}
         <header className="testata !items-start !pb-0">
-          <h1 className="gigante !mb-4 min-w-0 flex-1" style={{ overflowWrap: "anywhere", hyphens: "auto" }}>{titolo}</h1>
+          <h1 className="gigante !mb-4 min-w-0 flex-1" style={{ overflowWrap: "break-word", hyphens: "manual" }}>{titolo}</h1>
           <button type="button" className="tondo mt-1" aria-label="Impostazioni" onClick={() => navigate("/impostazioni")}>
             <Settings className="h-[18px] w-[18px]" strokeWidth={2.6} aria-hidden="true" />
           </button>
