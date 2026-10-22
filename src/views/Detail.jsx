@@ -3,7 +3,7 @@
 // "Dettagli", chiuso. Elimina è il cestino in alto accanto a Modifica.
 import { useEffect, useRef, useState } from "react";
 import { CopyNote } from "../components/ItemCard.jsx";
-import { Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { Page, Testata } from "../components/Layout.jsx";
 import { AiBadge, ChipEditor, EmptyState, ErrorBox, StatusBadge, TypeIcon } from "../components/ui.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -168,6 +168,15 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
         {/* Lo stato in piccolo; la spiegazione solo se la lettura non è riuscita. */}
         <section aria-live="polite" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.92rem] font-semibold">
           <StatusBadge status={item.status} />
+          {(prev || next) && (
+            <span className="ml-auto flex items-center gap-1">
+              {[["Precedente", prev, ChevronLeft], ["Successivo", next, ChevronRight]].map(([l, to, Ico]) => (
+                <button key={l} type="button" aria-label={l} disabled={!to} onClick={() => navigate(`/elemento/${to}`, { replace: true })} className="grid h-7 w-7 place-items-center rounded-full border-[1.5px] border-inchiostro opacity-60 disabled:opacity-15">
+                  <Ico className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+                </button>
+              ))}
+            </span>
+          )}
           {problem && <p className="order-last basis-full font-medium leading-snug">{item.status_detail || status.hint}</p>}
           {reprocessable && (
             <button type="button" className="link" disabled={!!busy} onClick={() => run("reprocess", () => archive.reprocess(item))}>
