@@ -1047,6 +1047,42 @@ test("più foto insieme: anteprima, si toglie una, si salvano le altre e restano
   await expect(page.getByRole("link", { name: "due.png" })).toHaveCount(0);
 });
 
+test("foto: lo swipe passa alla foto successiva/precedente e, eliminandone una, si resta sulla successiva", async ({ page }) => {
+  await page.goto("/");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  await page.getByLabel("Scegli foto, video o file").setInputFiles(
+    ["uno", "due", "tre"].map((n, i) => ({ name: `${n}.png`, mimeType: "image/png", buffer: Buffer.concat([png, Buffer.from(" ".repeat(i))]) })),
+  );
+  await page.getByRole("dialog", { name: "Anteprima prima di salvare" }).getByRole("button", { name: "Salva 3 foto" }).click();
+  await expect(page.getByText("3 salvati nell'archivio")).toBeVisible();
+  await page.getByRole("link", { name: "Archivio", exact: true }).click();
+  await page.getByRole("button", { name: "Box", exact: true }).click();
+  await page.getByRole("button", { name: /^Foto e video, 3 file/ }).click();
+  await expect(page.locator("ul.grid-cols-3 a")).toHaveCount(3);
+  const nomi = await page.locator("ul.grid-cols-3 a").evaluateAll((as) => as.map((a) => a.getAttribute("aria-label")));
+  expect(nomi).toHaveLength(3);
+  await page.locator("ul.grid-cols-3 a").first().click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[0].replace(".png", ""), "i"));
+  const swipe = (dx) =>
+    page.locator("article").evaluate((el, d) => {
+      const mk = (x, type) => {
+        const t = new Touch({ identifier: 1, target: el, clientX: x, clientY: 300 });
+        el.dispatchEvent(new TouchEvent(type, { touches: type === "touchend" ? [] : [t], changedTouches: [t], bubbles: true }));
+      };
+      mk(200, "touchstart");
+      mk(200 + d, "touchend");
+    }, dx);
+  await swipe(-150);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[1].replace(".png", ""), "i"));
+  await swipe(150);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[0].replace(".png", ""), "i"));
+  // Eliminando la prima si passa alla seconda, senza tornare all'archivio.
+  await swipe(-150);
+  await page.getByRole("button", { name: "Elimina" }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[2].replace(".png", ""), "i"));
+});
+
 test("anteprima: un file non ammesso resta per riprovare, l'altro è salvato", async ({ page }) => {
   await page.goto("/");
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
