@@ -353,12 +353,12 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
         <div className="relative max-w-[85%]">
           <p className="whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
             {msg.q}
-            <time className="num ml-2 align-bottom text-[11px] font-medium opacity-60 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]" dateTime={msg.at}>{timeOf(msg.at)}</time>
+            <time className="num -mb-0.5 mt-0.5 block text-right text-[11px] font-medium opacity-60 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]" dateTime={msg.at}>{timeOf(msg.at)}</time>
           </p>
         </div>
       </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
-        <div className={`card-bianca vignetta relative w-full max-w-[94%] py-3.5 pl-4 [-webkit-user-select:text] [user-select:text] ${r?.kind === "answer" ? "pr-4" : "pr-11"}`}>
+        <div className={`card-bianca vignetta relative w-full max-w-[94%] py-3.5 pl-4 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none] ${r?.kind === "answer" ? "pr-4" : "pr-11"}`}>
           {msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
@@ -407,7 +407,7 @@ export function AnswerText({ text, count, onCite }) {
     } else blocks.push({ p: t });
   }
   return (
-    <div className="mt-2.5 space-y-2.5 text-[1.02rem] font-medium leading-[1.45]">
+    <div className="mt-2.5 space-y-2.5 text-[1.02rem] font-medium leading-[1.45] [-webkit-user-select:text] [user-select:text]">
       {blocks.map((b, i) =>
         b.list ? (
           <ul key={i} className="list-disc space-y-1 pl-5 marker:text-[#0a0a0a]">
@@ -446,7 +446,7 @@ function Inline({ text, count, onCite }) {
             <button
               key={n}
               type="button"
-              className="num mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0a0a0a] px-1 align-text-top text-[11px] font-extrabold text-white"
+              className="num mx-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0a0a0a] px-1 align-text-top text-[11px] font-extrabold text-white [-webkit-user-select:none] [user-select:none]"
               aria-label={`Fonte ${n}`}
               onClick={() => onCite(n)}
             >
