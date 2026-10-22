@@ -9,6 +9,12 @@ import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
+// Tocco sulla card (non su link, pulsanti o campi): apre direttamente la scheda.
+const apriCard = (items, onOpen) => (e) => {
+  if (e.target.closest("a, button, input, textarea, select, [role=menu]") || window.getSelection?.()?.toString()) return;
+  if (items[0]) onOpen(items[0]);
+};
+
 function SourceLinks({ items, onOpen, extra }) {
   return (
     <ul className="mt-1.5 space-y-0.5 text-[0.88rem] font-bold">
@@ -139,7 +145,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
         return (
         <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
           <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
-          <div className="rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]">
+          <div className="cursor-pointer rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]" onClick={apriCard(r.items, onOpen)}>
           {cover && (
             <div className="copertina-ferma">
               <Thumb item={cover} size="h-32 w-full" rounded="rounded-t-[14px]" />
@@ -249,7 +255,7 @@ function EventRows({ events, onOpen, onDelete }) {
         return (
           <li key={e.key} data-biglietto className="overflow-hidden rounded-2xl border-[1.5px] border-inchiostro">
             <Riga onDelete={onDelete ? () => onDelete(e.key) : undefined}>
-            <div className="flex">
+            <div className="flex cursor-pointer" onClick={apriCard(e.items, onOpen)}>
             <div className="flex w-[4.6rem] shrink-0 flex-col items-center justify-center self-stretch bg-[var(--giallo)] px-1 py-3 text-center text-[#0a0a0a]">
               <b className="num text-[0.95rem] font-extrabold leading-tight">{day}</b>
               <span className="num text-[0.8rem] font-bold leading-tight">{rest.join(" ")}</span>
