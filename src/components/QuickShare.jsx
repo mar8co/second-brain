@@ -106,6 +106,8 @@ export default function QuickShare({ toast }) {
       {ask && <Domanda {...ask} color="#ffffff" onClose={() => setAsk(null)} />}
       <details className="group border-t border-riga pb-1">
         <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between gap-3 font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden"><span>Come creare il Comando Rapido</span><Segno /></summary>
+        <a className="bottone chiaro mt-2 inline-flex" href="https://www.icloud.com/shortcuts/a1375a33253b4547a66a52a0a33ad13e" target="_blank" rel="noreferrer">Installa il comando pronto</a>
+        <p className="mt-2">Dopo l'installazione incolla il tuo codice nel campo <code>token</code>. Oppure crealo a mano:</p>
         <ol className="mt-2 list-decimal space-y-1.5 pl-5">
           <li>App Comandi → <strong>+</strong> → tocca ⓘ e attiva <strong>Mostra nel foglio di condivisione</strong> (tipi: URL e Testo).</li>
           <li>
