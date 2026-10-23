@@ -20,7 +20,7 @@ export default function Stella({ item, className = "", size = 18 }) {
       }}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <Star style={{ width: size, height: size }} fill={on ? "currentColor" : "none"} strokeWidth={2.4} aria-hidden="true" />
+      <Star style={{ width: size, height: size }} fill={on ? "#ffd60a" : "none"} strokeWidth={2.4} aria-hidden="true" />
     </button>
   );
 }
