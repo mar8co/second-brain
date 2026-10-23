@@ -27,7 +27,8 @@ export function BottomNav({ path, navigate }) {
   return (
     <nav aria-label="Navigazione principale" className="schede bottom-nav">
       {TABS.map(([to, label]) => {
-        const active = to === "/" ? path === "/" || path === "/chiedi" : path.startsWith(to);
+        const chat = path === "/" || path === "/chiedi";
+        const active = to === "/" ? chat : !chat; // le pagine interne restano su Archivio
         return (
           <a
             key={to}
