@@ -83,16 +83,15 @@ function Shell({ auth }) {
   // "/" e il vecchio "/chiedi?q=…" portano alla chat.
   else view = <Chat key="chat" {...common} syncMode={isSyncMode} />;
 
-  // Barra in basso solo sulle schermate principali.
+  // Barra in basso su tutte le pagine.
   const chat = path === "/" || path === "/chiedi";
-  const main = chat || path === "/archivio";
   // L'avviso sta appena sopra la barra (e sopra il campo della chat).
-  const toastBottom = chat ? "calc(150px + env(safe-area-inset-bottom))" : main ? "calc(84px + env(safe-area-inset-bottom))" : "calc(24px + env(safe-area-inset-bottom))";
+  const toastBottom = chat ? "calc(150px + env(safe-area-inset-bottom))" : "calc(84px + env(safe-area-inset-bottom))";
   return (
     <FileStoreContext.Provider value={store}>
       {view}
       {condivisi && <FilePreview initial={condivisi} archive={archive} toast={toast} onClose={() => setCondivisi(null)} />}
-      {main && <BottomNav path={path} navigate={navigate} />}
+      <BottomNav path={path} navigate={navigate} />
       <div role="status" aria-live="polite">
         {toastMsg && (
           <div key={toastMsg.key} className="brindisi" style={{ bottom: toastBottom }}>
