@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_CATEGORY, countBy, countValues, groupByCategory, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
+import { NO_CATEGORY, PREFERITI, countBy, countValues, groupByCategory, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
 
 const items = [
   { id: "1", type: "link", title: "Ricetta pasta al limone", tags: ["pasta"], categories: ["Ricette"], created_at: "2026-10-01T10:00:00Z" },
@@ -109,5 +109,12 @@ describe("filtri per autore, sito e periodo", () => {
   });
   it("conteggi di un campo", () => {
     expect(countValues([post, post, { ...post, author: "Anna" }, { id: "y" }], "author")).toEqual([["Mario Rossi (@mario.ai)", 2], ["Anna", 1]]);
+  });
+});
+
+describe("filtro Preferiti", () => {
+  it("la categoria speciale Preferiti tiene solo gli elementi con la stella", () => {
+    expect(matchesFilters({ favorite: true, categories: ["Cibo"] }, { category: PREFERITI })).toBe(true);
+    expect(matchesFilters({ categories: ["Cibo"] }, { category: PREFERITI })).toBe(false);
   });
 });

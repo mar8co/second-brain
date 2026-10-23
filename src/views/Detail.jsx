@@ -142,7 +142,6 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
         onBack={() => back("/")}
         right={
           <>
-            <Stella item={item} className="tondo !border-2" size={18} />
             <button type="button" className="pillola" onClick={() => setEditing(true)}>
               Modifica
             </button>
@@ -171,15 +170,14 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
         {/* Lo stato in piccolo; la spiegazione solo se la lettura non è riuscita. */}
         <section aria-live="polite" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.92rem] font-semibold">
           <StatusBadge status={item.status} />
-          {(prev || next) && (
-            <span className="ml-auto flex items-center gap-1">
-              {[["Precedente", prev, ChevronLeft], ["Successivo", next, ChevronRight]].map(([l, to, Ico]) => (
+          <span className="ml-auto flex items-center gap-1">
+            <Stella item={item} className="mr-1 h-7 w-7 rounded-full border-[1.5px] border-inchiostro" size={15} />
+            {(prev || next) && [["Precedente", prev, ChevronLeft], ["Successivo", next, ChevronRight]].map(([l, to, Ico]) => (
                 <button key={l} type="button" aria-label={l} disabled={!to} onClick={() => navigate(`/elemento/${to}`, { replace: true })} className="grid h-7 w-7 place-items-center rounded-full border-[1.5px] border-inchiostro opacity-60 disabled:opacity-15">
                   <Ico className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
                 </button>
               ))}
-            </span>
-          )}
+          </span>
           {problem && <p className="order-last basis-full font-medium leading-snug">{item.status_detail || status.hint}</p>}
           {reprocessable && (
             <button type="button" className="link" disabled={!!busy} onClick={() => run("reprocess", () => archive.reprocess(item))}>
