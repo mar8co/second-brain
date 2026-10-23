@@ -298,7 +298,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
           <>
             {sezione === "preferiti" ? (
               favs.length ? (
-                <ItemGrid items={favs} onOpen={apri(favs, BOX_FIXED.preferiti)} />
+                <ItemGrid items={favs} onOpen={apri(favs)} />
               ) : (
                 <EmptyState title="Ancora nessun preferito">Tocca la stellina su un elemento per ritrovarlo qui.</EmptyState>
               )
@@ -334,7 +334,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             {vista === "lista" ? (
               <ItemList items={results} onOpen={apri(results, { bg: "#ffffff", fg: "#0a0a0a" })} onDelete={removeFromList} />
             ) : filters.category ? (
-              <ItemGrid items={results} onOpen={apri(results, (filters.category === PREFERITI ? BOX_FIXED.preferiti : categoryColor(filters.category, nomiCat)))} />
+              <ItemGrid items={results} onOpen={apri(results, filters.category === PREFERITI ? null : categoryColor(filters.category, nomiCat))} />
             ) : (
               <CategoryBoxes tiles={tiles} preferiti={preferitiTile} onPreferiti={() => openBox({ sezione: "preferiti" })} onOpen={openTile} ordina={ordina} onMove={moveTile} />
             )}
