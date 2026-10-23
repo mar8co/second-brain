@@ -46,6 +46,8 @@ create index if not exists items_user_created_idx on public.items (user_id, crea
 -- Colonne aggiunte dopo la prima versione (per i database già creati).
 alter table public.items add column if not exists author text check (author is null or length(author) <= 200);
 alter table public.items add column if not exists published_at timestamptz;
+-- Preferiti (stellina sugli elementi).
+alter table public.items add column if not exists favorite boolean not null default false;
 -- Ricerca per significato (Gemini Embedding, 768 dimensioni): vettore di ogni
 -- elemento e funzione che trova i più vicini a una domanda. La funzione gira
 -- con i permessi di chi la chiama: la sicurezza per riga (RLS) resta valida.

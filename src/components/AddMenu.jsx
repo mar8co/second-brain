@@ -6,7 +6,7 @@ import { ACCEPTED_MIME } from "../lib/constants.js";
 import { mergeFiles } from "../lib/upload.js";
 import FilePreview from "./FilePreview.jsx";
 
-export default function AddMenu({ archive, navigate, toast }) {
+export default function AddMenu({ archive, navigate, toast, grande = false, dalDestra = false }) {
   const [open, setOpen] = useState(false);
   const fileRef = useRef(null);
   const [pending, setPending] = useState(null);
@@ -53,7 +53,7 @@ export default function AddMenu({ archive, navigate, toast }) {
       <input ref={fileRef} type="file" accept={[...ACCEPTED_MIME, ".md", ".heic", "image/*", "video/*"].join(",")} multiple hidden aria-label="Scegli foto, video o file" onChange={pick} />
       {pending && <FilePreview initial={pending} archive={archive} toast={toast} onClose={() => setPending(null)} />}
       {open && (
-        <div role="menu" aria-label="Aggiungi foto, video o file" className="absolute bottom-[calc(100%+10px)] left-0 z-[2] min-w-[15rem] overflow-hidden rounded-2xl border-[1.5px] border-[#0a0a0a] bg-white text-[#0a0a0a]">
+        <div role="menu" aria-label="Aggiungi foto, video o file" className={`absolute bottom-[calc(100%+10px)] ${dalDestra ? "right-0" : "left-0"} z-[2] min-w-[15rem] overflow-hidden rounded-2xl border-[1.5px] border-[#0a0a0a] bg-white text-[#0a0a0a]`}>
           <button type="button" role="menuitem" className={`${row} border-b border-[rgb(10_10_10/0.15)]`} onClick={() => choose(() => fileRef.current?.click())}>
             <FileText className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" /> Foto, video o file
           </button>
@@ -62,7 +62,7 @@ export default function AddMenu({ archive, navigate, toast }) {
           </button>
         </div>
       )}
-      <button type="button" className="piu-tondo" aria-label="Aggiungi foto, video o file" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`piu-tondo${grande ? " grande" : ""}`} aria-label="Aggiungi foto, video o file" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <Plus className="h-6 w-6" strokeWidth={2.8} aria-hidden="true" />
       </button>
     </div>

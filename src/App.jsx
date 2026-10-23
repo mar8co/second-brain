@@ -10,6 +10,7 @@ import { useAiStatus } from "./hooks/useAiStatus.js";
 import { useSettings } from "./hooks/useSettings.js";
 import { isSyncMode, supabase } from "./lib/supabase.js";
 import { FileStoreContext } from "./lib/fileurl.js";
+import { PreferitiContext } from "./lib/preferiti.js";
 import { createLocalStore } from "./lib/store/local.js";
 import { createRemoteStore } from "./lib/store/remote.js";
 import { startChatSync, stopChatSync } from "./lib/chatlog.js";
@@ -57,6 +58,18 @@ function Shell({ auth }) {
     timer.current = setTimeout(() => setToastMsg(null), action ? 5000 : 2400);
   }, []);
 
+  const togglePreferito = useCallback(
+    async (it) => {
+      try {
+        await archive.update(it.id, { favorite: !it.favorite });
+        toast(it.favorite ? "Tolto dai preferiti" : "Aggiunto ai preferiti");
+      } catch (e) {
+        toast(e?.message || "Preferito non salvato");
+      }
+    },
+    [archive.update, toast], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   // File arrivati dal menu Condividi di Android: anteprima prima di salvarli.
   const [condivisi, setCondivisi] = useState(null);
   useEffect(() => {
@@ -89,9 +102,10 @@ function Shell({ auth }) {
   const toastBottom = chat ? "calc(150px + env(safe-area-inset-bottom))" : "calc(84px + env(safe-area-inset-bottom))";
   return (
     <FileStoreContext.Provider value={store}>
+      <PreferitiContext.Provider value={togglePreferito}>
       {view}
       {condivisi && <FilePreview initial={condivisi} archive={archive} toast={toast} onClose={() => setCondivisi(null)} />}
-      <BottomNav path={path} navigate={navigate} />
+      <BottomNav path={path} navigate={navigate} archive={archive} toast={toast} />
       <div role="status" aria-live="polite">
         {toastMsg && (
           <div key={toastMsg.key} className="brindisi" style={{ bottom: toastBottom }}>
@@ -111,6 +125,7 @@ function Shell({ auth }) {
           </div>
         )}
       </div>
+      </PreferitiContext.Provider>
     </FileStoreContext.Provider>
   );
 }
