@@ -1220,3 +1220,31 @@ test("campo di ricerca: la X di cancellazione è nera e spessa", async ({ page }
   });
   expect(regola).toContain("0a0a0a");
 });
+
+test("preferiti: stellina su scheda e riga, box Preferiti; + nella barra fuori dalla Chat, barra al centro", async ({ page }) => {
+  await page.goto("/aggiungi");
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel(/^Titolo/).fill("Idea preferita");
+  await page.getByLabel("Testo").fill("Da ritrovare");
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  // Nella scheda: il + è nella barra, a destra; la barra resta al centro.
+  const piu = page.getByRole("button", { name: "Aggiungi foto, video o file" });
+  await expect(piu).toBeVisible();
+  const nav = await page.getByRole("navigation", { name: "Navigazione principale" }).boundingBox();
+  const vw = page.viewportSize().width;
+  expect(Math.abs(nav.x + nav.width / 2 - vw / 2)).toBeLessThan(3);
+  expect((await piu.boundingBox()).x).toBeGreaterThan(nav.x + nav.width);
+  await page.getByRole("button", { name: "Aggiungi ai preferiti" }).click();
+  await expect(page.getByRole("button", { name: "Togli dai preferiti" })).toBeVisible();
+  // Nella Chat il + resta accanto al campo, non nella barra.
+  await page.goto("/");
+  await expect(page.locator(".barra-piu button")).toHaveCount(0);
+  await page.goto("/archivio");
+  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Box" }).click();
+  await page.getByRole("button", { name: /^Preferiti,/ }).click();
+  await expect(page.getByRole("heading", { name: "Preferiti", level: 1 })).toBeVisible();
+  await expect(page.getByText("Idea preferita")).toBeVisible();
+  await page.getByRole("button", { name: "Togli dai preferiti" }).click();
+  await expect(page.getByText("Ancora nessun preferito")).toBeVisible();
+});

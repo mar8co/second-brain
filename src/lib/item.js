@@ -7,7 +7,7 @@ import { LIMITS, TYPE_KEYS, STATUS_KEYS } from "./constants.js";
 export const COLUMNS = [
   "id", "type", "url", "final_url", "title", "description", "note", "site_name", "author", "published_at", "image_url",
   "extracted_text", "text_source", "place", "categories", "tags", "status", "status_detail",
-  "ai", "file_path", "file_name", "file_mime", "file_size", "created_at", "updated_at", "processed_at",
+  "ai", "favorite", "file_path", "file_name", "file_mime", "file_size", "created_at", "updated_at", "processed_at",
 ];
 
 const clip = (s, n) => (typeof s === "string" ? (s.length > n ? s.slice(0, n) : s) : s ?? null);
@@ -40,6 +40,7 @@ export function sanitizeItem(patch) {
   if ("note" in out) out.note = clip(out.note, LIMITS.noteChars);
   if ("extracted_text" in out) out.extracted_text = clip(out.extracted_text, LIMITS.textChars);
   if ("categories" in out) out.categories = cleanList(out.categories, 10);
+  if ("favorite" in out) out.favorite = Boolean(out.favorite);
   if ("tags" in out) out.tags = cleanList(out.tags).map((t) => t.toLowerCase());
   if ("url" in out && out.url && !/^https?:\/\//i.test(out.url)) out.url = null;
   return out;

@@ -11,6 +11,7 @@ import { itemColor } from "../lib/colors.js";
 import { StatusBadge, TypeIcon } from "./ui.jsx";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { copyText } from "../lib/clipboard.js";
+import Stella from "./Stella.jsx";
 
 // Copertina in piccolo (Reel, video, link con immagine); se manca o non si
 // carica più (i link delle copertine social scadono) resta il quadrato del
@@ -124,7 +125,8 @@ export function ItemCard({ item, onOpen }) {
         <p className="micro flex items-center gap-1.5">
           <span className="sr-only">{typeLabel(item.type)} · </span>
           <span className="min-w-0 flex-1 truncate">{source}</span>
-          <time className="num ml-auto shrink-0" dateTime={item.created_at}>{formatDate(item.created_at)}</time>
+          <Stella item={item} className="ml-auto -my-3 h-10 w-8" size={17} />
+          <time className="num shrink-0" dateTime={item.created_at}>{formatDate(item.created_at)}</time>
         </p>
         <h3 className="mt-0.5 line-clamp-2 text-[1.15rem] font-extrabold leading-[1.08] tracking-[-0.035em]">{title}</h3>
         {snippet && <p className="mt-1 line-clamp-2 text-[0.9rem] font-medium leading-snug text-tenue">{snippet}</p>}
@@ -249,8 +251,9 @@ export function ItemGrid({ items, onOpen }) {
               }}
               className="block active:opacity-70"
             >
-              <div className="aspect-square">
+              <div className="relative aspect-square">
                 <Thumb item={it} size="h-full w-full" rounded="rounded-2xl" />
+                <Stella item={it} className="absolute right-1 top-1 h-9 w-9 rounded-full bg-white/90 text-[#0a0a0a]" size={17} />
               </div>
               <p className="mt-1.5 line-clamp-2 text-[0.95rem] font-extrabold leading-[1.08] tracking-[-0.03em]">{displayTitle(it)}</p>
               <p className="micro mt-0.5 flex items-center gap-0.5">

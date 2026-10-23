@@ -7,8 +7,16 @@ import { Thumb } from "./ItemCard.jsx";
 import { boxStyle } from "../lib/colors.js";
 
 // `tiles`: [{ id, kind: "fisso" | "categoria", name, sub, color, Icon?, items? }]
-export default function CategoryBoxes({ tiles, onOpen, ordina = false, onMove }) {
+export default function CategoryBoxes({ tiles, onOpen, ordina = false, onMove, preferiti = null, onPreferiti }) {
   return (
+    <>
+      {preferiti && (
+        <button type="button" className="scatola mt-3.5 flex !h-auto items-center gap-3 !px-4 !py-3.5" style={boxStyle(preferiti.color)} aria-label={`${preferiti.name}, ${preferiti.sub}`} onClick={() => !ordina && onPreferiti()}>
+          <preferiti.Icon className="h-8 w-8 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+          <b className="text-[1.3rem] font-extrabold leading-[1.02] tracking-[-0.04em]">{preferiti.name}</b>
+          <span className="micro ml-auto font-semibold">{preferiti.sub}</span>
+        </button>
+      )}
     <ul className="grid grid-cols-2 gap-3 pt-3.5">
       {tiles.map((t, i) => (
         <li key={t.id} className="relative min-w-0">
@@ -40,6 +48,7 @@ export default function CategoryBoxes({ tiles, onOpen, ordina = false, onMove })
         </li>
       ))}
     </ul>
+    </>
   );
 }
 

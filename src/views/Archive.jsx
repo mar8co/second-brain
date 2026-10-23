@@ -2,7 +2,7 @@
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { setGalleria } from "../lib/galleria.js";
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ArrowUpDown, FileText, Images, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
+import { CalendarDays, ChevronLeft, ArrowUpDown, FileText, Images, LayoutGrid, List, Settings, SlidersHorizontal, Star, Utensils } from "lucide-react";
 import { Page } from "../components/Layout.jsx";
 import Calendario from "../components/Calendario.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -19,7 +19,7 @@ import { countBy, countValues, groupByCategory, searchItems } from "../lib/searc
 import { TYPES } from "../lib/constants.js";
 import { formatRange } from "../lib/calendar.js";
 
-const SEZIONI = ["ristoranti", "eventi", "foto", "file"];
+const SEZIONI = ["preferiti", "ristoranti", "eventi", "foto", "file"];
 const FILTER_KEYS = ["type", "category", "author", "site", "from", "to"];
 
 // Vista scelta (box o lista), ricordata su questo telefono. Di partenza: box.
@@ -125,8 +125,10 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const photos = useMemo(() => photosOf(matches), [matches]);
   const docs = useMemo(() => docsOf(matches), [matches]);
   const notes = useMemo(() => notesOf(matches), [matches]);
+  const favs = useMemo(() => matches.filter((it) => it.favorite), [matches]);
   const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
   const plural = (n, uno, molti) => (n === 1 ? `1 ${uno}` : `${n} ${molti}`);
+  const preferitiTile = { id: "preferiti", name: "Preferiti", Icon: Star, sub: favs.length ? plural(favs.length, "elemento", "elementi") : "Ancora nessuno", color: BOX_FIXED.preferiti };
   const fissi = [
     { id: "ristoranti", name: "Ristoranti", Icon: Utensils, items: restaurants, sub: restaurants.length ? plural(restaurants.length, "locale", "locali") : "Ancora nessuno" },
     { id: "eventi", name: "Eventi", Icon: CalendarDays, items: [], sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : plural(eventsTotal, "evento", "eventi") },
@@ -169,10 +171,11 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
       {chips.length > 0 && <span className="conta num" aria-hidden="true">{chips.length}</span>}
     </button>
   );
-  const titolo = sezione ? fissi.find((t) => t.id === sezione).name : dentro ? filters.category : "Archivio";
+  const sezioneTile = sezione === "preferiti" ? preferitiTile : fissi.find((t) => t.id === sezione);
+  const titolo = sezione ? sezioneTile.name : dentro ? filters.category : "Archivio";
   const indietro = sezione ? () => closeBox({ sezione: "" }) : dentro ? () => closeBox({ category: "" }) : null;
   const conteggio = sezione
-    ? fissi.find((t) => t.id === sezione).sub
+    ? sezioneTile.sub
     : vista === "box" && !filters.category
       ? boxes.length === 1 ? "1 categoria" : `${boxes.length} categorie`
       : results.length === 1 ? "1 elemento" : `${results.length} elementi`;
@@ -292,7 +295,13 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
           <Spinner />
         ) : sezione ? (
           <>
-            {sezione === "ristoranti" ? (
+            {sezione === "preferiti" ? (
+              favs.length ? (
+                <ItemGrid items={favs} onOpen={apri(favs, BOX_FIXED.preferiti)} />
+              ) : (
+                <EmptyState title="Ancora nessun preferito">Tocca la stellina su un elemento per ritrovarlo qui.</EmptyState>
+              )
+            ) : sezione === "ristoranti" ? (
               <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onDelete={deleteRestaurant} />
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes], sezione === "foto" ? BOX_FIXED.foto : BOX_FIXED.file)} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
@@ -326,7 +335,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             ) : filters.category ? (
               <ItemGrid items={results} onOpen={apri(results, categoryColor(filters.category, nomiCat))} />
             ) : (
-              <CategoryBoxes tiles={tiles} onOpen={openTile} ordina={ordina} onMove={moveTile} />
+              <CategoryBoxes tiles={tiles} preferiti={preferitiTile} onPreferiti={() => openBox({ sezione: "preferiti" })} onOpen={openTile} ordina={ordina} onMove={moveTile} />
             )}
           </>
         )}

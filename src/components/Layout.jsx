@@ -1,3 +1,5 @@
+import AddMenu from "./AddMenu.jsx";
+
 // Struttura della pagina: intestazione, contenuto, barra in basso.
 // Il titolo della pagina non sta nell'intestazione: è il primo elemento della
 // pagina, enorme.
@@ -22,28 +24,33 @@ const TABS = [
   ["/archivio", "Archivio"],
 ];
 
-// Pillola nera flottante con la scheda attiva accesa in chiaro. Solo parole.
-export function BottomNav({ path, navigate }) {
+// Pillola nera flottante al centro con la scheda attiva accesa in chiaro (solo parole);
+// fuori dalla Chat, a destra, il tondo + per aggiungere foto, file, link o note.
+export function BottomNav({ path, navigate, archive, toast }) {
+  const chat = path === "/" || path === "/chiedi";
   return (
-    <nav aria-label="Navigazione principale" className="schede bottom-nav">
-      {TABS.map(([to, label]) => {
-        const chat = path === "/" || path === "/chiedi";
-        const active = to === "/" ? chat : !chat; // le pagine interne restano su Archivio
-        return (
-          <a
-            key={to}
-            href={to}
-            onClick={(e) => {
-              e.preventDefault();
-              navigate(to);
-            }}
-            aria-current={active ? "page" : undefined}
-          >
-            {label}
-          </a>
-        );
-      })}
-    </nav>
+    <div className="barra-in-basso bottom-nav">
+      <span aria-hidden="true" />
+      <nav aria-label="Navigazione principale" className="schede">
+        {TABS.map(([to, label]) => {
+          const active = to === "/" ? chat : !chat; // le pagine interne restano su Archivio
+          return (
+            <a
+              key={to}
+              href={to}
+              onClick={(e) => {
+                e.preventDefault();
+                navigate(to);
+              }}
+              aria-current={active ? "page" : undefined}
+            >
+              {label}
+            </a>
+          );
+        })}
+      </nav>
+      <div className="barra-piu">{!chat && path !== "/aggiungi" && <AddMenu archive={archive} navigate={navigate} toast={toast} grande dalDestra />}</div>
+    </div>
   );
 }
 

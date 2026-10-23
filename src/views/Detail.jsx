@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CopyNote } from "../components/ItemCard.jsx";
 import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import Stella from "../components/Stella.jsx";
 import { Page, Testata } from "../components/Layout.jsx";
 import { AiBadge, ChipEditor, EmptyState, ErrorBox, StatusBadge, TypeIcon } from "../components/ui.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -141,6 +142,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
         onBack={() => back("/")}
         right={
           <>
+            <Stella item={item} className="tondo !border-2" size={18} />
             <button type="button" className="pillola" onClick={() => setEditing(true)}>
               Modifica
             </button>
