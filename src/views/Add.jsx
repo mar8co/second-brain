@@ -202,7 +202,7 @@ export default function Add({ archive, query, navigate, back, toast }) {
 
         {error && <ErrorBox>{error}</ErrorBox>}
 
-        <div className="sticky bottom-0 -mx-4 bg-sfondo px-4 pb-[calc(12px+env(safe-area-inset-bottom))] pt-3">
+        <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] -mx-4 bg-sfondo px-4 pb-3 pt-3">
           <button type="submit" className="bottone grande-azione" disabled={saving}>
             {saving ? "Salvo…" : "Salva"}
           </button>

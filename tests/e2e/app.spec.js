@@ -36,7 +36,7 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   expect(rian.y).toBeLessThan(titolo.y + 300);
   // Ordine chiaro: Archivio, AI, Dati e account; il resto è in "Informazioni e privacy", chiuso.
   const ys = [];
-  for (const n of ["Archivio", "AI", "Dati e account", "Informazioni e privacy"]) ys.push((await page.getByText(n, { exact: true }).last().boundingBox()).y);
+  for (const n of ["Archivio", "AI", "Dati e account", "Informazioni e privacy"]) ys.push((await page.locator("main").getByText(n, { exact: true }).last().boundingBox()).y);
   expect([...ys].sort((a, b) => a - b)).toEqual(ys);
   await expect(page.getByRole("switch", { name: /Rielabora con l'AI/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Fai il Backup" })).toBeVisible();
