@@ -136,12 +136,16 @@ export function scoreItem(item, queryTokens, mode = "all") {
 
 // Valore del filtro Categoria per gli elementi che non ne hanno nessuna.
 export const NO_CATEGORY = "Senza categoria";
+// Come "Senza categoria": un valore speciale del filtro Categoria, per i preferiti.
+export const PREFERITI = "Preferiti";
 
 export function matchesFilters(item, f = {}) {
   if (f.type && item.type !== f.type) return false;
   if (f.category) {
     const cats = item.categories || [];
-    if (f.category === NO_CATEGORY ? cats.length > 0 : !cats.includes(f.category)) return false;
+    if (f.category === PREFERITI) {
+      if (!item.favorite) return false;
+    } else if (f.category === NO_CATEGORY ? cats.length > 0 : !cats.includes(f.category)) return false;
   }
   if (f.tag && !(item.tags || []).includes(f.tag)) return false;
   if (f.status && item.status !== f.status) return false;

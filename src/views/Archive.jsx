@@ -15,7 +15,7 @@ import Gallery from "../components/Gallery.jsx";
 import { docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, notesOf, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
-import { countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
+import { PREFERITI, countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
 import { TYPES } from "../lib/constants.js";
 import { formatRange } from "../lib/calendar.js";
 
@@ -149,7 +149,8 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     saveOrder(next);
   };
   const openTile = (t) => (t.kind === "fisso" ? openBox({ sezione: t.id }) : openBox({ category: t.name }));
-  const cats = useMemo(() => countBy(items, "categories"), [items]);
+  const nPreferiti = useMemo(() => items.filter((it) => it.favorite).length, [items]);
+  const cats = useMemo(() => [...(nPreferiti ? [[PREFERITI, nPreferiti]] : []), ...countBy(items, "categories")], [items, nPreferiti]);
   const authors = useMemo(() => countValues(items, "author"), [items]);
   const sites = useMemo(() => countValues(items, "site_name"), [items]);
   // Dalla lista: swipe sulla riga e "Elimina", con "Annulla" per qualche secondo.
@@ -333,7 +334,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             {vista === "lista" ? (
               <ItemList items={results} onOpen={apri(results, { bg: "#ffffff", fg: "#0a0a0a" })} onDelete={removeFromList} />
             ) : filters.category ? (
-              <ItemGrid items={results} onOpen={apri(results, categoryColor(filters.category, nomiCat))} />
+              <ItemGrid items={results} onOpen={apri(results, (filters.category === PREFERITI ? BOX_FIXED.preferiti : categoryColor(filters.category, nomiCat)))} />
             ) : (
               <CategoryBoxes tiles={tiles} preferiti={preferitiTile} onPreferiti={() => openBox({ sezione: "preferiti" })} onOpen={openTile} ordina={ordina} onMove={moveTile} />
             )}
