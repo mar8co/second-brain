@@ -1289,6 +1289,7 @@ test("Archivio: Preferiti non è tra le categorie ma nei Filtri, con 'Ordina per
   await page.getByRole("button", { name: "Salva", exact: true }).click();
   await expect(page).toHaveURL(/\/elemento\//);
   await page.getByRole("button", { name: "Aggiungi ai preferiti" }).click();
+  await expect(page.getByText("Aggiunto ai preferiti")).toBeVisible();
   await page.goto("/archivio");
   await expect(page.getByRole("list", { name: "Categorie" }).getByRole("button", { name: /^Preferiti/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Filtri" }).click();
