@@ -163,50 +163,71 @@ export default function Add({ archive, query, navigate, back, toast }) {
           </div>
         )}
 
-        <div>
-          <label htmlFor="add-title" className="etichetta">Titolo {mode === "note" ? "" : "(facoltativo)"}</label>
-          <input id="add-title" className="campo" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={mode === "link" ? "Lo leggo dal link se lo lasci vuoto" : ""} maxLength={300} autoComplete="off" />
-        </div>
-
-        <div>
-          <label htmlFor="add-note" className="etichetta">{mode === "note" ? "Testo" : "Nota (facoltativa)"}</label>
-          <textarea
-            id="add-note"
-            className="campo min-h-[110px]"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={mode === "link" ? "Perché lo salvi? Es. “ricetta pasta al limone da provare”" : "Scrivi qui…"}
-            maxLength={20000}
-          />
-          {mode === "link" && /instagram/i.test(cleanUrl || "") && (
-            <p className="micro mt-1.5 text-[0.8rem]">Instagram di solito non permette di leggere il contenuto senza accesso: una nota ti aiuterà a ritrovarlo.</p>
-          )}
-        </div>
-
-        <fieldset>
-          <legend className="etichetta">Tipo</legend>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {typeChoices.map((t) => (
-              <button key={t} type="button" aria-pressed={type === t} className={`pillola${type === t ? " attiva" : ""}`} onClick={() => setTypeOverride(t)}>
-                <TypeIcon type={t} className="h-4 w-4" /> {typeLabel(t)}
-              </button>
-            ))}
-            {!typeChoices.includes(type) && (
-              <span className="pillola attiva"><TypeIcon type={type} className="h-4 w-4" /> {TYPES[type]?.label}</span>
-            )}
+        {mode === "note" && (
+          <div>
+            <label htmlFor="add-note" className="etichetta">Testo</label>
+            <textarea id="add-note" className="campo min-h-[140px]" autoFocus={!init.note} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Incolla o scrivi qui…" maxLength={20000} />
           </div>
-        </fieldset>
+        )}
 
-        <ChipEditor label="Categorie" values={categories} onChange={setCategories} suggestions={archive.categories} placeholder="Scegli o scrivi e premi Invio" />
-        <ChipEditor label="Tag" values={tags} onChange={setTags} lowercase placeholder="es. pasta, roma, regalo" />
-
-        {error && <ErrorBox>{error}</ErrorBox>}
-
-        <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom))] -mx-4 bg-sfondo px-4 pb-3 pt-3">
+        <div>
           <button type="submit" className="bottone grande-azione" disabled={saving}>
             {saving ? "Salvo…" : "Salva"}
           </button>
+          <p className="micro mt-2 text-[0.8rem]">Categorie e tag li scelgo io con l'AI: dopo li puoi cambiare dalla scheda.</p>
         </div>
+
+        {error && <ErrorBox>{error}</ErrorBox>}
+
+        <details className="group border-y-[1.5px] border-inchiostro">
+          <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 py-2 text-[0.95rem] font-extrabold tracking-[-0.02em] [&::-webkit-details-marker]:hidden">
+            <span>Altri campi (facoltativi)</span>
+            <span aria-hidden="true" className="text-[1.3rem] font-bold leading-none">
+              <span className="group-open:hidden">+</span>
+              <span className="hidden group-open:inline">−</span>
+            </span>
+          </summary>
+          <div className="space-y-6 pb-5 pt-2">
+            <div>
+              <label htmlFor="add-title" className="etichetta">Titolo (facoltativo)</label>
+              <input id="add-title" className="campo" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={mode === "link" ? "Lo leggo dal link se lo lasci vuoto" : ""} maxLength={300} autoComplete="off" />
+            </div>
+
+            {mode === "link" && (
+              <div>
+                <label htmlFor="add-note" className="etichetta">Nota (facoltativa)</label>
+                <textarea
+                  id="add-note"
+                  className="campo min-h-[110px]"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Perché lo salvi? Es. “ricetta pasta al limone da provare”"
+                  maxLength={20000}
+                />
+                {/instagram/i.test(cleanUrl || "") && (
+                  <p className="micro mt-1.5 text-[0.8rem]">Instagram di solito non permette di leggere il contenuto senza accesso: una nota ti aiuterà a ritrovarlo.</p>
+                )}
+              </div>
+            )}
+
+            <fieldset>
+              <legend className="etichetta">Tipo</legend>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {typeChoices.map((t) => (
+                  <button key={t} type="button" aria-pressed={type === t} className={`pillola${type === t ? " attiva" : ""}`} onClick={() => setTypeOverride(t)}>
+                    <TypeIcon type={t} className="h-4 w-4" /> {typeLabel(t)}
+                  </button>
+                ))}
+                {!typeChoices.includes(type) && (
+                  <span className="pillola attiva"><TypeIcon type={type} className="h-4 w-4" /> {TYPES[type]?.label}</span>
+                )}
+              </div>
+            </fieldset>
+
+            <ChipEditor label="Categorie" values={categories} onChange={setCategories} suggestions={archive.categories} placeholder="Scegli o scrivi e premi Invio" />
+            <ChipEditor label="Tag" values={tags} onChange={setTags} lowercase placeholder="es. pasta, roma, regalo" />
+          </div>
+        </details>
       </form>
     </Page>
   );

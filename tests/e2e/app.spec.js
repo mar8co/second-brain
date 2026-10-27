@@ -12,10 +12,19 @@ test.beforeEach(async ({ page }, info) => {
   await page.addInitScript(() => window.localStorage.setItem("sb-vista", "lista"));
 });
 
+// "Altri campi (facoltativi)" è chiuso: lo apre se serve (titolo, nota del link, categorie, tag).
+async function apriAltri(page) {
+  const d = page.locator("details", { hasText: "Altri campi (facoltativi)" });
+  if ((await d.getAttribute("open")) === null) await d.locator("summary").click();
+}
+
 async function addLink(page, url, note) {
   await page.goto("/aggiungi");
   await page.getByLabel("Link", { exact: true }).fill(url);
-  if (note) await page.getByLabel("Nota (facoltativa)").fill(note);
+  if (note) {
+    await apriAltri(page);
+    await page.getByLabel("Nota (facoltativa)").fill(note);
+  }
   await page.getByRole("button", { name: "Salva", exact: true }).click();
 }
 
@@ -174,6 +183,7 @@ test("trascrizione incollata a mano su un link: salvata e mostrata come testo es
 test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Idea regalo per Giulia");
   await page.getByLabel("Testo").fill("Lampada da lettura in ottone");
   await page.getByRole("textbox", { name: "Categorie" }).fill("Acquisti");
@@ -277,6 +287,7 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Trattoria Da Enzo");
   await page.getByLabel("Testo").fill("ristorante a Roma, Trastevere");
   await page.getByRole("button", { name: "Salva", exact: true }).click();
@@ -435,6 +446,7 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Idea regalo per Giulia");
   await page.getByLabel("Testo").fill("Lampada da lettura in ottone");
   await page.getByRole("textbox", { name: "Categorie" }).fill("Acquisti");
@@ -860,6 +872,7 @@ test("Archivio a box: i box fissi Foto e video e File hanno le stesse dimensioni
 test("lista: lo swipe su una riga scopre Elimina, con Annulla", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Prova da togliere");
   await page.getByLabel("Testo").fill("Testo di prova");
   await page.getByRole("button", { name: "Salva", exact: true }).click();
@@ -1103,6 +1116,7 @@ test("note: il pulsante copia mette negli appunti solo il testo della propria no
   for (const [i, t] of testi.entries()) {
     await page.goto("/aggiungi");
     await page.getByRole("tab", { name: "Nota" }).click();
+    await apriAltri(page);
     await page.getByLabel(/^Titolo/).fill(`Titolo ${i}`);
     await page.getByLabel("Testo").fill(t);
     await page.getByRole("button", { name: "Salva", exact: true }).click();
@@ -1130,6 +1144,7 @@ test("note: se la copia non riesce lo dice e non dichiara di aver copiato", asyn
   });
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Nota rifiutata");
   await page.getByLabel("Testo").fill("contenuto");
   await page.getByRole("button", { name: "Salva", exact: true }).click();
@@ -1157,6 +1172,7 @@ test("condivisione di più file: lo script del service worker è servito", async
 test("box File e note: le note stanno con i file, niente pulsante Nuova nota; data a destra e copia in basso con i tag", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Idea per il weekend");
   await page.getByLabel("Testo").fill("Gita al lago");
   await page.getByRole("textbox", { name: "Categorie" }).fill("Tempo libero");
@@ -1188,6 +1204,7 @@ test("scheda nota: copia a destra sulla riga di Nota; 'Nota copiata ✓' resta 2
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Nota lunga");
   await page.getByLabel("Testo").fill("contenuto da copiare");
   await page.getByRole("button", { name: "Salva", exact: true }).click();
@@ -1224,6 +1241,7 @@ test("campo di ricerca: la X di cancellazione è nera e spessa", async ({ page }
 test("preferiti: stellina su scheda e riga, box Preferiti; + nella barra fuori dalla Chat, barra al centro", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
+  await apriAltri(page);
   await page.getByLabel(/^Titolo/).fill("Idea preferita");
   await page.getByLabel("Testo").fill("Da ritrovare");
   await page.getByRole("button", { name: "Salva", exact: true }).click();
@@ -1247,4 +1265,19 @@ test("preferiti: stellina su scheda e riga, box Preferiti; + nella barra fuori d
   await expect(page.getByText("Idea preferita")).toBeVisible();
   await page.getByRole("button", { name: "Togli dai preferiti" }).click();
   await expect(page.getByText("Ancora nessun preferito")).toBeVisible();
+});
+
+test("Aggiungi veloce: Salva sotto il campo, non fisso; basta incollare il testo e salvare, senza titolo né categorie", async ({ page }) => {
+  await page.goto("/aggiungi");
+  const salva = page.getByRole("button", { name: "Salva", exact: true });
+  expect(await salva.evaluate((el) => { for (let n = el; n; n = n.parentElement) if (window.getComputedStyle(n).position === "sticky" || window.getComputedStyle(n).position === "fixed") return true; return false; })).toBe(false);
+  // Titolo, categorie e tag stanno in un riquadro chiuso.
+  await expect(page.getByLabel(/^Titolo/)).toBeHidden();
+  const campo = await page.getByLabel("Link", { exact: true }).boundingBox();
+  expect((await salva.boundingBox()).y - campo.y).toBeLessThan(220);
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel("Testo").fill("Idea veloce da ritrovare");
+  await salva.click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  await expect(page.getByText("Idea veloce da ritrovare").first()).toBeVisible();
 });
