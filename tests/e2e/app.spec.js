@@ -1270,7 +1270,7 @@ test("preferiti: stellina su scheda e riga, box Preferiti; + nella barra fuori d
 test("Aggiungi veloce: Salva sotto il campo, non fisso; basta incollare il testo e salvare, senza titolo né categorie", async ({ page }) => {
   await page.goto("/aggiungi");
   const salva = page.getByRole("button", { name: "Salva", exact: true });
-  expect(await salva.evaluate((el) => { for (let n = el; n; n = n.parentElement) if (getComputedStyle(n).position === "sticky" || getComputedStyle(n).position === "fixed") return true; return false; })).toBe(false);
+  expect(await salva.evaluate((el) => { for (let n = el; n; n = n.parentElement) if (window.getComputedStyle(n).position === "sticky" || window.getComputedStyle(n).position === "fixed") return true; return false; })).toBe(false);
   // Titolo, categorie e tag stanno in un riquadro chiuso.
   await expect(page.getByLabel(/^Titolo/)).toBeHidden();
   const campo = await page.getByLabel("Link", { exact: true }).boundingBox();
