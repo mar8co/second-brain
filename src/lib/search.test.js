@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_CATEGORY, PREFERITI, countBy, countValues, groupByCategory, matchesFilters, normalize, retrieveForQuestion, searchItems } from "./search.js";
+import { NO_CATEGORY, countBy, countValues, groupByCategory, matchesFilters, normalize, retrieveForQuestion, searchItems, sortItems } from "./search.js";
 
 const items = [
   { id: "1", type: "link", title: "Ricetta pasta al limone", tags: ["pasta"], categories: ["Ricette"], created_at: "2026-10-01T10:00:00Z" },
@@ -112,9 +112,16 @@ describe("filtri per autore, sito e periodo", () => {
   });
 });
 
-describe("filtro Preferiti", () => {
-  it("la categoria speciale Preferiti tiene solo gli elementi con la stella", () => {
-    expect(matchesFilters({ favorite: true, categories: ["Cibo"] }, { category: PREFERITI })).toBe(true);
-    expect(matchesFilters({ categories: ["Cibo"] }, { category: PREFERITI })).toBe(false);
+describe("filtro Preferiti e ordine", () => {
+  it("il filtro preferiti tiene solo gli elementi con la stella", () => {
+    expect(matchesFilters({ favorite: true }, { preferiti: "1" })).toBe(true);
+    expect(matchesFilters({}, { preferiti: "1" })).toBe(false);
+    expect(matchesFilters({}, {})).toBe(true);
+  });
+  it("sortItems: più recenti (predefinito), meno recenti, nome", () => {
+    const l = [{ id: "b", title: "Zeta", created_at: "2026-01-02" }, { id: "a", title: "Alfa", created_at: "2026-01-03" }, { id: "c", title: "Mela", created_at: "2026-01-01" }];
+    expect(sortItems(l).map((x) => x.id)).toEqual(["b", "a", "c"]);
+    expect(sortItems(l, "vecchi").map((x) => x.id)).toEqual(["c", "b", "a"]);
+    expect(sortItems(l, "nome").map((x) => x.id)).toEqual(["a", "c", "b"]);
   });
 });

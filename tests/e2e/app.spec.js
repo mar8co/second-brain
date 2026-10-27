@@ -1281,3 +1281,20 @@ test("Aggiungi veloce: Salva sotto il campo, non fisso; basta incollare il testo
   await expect(page).toHaveURL(/\/elemento\//);
   await expect(page.getByText("Idea veloce da ritrovare").first()).toBeVisible();
 });
+
+test("Archivio: Preferiti non è tra le categorie ma nei Filtri, con 'Ordina per' (predefinito: più recenti)", async ({ page }) => {
+  await page.goto("/aggiungi");
+  await page.getByRole("tab", { name: "Nota" }).click();
+  await page.getByLabel("Testo").fill("Nota con stella");
+  await page.getByRole("button", { name: "Salva", exact: true }).click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  await page.getByRole("button", { name: "Aggiungi ai preferiti" }).click();
+  await expect(page.getByText("Aggiunto ai preferiti")).toBeVisible();
+  await page.goto("/archivio");
+  await expect(page.getByRole("list", { name: "Categorie" }).getByRole("button", { name: /^Preferiti/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Filtri" }).click();
+  await expect(page.locator("#f-ordina\\ per")).toContainText("Più recenti");
+  await page.locator("#f-preferiti").click();
+  await page.getByRole("option", { name: "Solo preferiti" }).click();
+  await expect(page.getByText("Nota con stella").first()).toBeVisible();
+});

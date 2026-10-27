@@ -228,3 +228,15 @@ describe("hideEventPatches", () => {
     expect(eventsOf([{ id: "a", ai: back.ai }], "2030-01-01").upcoming).toHaveLength(2);
   });
 });
+
+describe("ristoranti: ordine", () => {
+  const rist = (id, name, created_at) => ({ id, created_at, ai: { v: 4, places: [{ name, address: "Roma", kind: "ristorante" }] } });
+  const lista = [rist("1", "Alfa", "2026-01-01T10:00:00Z"), rist("2", "Zeta", "2026-01-03T10:00:00Z"), rist("3", "Mela", "2026-01-02T10:00:00Z")];
+  it("predefinito: data di archiviazione, più recenti prima (non alfabetico)", () => {
+    expect(restaurantsOf(lista).map((r) => r.name)).toEqual(["Zeta", "Mela", "Alfa"]);
+  });
+  it("meno recenti prima, e per nome", () => {
+    expect(restaurantsOf(lista, "vecchi").map((r) => r.name)).toEqual(["Alfa", "Mela", "Zeta"]);
+    expect(restaurantsOf(lista, "nome").map((r) => r.name)).toEqual(["Alfa", "Mela", "Zeta"]);
+  });
+});

@@ -136,17 +136,14 @@ export function scoreItem(item, queryTokens, mode = "all") {
 
 // Valore del filtro Categoria per gli elementi che non ne hanno nessuna.
 export const NO_CATEGORY = "Senza categoria";
-// Come "Senza categoria": un valore speciale del filtro Categoria, per i preferiti.
-export const PREFERITI = "Preferiti";
 
 export function matchesFilters(item, f = {}) {
   if (f.type && item.type !== f.type) return false;
   if (f.category) {
     const cats = item.categories || [];
-    if (f.category === PREFERITI) {
-      if (!item.favorite) return false;
-    } else if (f.category === NO_CATEGORY ? cats.length > 0 : !cats.includes(f.category)) return false;
+    if (f.category === NO_CATEGORY ? cats.length > 0 : !cats.includes(f.category)) return false;
   }
+  if (f.preferiti && !item.favorite) return false;
   if (f.tag && !(item.tags || []).includes(f.tag)) return false;
   if (f.status && item.status !== f.status) return false;
   if (f.author && item.author !== f.author) return false;
@@ -155,6 +152,13 @@ export function matchesFilters(item, f = {}) {
   if (f.from && t < new Date(`${f.from}T00:00:00`).getTime()) return false;
   if (f.to && t > new Date(`${f.to}T23:59:59.999`).getTime()) return false;
   return true;
+}
+
+// Ordine delle liste (senza ricerca): "recenti" (default), "vecchi", "nome".
+export function sortItems(list, ordine = "recenti") {
+  if (ordine === "vecchi") return [...list].sort((a, b) => byDateDesc(b, a));
+  if (ordine === "nome") return [...list].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "it"));
+  return list;
 }
 
 const byDateDesc = (a, b) => new Date(b.created_at) - new Date(a.created_at);
