@@ -15,12 +15,13 @@ import Gallery from "../components/Gallery.jsx";
 import { docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, notesOf, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
-import { PREFERITI, countBy, countValues, groupByCategory, searchItems } from "../lib/search.js";
+import { countBy, countValues, groupByCategory, searchItems, sortItems } from "../lib/search.js";
 import { TYPES } from "../lib/constants.js";
 import { formatRange } from "../lib/calendar.js";
 
 const SEZIONI = ["preferiti", "ristoranti", "eventi", "foto", "file"];
-const FILTER_KEYS = ["type", "category", "author", "site", "from", "to"];
+const FILTER_KEYS = ["type", "category", "author", "site", "from", "to", "preferiti"];
+const ORDINI = ["vecchi", "nome"]; // il predefinito ("recenti", data di archiviazione) è senza parametro
 
 // Vista scelta (box o lista), ricordata su questo telefono. Di partenza: box.
 const VISTA_KEY = "sb-vista";
@@ -37,6 +38,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const q = query.get("q") || "";
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, query.get(k) || ""]));
   const active = FILTER_KEYS.filter((k) => filters[k]);
+  const ordine = ORDINI.includes(query.get("ordine")) ? query.get("ordine") : "recenti";
   const [vista, setVistaState] = useState(readVista);
   const setVista = (v) => {
     setVistaState(v);
@@ -116,16 +118,16 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     openItem(it);
   };
   const nomiCat = [...new Set(items.flatMap((it) => it.categories || []))].sort((a, b) => a.localeCompare(b, "it"));
-  const results = useMemo(() => searchItems(items, q, filters), [items, q, filters.type, filters.category, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const results = useMemo(() => { const r = searchItems(items, q, filters); return q ? r : sortItems(r, ordine); }, [items, q, ordine, filters.type, filters.category, filters.author, filters.site, filters.from, filters.to, filters.preferiti]); // eslint-disable-line react-hooks/exhaustive-deps
   // Per i box: i risultati di ricerca e filtri, ma senza il filtro Categoria.
-  const matches = useMemo(() => searchItems(items, q, { ...filters, category: "" }), [items, q, filters.type, filters.author, filters.site, filters.from, filters.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  const matches = useMemo(() => searchItems(items, q, { ...filters, category: "" }), [items, q, filters.type, filters.author, filters.site, filters.from, filters.to, filters.preferiti]); // eslint-disable-line react-hooks/exhaustive-deps
   const boxes = useMemo(() => groupByCategory(matches), [matches]);
-  const restaurants = useMemo(() => restaurantsOf(matches), [matches]);
+  const restaurants = useMemo(() => restaurantsOf(matches, ordine), [matches, ordine]);
   const events = useMemo(() => eventsOf(matches), [matches]);
   const photos = useMemo(() => photosOf(matches), [matches]);
   const docs = useMemo(() => docsOf(matches), [matches]);
   const notes = useMemo(() => notesOf(matches), [matches]);
-  const favs = useMemo(() => matches.filter((it) => it.favorite), [matches]);
+  const favs = useMemo(() => sortItems(matches.filter((it) => it.favorite), q ? "recenti" : ordine), [matches, q, ordine]);
   const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
   const plural = (n, uno, molti) => (n === 1 ? `1 ${uno}` : `${n} ${molti}`);
   const preferitiTile = { id: "preferiti", name: "Preferiti", Icon: Star, sub: favs.length ? plural(favs.length, "elemento", "elementi") : "Ancora nessuno", color: BOX_FIXED.preferiti };
@@ -149,8 +151,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     saveOrder(next);
   };
   const openTile = (t) => (t.kind === "fisso" ? openBox({ sezione: t.id }) : openBox({ category: t.name }));
-  const nPreferiti = useMemo(() => items.filter((it) => it.favorite).length, [items]);
-  const cats = useMemo(() => [...(nPreferiti ? [[PREFERITI, nPreferiti]] : []), ...countBy(items, "categories")], [items, nPreferiti]);
+  const cats = useMemo(() => countBy(items, "categories"), [items]);
   const authors = useMemo(() => countValues(items, "author"), [items]);
   const sites = useMemo(() => countValues(items, "site_name"), [items]);
   // Dalla lista: swipe sulla riga e "Elimina", con "Annulla" per qualche secondo.
@@ -161,7 +162,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const clearAll = () => setParam(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])));
   // Filtri attivi come pillole da togliere; Dal e Al insieme, come periodo.
   const chips = [
-    ...shown.filter((k) => k !== "from" && k !== "to").map((k) => ({ key: k, label: k === "type" ? TYPES[filters[k]]?.label || filters[k] : filters[k], clear: { [k]: "" } })),
+    ...shown.filter((k) => k !== "from" && k !== "to").map((k) => ({ key: k, label: k === "type" ? TYPES[filters[k]]?.label || filters[k] : k === "preferiti" ? "Preferiti" : filters[k], clear: { [k]: "" } })),
     ...(filters.from || filters.to ? [{ key: "periodo", label: formatRange(filters.from, filters.to), clear: { from: "", to: "" } }] : []),
   ];
   // Dentro un box il titolo della pagina è il nome del box.
@@ -274,6 +275,8 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             <Scelta label="Sito" value={filters.site} onChange={(v) => setParam({ site: v })} options={sites} />
             <Scelta label="Autore" value={filters.author} onChange={(v) => setParam({ author: v })} options={authors} />
             <Scelta label="Categoria" value={filters.category} onChange={(v) => setParam({ category: v })} options={cats} />
+            <Scelta label="Preferiti" value={filters.preferiti} onChange={(v) => setParam({ preferiti: v })} options={[["1", "Solo preferiti"]]} />
+            <Scelta label="Ordina per" value={ordine === "recenti" ? "" : ordine} vuoto="Più recenti" onChange={(v) => setParam({ ordine: v })} options={[["vecchi", "Meno recenti"], ["nome", "Nome A–Z"]]} />
           </div>
         )}
 
@@ -334,7 +337,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             {vista === "lista" ? (
               <ItemList items={results} onOpen={apri(results, { bg: "#ffffff", fg: "#0a0a0a" })} onDelete={removeFromList} />
             ) : filters.category ? (
-              <ItemGrid items={results} onOpen={apri(results, filters.category === PREFERITI ? null : categoryColor(filters.category, nomiCat))} />
+              <ItemGrid items={results} onOpen={apri(results, categoryColor(filters.category, nomiCat))} />
             ) : (
               <CategoryBoxes tiles={tiles} preferiti={preferitiTile} onPreferiti={() => openBox({ sezione: "preferiti" })} onOpen={openTile} ordina={ordina} onMove={moveTile} />
             )}
@@ -352,7 +355,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
 
 // Scelta dentro l'app al posto del menu a tendina del sistema: una riga con
 // etichetta e valore; toccandola si aprono le pillole delle scelte.
-function Scelta({ label, value, onChange, options }) {
+function Scelta({ label, value, onChange, options, vuoto = "Tutti" }) {
   const [open, setOpen] = useState(false);
   const id = `f-${label.toLowerCase()}`;
   // options: [valore, etichetta] oppure [valore, conteggio]
@@ -372,12 +375,12 @@ function Scelta({ label, value, onChange, options }) {
         onClick={() => setOpen((o) => !o)}
       >
         <span className="micro font-semibold">{label}</span>
-        <span className="truncate font-bold tracking-[-0.02em]">{value ? labelOf(value) : "Tutti"}</span>
+        <span className="truncate font-bold tracking-[-0.02em]">{value ? labelOf(value) : vuoto}</span>
         <span aria-hidden="true" className="font-bold">{open ? "−" : "+"}</span>
       </button>
       {open && (
         <div id={`${id}-scelte`} role="listbox" aria-label={label} className="flex flex-wrap gap-1.5 pb-3">
-          {[["", "Tutti"], ...options].map(([k, l]) => (
+          {[["", vuoto], ...options].map(([k, l]) => (
             <button
               key={k || "tutti"}
               type="button"

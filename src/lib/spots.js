@@ -142,7 +142,8 @@ function add(map, key, base, item) {
 // [{ key, name, address, addresses, streets, manual, items }] in ordine
 // alfabetico. `addresses`: le sedi note; `streets`: quelle con una via vera (le
 // sedi scritte a mano contano sempre); `address`: la prima, per la ricerca.
-export function restaurantsOf(items) {
+// ordine: "recenti" (default, archiviati più di recente prima), "vecchi", "nome".
+export function restaurantsOf(items, ordine = "recenti") {
   const m = new Map();
   for (const item of items) {
     const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
@@ -164,9 +165,13 @@ export function restaurantsOf(items) {
       }
     }
   }
+  // Data di archiviazione del locale: quella dell'elemento archiviato più di recente.
+  const saved = (r) => Math.max(...r.items.map((it) => Date.parse(it.created_at) || 0));
+  const byName = (a, b) => a.name.localeCompare(b.name, "it");
+  const sorter = ordine === "nome" ? byName : ordine === "vecchi" ? (a, b) => saved(a) - saved(b) || byName(a, b) : (a, b) => saved(b) - saved(a) || byName(a, b);
   return [...m.values()]
     .map((r) => ({ ...r, address: r.addresses[0] || "", streets: r.manual ? r.addresses : r.addresses.filter(hasStreet) }))
-    .sort((a, b) => a.name.localeCompare(b.name, "it"));
+    .sort(sorter);
 }
 
 // { upcoming, undated, past }: prossimi per data, poi quelli senza data, e in
