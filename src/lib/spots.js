@@ -60,18 +60,22 @@ export function cittaDi(address) {
 }
 
 // Locali divisi per zona (quartiere, altrimenti città) o per tipo:
-// [{ key, label, list }], prima i gruppi più numerosi; "Zona non indicata" in fondo.
+// [{ key, label, list, controllare? }], prima i gruppi più numerosi; "Zona non
+// indicata" in fondo. Per zona, in cima "Via da controllare": i locali di cui
+// né l'AI né OpenStreetMap hanno trovato la via (da scrivere a mano).
 export const SENZA_ZONA = "Zona non indicata";
+export const DA_CONTROLLARE = "Via da controllare";
 export function gruppiLocali(restaurants, per = "zona") {
   const m = new Map();
   for (const r of restaurants) {
-    const label = per === "tipo" ? TIPI_LOCALE[r.tipo]?.plurale || "Ristoranti" : r.zona || r.citta || SENZA_ZONA;
+    const controllare = per === "zona" && !r.streets?.length && r.cercato;
+    const label = per === "tipo" ? TIPI_LOCALE[r.tipo]?.plurale || "Ristoranti" : controllare ? DA_CONTROLLARE : r.zona || r.citta || SENZA_ZONA;
     const k = normalize(label);
-    if (!m.has(k)) m.set(k, { key: k, label, list: [] });
+    if (!m.has(k)) m.set(k, { key: k, label, list: [], ...(controllare ? { controllare: true } : {}) });
     m.get(k).list.push(r);
   }
-  const ultimo = (g) => (g.label === SENZA_ZONA ? 1 : 0);
-  return [...m.values()].sort((a, b) => ultimo(a) - ultimo(b) || b.list.length - a.list.length || a.label.localeCompare(b.label, "it"));
+  const posto = (g) => (g.controllare ? -1 : g.label === SENZA_ZONA ? 1 : 0);
+  return [...m.values()].sort((a, b) => posto(a) - posto(b) || b.list.length - a.list.length || a.label.localeCompare(b.label, "it"));
 }
 
 // Locali di cui cercare via e quartiere su OpenStreetMap: quelli senza via mai
@@ -218,10 +222,11 @@ export function restaurantsOf(items, ordine = "recenti") {
       const manual = p.manual === true && addresses.length > 0;
       const e = m.get(key);
       if (!e) {
-        m.set(key, { key, name: text(p.name), addresses, manual, items: [item], tipo: text(p.tipo), zona: text(p.zona) });
+        m.set(key, { key, name: text(p.name), addresses, manual, items: [item], tipo: text(p.tipo), zona: text(p.zona), cercato: Boolean(p.geo_at) });
         continue;
       }
       if (!e.items.includes(item)) e.items.push(item);
+      if (p.geo_at) e.cercato = true;
       if (!TIPI_LOCALE[e.tipo] && text(p.tipo)) e.tipo = text(p.tipo);
       // Le sedi scritte a mano vincono; poi un indirizzo con la via su uno solo con la città.
       if ((manual && !e.manual) || (!e.manual && !manual && !e.addresses.some(hasStreet) && addresses.some(hasStreet))) {
