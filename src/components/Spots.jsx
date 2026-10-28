@@ -7,6 +7,7 @@ import { displayHost } from "../lib/detect.js";
 import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
+import { formatDate } from "../lib/format.js";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
 // Tocco sulla card (non su link, pulsanti o campi): apre direttamente la scheda.
@@ -15,11 +16,12 @@ const apriCard = (items, onOpen) => (e) => {
   if (items[0]) onOpen(items[0]);
 };
 
-function SourceLinks({ items, onOpen, extra }) {
+function SourceLinks({ items, onOpen, extra, quando = false }) {
   return (
     <ul className="mt-1.5 space-y-0.5 text-[0.88rem] font-bold">
       {items.map((it, i) => (
         <li key={it.id} className="flex flex-wrap items-center gap-x-3">
+          {quando && <span className="micro font-semibold">{[it.author, formatDate(it.created_at)].filter(Boolean).join(" · ")}</span>}
           {/^https?:\/\//.test(it.url || "") && (
             <a href={it.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-[3px]">
               Apri su {it.site_name || displayHost(it.url)} ↗
@@ -132,6 +134,11 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
       </EmptyState>
     );
   }
+  // Altri locali citati nello stesso post: senza miniatura, è il modo per capire
+  // che vengono dallo stesso Reel.
+  const perPost = new Map();
+  for (const r of restaurants) for (const it of r.items) perPost.set(it.id, [...(perPost.get(it.id) || []), r.name]);
+  const stessoPost = (r) => [...new Set(r.items.flatMap((it) => perPost.get(it.id) || []))].filter((n) => n !== r.name);
   const choose = (r, mode) => {
     setMenu(null);
     setEditing({ key: r.key, mode });
@@ -141,21 +148,17 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
       {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
     <ul className="mt-3.5 space-y-3.5">
       {restaurants.map((r) => {
-        const cover = r.items.find((it) => it.image_url || it.file_path);
+        const insieme = stessoPost(r);
         return (
         <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
           <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
           <div className="cursor-pointer rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]" onClick={apriCard(r.items, onOpen)}>
-          {cover && (
-            <div className="copertina-ferma">
-              <Thumb item={cover} size="h-32 w-full" rounded="rounded-t-[14px]" />
-            </div>
-          )}
           <div className="min-w-0 px-4 py-3.5">
           <p className={NAME_BIG}>{r.name}</p>
           <SourceLinks
             items={r.items}
             onOpen={onOpen}
+            quando
             extra={
               onStreet && editing?.key !== r.key ? (
                 <span className="relative">
@@ -199,6 +202,12 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
             }
           />
           {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
+          {insieme.length > 0 && (
+            <p className="micro mt-1.5 text-[0.85rem]" data-stesso-post>
+              Nello stesso post: {insieme.slice(0, 3).join(", ")}
+              {insieme.length > 3 ? ` e altri ${insieme.length - 3}` : ""}
+            </p>
+          )}
           {onStreet && editing?.key === r.key && (
             <AddressForm
               name={r.name}

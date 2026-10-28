@@ -535,13 +535,16 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const g2 = await page.getByRole("button", { name: "Impostazioni" }).boundingBox();
   expect(g2.y).toBeLessThan(t2.y + t2.height);
   await expect(righe.first()).toContainText("Bar San Calisto");
+  // Senza miniatura (più locali vengono dallo stesso post): si dice invece quali.
+  await expect(righe.locator("img")).toHaveCount(0);
+  await expect(righe.first().locator("[data-stesso-post]")).toContainText("Nello stesso post: Da Enzo al 29");
   // Un tocco sulla card apre la scheda, che ha il rosso del box Ristoranti.
   await righe.first().getByText("Bar San Calisto").first().click();
   await expect(page).toHaveURL(/\/elemento\//);
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 59, 28)");
   await page.goBack();
   await expect(righe).toHaveCount(2);
-  const enzo = righe.filter({ hasText: "Da Enzo al 29" });
+  const enzo = righe.filter({ has: page.getByText("Da Enzo al 29", { exact: true }) });
   await expect(enzo).toContainText("Via dei Vascellari 29, Roma");
   // L'indirizzo con la via completa è il testo del link a Maps (nome e via nella ricerca).
   const mappa = enzo.getByRole("link", { name: /Via dei Vascellari 29, Roma/ });
@@ -1238,7 +1241,7 @@ test("campo di ricerca: la X di cancellazione è nera e spessa", async ({ page }
   expect(regola).toContain("0a0a0a");
 });
 
-test("preferiti: stellina su scheda e riga, box Preferiti; + nella barra fuori dalla Chat, barra al centro", async ({ page }) => {
+test("preferiti: stellina su scheda e riga, niente box Preferiti nell'Archivio; + nella barra fuori dalla Chat, barra al centro", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
   await apriAltri(page);
@@ -1260,11 +1263,13 @@ test("preferiti: stellina su scheda e riga, box Preferiti; + nella barra fuori d
   await expect(page.locator(".barra-piu button")).toHaveCount(0);
   await page.goto("/archivio");
   await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Box" }).click();
-  await page.getByRole("button", { name: /^Preferiti,/ }).click();
-  await expect(page.getByRole("heading", { name: "Preferiti", level: 1 })).toBeVisible();
+  // Nessun box Preferiti nell'Archivio: si ritrovano con il filtro.
+  await expect(page.getByRole("button", { name: /^Preferiti,/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Filtri" }).click();
+  await page.locator("#f-preferiti").click();
+  await page.getByRole("option", { name: "Solo preferiti" }).click();
+  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Lista" }).click();
   await expect(page.getByText("Idea preferita")).toBeVisible();
-  await page.getByRole("button", { name: "Togli dai preferiti" }).click();
-  await expect(page.getByText("Ancora nessun preferito")).toBeVisible();
 });
 
 test("Aggiungi veloce: Salva sotto il campo, non fisso; basta incollare il testo e salvare, senza titolo né categorie", async ({ page }) => {
