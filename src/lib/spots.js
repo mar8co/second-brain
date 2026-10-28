@@ -25,7 +25,7 @@ export function hasStreet(address) {
 // tavolozza; l'icona è in components/Spots.jsx.
 export const TIPI_LOCALE = {
   trattoria: { label: "Trattoria", plurale: "Trattorie", colore: "var(--arancio)" },
-  pizzeria: { label: "Pizzeria", plurale: "Pizzerie", colore: "var(--grigio)" },
+  pizzeria: { label: "Pizzeria", plurale: "Pizzerie", colore: "var(--giallo)" },
   bar: { label: "Bar e caffè", plurale: "Bar e caffè", colore: "var(--sabbia)" },
   street: { label: "Street food", plurale: "Street food", colore: "var(--verde)" },
   vino: { label: "Vino e cocktail", plurale: "Vino e cocktail", colore: "var(--rosa)" },
