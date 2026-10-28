@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { ZONA_V, DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -101,31 +101,35 @@ describe("hasStreet", () => {
 
 describe("via dei locali", () => {
   const item = (id, places) => ({ id, ai: { v: 5, places } });
-  it("mette in coda i locali senza via o senza quartiere mai cercati, una volta per locale", () => {
-    const fatto = { geo_at: "2026-10-15T08:00:00Z", zona_at: "2026-10-28T08:00:00Z" };
+  it("mette in coda i locali senza via o con il quartiere di una versione precedente, una volta per locale", () => {
+    const fatto = { geo_at: "2026-10-15T08:00:00Z", zona_at: "2026-10-28T08:00:00Z", zona_v: ZONA_V };
     const q = streetQueue([
       item("a", [{ name: "Bar San Calisto", address: "Roma", kind: "ristorante" }, { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" }, { name: "Museo", address: "Roma", kind: "altro" }]),
       item("b", [
         { name: "bar san calisto", address: "Roma", kind: "ristorante" },
         { name: "Già cercato", address: "Roma", kind: "ristorante", ...fatto },
-        { name: "Con quartiere", address: "Via Y 2, Roma", kind: "ristorante", zona: "Prati" },
-        { name: "Cercato prima dei quartieri", address: "Roma", street: "Via X 1, Roma", kind: "ristorante", geo_at: "2026-10-15T08:00:00Z" },
+        { name: "Quartiere vecchio", address: "Via Y 2, Roma", kind: "ristorante", zona: "Città giudiziaria", zona_at: "2026-10-28T08:00:00Z" },
+        { name: "Via trovata prima", address: "Roma", street: "Via X 1, La Spezia", kind: "ristorante", geo_at: "2026-10-15T08:00:00Z" },
+        { name: "A mano", address: "Roma", street: "Via M 3, Roma", sedi: ["Via M 3, Roma"], manual: true, kind: "ristorante" },
       ]),
     ]);
-    expect(q.map((x) => x.name)).toEqual(["Bar San Calisto", "Da Enzo", "Cercato prima dei quartieri"]);
-    expect(q[0]).toMatchObject({ address: "Roma" });
+    expect(q.map((x) => x.name)).toEqual(["Bar San Calisto", "Da Enzo", "Quartiere vecchio", "Via trovata prima", "A mano"]);
     expect(q[0].targets.map((t) => t.id)).toEqual(["a", "b"]);
-    // Si cerca con la via già nota.
-    expect(q[2].address).toBe("Via X 1, Roma");
+    // Si ricerca con l'indirizzo dell'AI, non con la via trovata prima; con la via a mano se c'è.
+    expect(q[3].address).toBe("Roma");
+    expect(q[4].address).toBe("Via M 3, Roma");
   });
 
-  it("salva il quartiere senza cambiare una via già nota", () => {
+  it("vie e quartieri: OpenStreetMap si sostituisce, a mano e AI restano", () => {
     const at = new Date("2026-10-28T08:00:00Z");
-    const conVia = item("a", [{ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" }]);
-    const p = streetPatch(conVia, 0, "Da Enzo", { street: "Via Sbagliata 1, Roma", zona: "Trastevere" }, at);
-    expect(p.ai.places[0]).toEqual({ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere", geo_at: at.toISOString(), zona_at: at.toISOString() });
-    const vecchio = item("b", [{ name: "Bar", address: "Roma", street: "Via X 1, Roma", geo_at: "2026-10-15T08:00:00Z", kind: "ristorante" }]);
-    expect(streetPatch(vecchio, 0, "Bar", null, at).ai.places[0]).toMatchObject({ street: "Via X 1, Roma", geo_at: "2026-10-15T08:00:00Z", zona_at: at.toISOString() });
+    const done = { geo_at: at.toISOString(), zona_at: at.toISOString(), zona_v: ZONA_V };
+    const conVia = item("a", [{ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Città giudiziaria" }]);
+    expect(streetPatch(conVia, 0, "Da Enzo", { street: "Via Sbagliata 1, Roma", zona: "Trastevere" }, at).ai.places[0]).toEqual({ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere", ...done });
+    // Via di OpenStreetMap sbagliata (altra città): non si trova più, si toglie.
+    const sbagliata = item("b", [{ name: "Controluce", address: "Roma", street: "Via X 1, La Spezia", geo_at: "2026-10-15T08:00:00Z", kind: "ristorante", zona: "Centro" }]);
+    expect(streetPatch(sbagliata, 0, "Controluce", null, at).ai.places[0]).toEqual({ name: "Controluce", address: "Roma", kind: "ristorante", ...done });
+    const manuale = item("c", [{ name: "Mazzo", address: "Roma", street: "Via degli Equi 62, Roma", manual: true, kind: "ristorante" }]);
+    expect(streetPatch(manuale, 0, "Mazzo", { street: "Altra 1, Roma", zona: "San Lorenzo" }, at).ai.places[0]).toMatchObject({ street: "Via degli Equi 62, Roma", zona: "San Lorenzo" });
   });
 
   it("salva la via trovata, o solo che è già stato cercato", () => {

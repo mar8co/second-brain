@@ -39,6 +39,11 @@ function lastBlock(prompt, tag) {
 }
 
 function fakeGemini(prompt) {
+  if (prompt.includes("<locale>")) {
+    // Quartiere dalla via: Trastevere per le vie di Trastevere, altrimenti non sa.
+    const { indirizzo } = lastBlock(prompt, "locale");
+    return { quartiere: /Vascellari|San Calisto/.test(indirizzo) ? "Trastevere" : "" };
+  }
   if (prompt.includes("<domanda>") && prompt.includes("Scegli gli elementi")) {
     // Archivio grande: sceglie le schede con le parole della domanda.
     const q = prompt.slice(prompt.lastIndexOf("<domanda>")).toLowerCase();

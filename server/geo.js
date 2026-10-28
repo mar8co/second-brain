@@ -5,6 +5,7 @@
 // risposta nell'elemento. Google Maps non si usa: la sua API è a pagamento.
 
 import { verifyRequest } from "./auth.js";
+import { aiConfigured, quartiereWithAi } from "./ai.js";
 
 const DEFAULT_BASE = "https://nominatim.openstreetmap.org";
 const TIMEOUT_MS = 8000;
@@ -37,27 +38,51 @@ export function sameName(requested, found) {
   return words.length ? words.some((w) => got.includes(w)) : got.includes(want);
 }
 
+// Città scritta in fondo a un indirizzo ("Via X 1, 00153 Roma" → "Roma"); "" se
+// l'ultima parte è una via.
+export function cityOf(address) {
+  const parts = str(address, 200).split(",").map((x) => x.replace(/\b\d{5}\b/g, "").trim()).filter(Boolean);
+  const last = parts[parts.length - 1] || "";
+  return last && !VIA.test(last) ? last : "";
+}
+
+// Il risultato è nella città cercata? (Un locale con lo stesso nome in
+// un'altra città non vale: "Controluce, Roma" non è il Controluce di La Spezia.)
+export function sameCity(city, a) {
+  const want = plain(city);
+  if (!want) return true;
+  return [a?.city, a?.town, a?.village, a?.municipality, a?.county].some((v) => {
+    const got = plain(v);
+    return got && (got === want || got.includes(want) || want.includes(got));
+  });
+}
+
 // Via, numero civico e città del primo risultato che è davvero il posto cercato
-// (con addressdetails=1); null se non c'è.
-export function parseStreet(list, name) {
+// (con addressdetails=1), nella città cercata; null se non c'è.
+export function parseStreet(list, name, city = "") {
   for (const r of Array.isArray(list) ? list : []) {
     if (!r || !POI_CATEGORIES.has(r.category)) continue;
     const a = r.address || {};
     const road = str(a.road || a.pedestrian || a.footway || a.square, 120);
-    if (!road || !sameName(name, r.name || r.display_name)) continue;
+    if (!road || !sameName(name, r.name || r.display_name) || !sameCity(city, a)) continue;
     const number = str(a.house_number, 12);
-    const city = str(a.city || a.town || a.village || a.municipality, 80);
+    const found = str(a.city || a.town || a.village || a.municipality, 80);
     const zona = zonaOf(a);
-    return { street: [number ? `${road} ${number}` : road, city].filter(Boolean).join(", "), label: str(r.display_name, 300) || null, ...(zona ? { zona } : {}) };
+    return { street: [number ? `${road} ${number}` : road, found].filter(Boolean).join(", "), label: str(r.display_name, 300) || null, ...(zona ? { zona } : {}), hints: hintsOf(a) };
   }
   return null;
 }
 
+// Nomi di zona di OpenStreetMap, come indizi per l'AI.
+function hintsOf(a) {
+  return Object.fromEntries(["suburb", "quarter", "neighbourhood"].map((f) => [f, str(a?.[f], 60)]).filter(([, v]) => v));
+}
+
 // Quartiere di un indirizzo di OpenStreetMap (Trastevere, Brera…), senza i
 // municipi o le circoscrizioni amministrative; "" se non c'è.
-const AMMINISTRATIVO = /^(municipio|circoscrizione|quartiere\s+\d|zona\s+\d|\d)/i;
+export const AMMINISTRATIVO = /^(municipio|circoscrizione|quartiere\s+\d|zona\s+\d|\d)/i;
 export function zonaOf(a) {
-  for (const f of ["quarter", "suburb", "neighbourhood", "city_district"]) {
+  for (const f of ["suburb", "quarter", "neighbourhood", "city_district"]) {
     const v = str(a?.[f], 60);
     if (v && !AMMINISTRATIVO.test(v)) return v;
   }
@@ -76,7 +101,7 @@ export function parseZona(list) {
 
 const VIA = /\b\d{1,4}[a-z]?\b|\b(via|viale|piazza|piazzale|corso|largo|vicolo|lungotevere|borgo|strada|street|road|avenue|rue|calle)\b/i;
 
-export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, now = Date.now, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFetch = fetch, now = Date.now, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const auth = await verifyRequest({ authHeader, env });
   if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
   const q = geocodeQuery(body?.place);
@@ -108,13 +133,25 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, now 
 
   const list = await search(q);
   if (list?.error) return { status: list.status, json: { error: list.error } };
-  let found = parseStreet(list, str(body?.place?.name, 150));
-  // Locale non trovato per nome ma con la via: il quartiere si ricava dalla via.
   const address = str(body?.place?.address, 200);
-  if (!found && VIA.test(address)) {
+  let found = parseStreet(list, str(body?.place?.name, 150), cityOf(address));
+  // Il quartiere: con l'AI, il nome che usa la gente a partire dalla via (le
+  // zone di OpenStreetMap sono spesso amministrative, come "Città giudiziaria");
+  // senza AI, quello di OpenStreetMap.
+  const via = found?.street || (VIA.test(address) ? address : "");
+  if (via && aiConfigured(env)) {
+    try {
+      const zona = await quartiereWithAi({ env, name: str(body?.place?.name, 150), address: via, hints: found?.hints || {}, fetchImpl: aiFetch });
+      found = { ...(found || { street: "" }), zona };
+    } catch {
+      // AI non raggiungibile: resta il quartiere di OpenStreetMap, se c'è.
+    }
+  } else if (!found && via) {
+    // Locale non trovato per nome ma con la via: il quartiere si ricava dalla via.
     const byStreet = await search(address);
     const zona = byStreet?.error ? "" : parseZona(byStreet);
     if (zona) found = { street: "", zona };
   }
+  if (found) delete found.hints;
   return { status: 200, json: { query: q, found } };
 }

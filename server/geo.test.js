@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { geocodeQuery, handleGeo, parseStreet, parseZona, sameName, zonaOf } from "./geo.js";
+import { cityOf, geocodeQuery, handleGeo, parseStreet, parseZona, sameCity, sameName, zonaOf } from "./geo.js";
 
 const env = { ALLOW_NO_AUTH: "1", GEOCODE_API_BASE: "https://osm.test/" };
 const calisto = { category: "amenity", name: "Bar San Calisto", display_name: "Bar San Calisto, Roma", address: { road: "Piazza di San Calisto", house_number: "3", city: "Roma" } };
@@ -20,12 +20,24 @@ describe("via di un locale (OpenStreetMap)", () => {
   });
 
   it("via, civico e città solo di un posto vero con la via", () => {
-    expect(parseStreet([calisto], "Bar San Calisto")).toEqual({ street: "Piazza di San Calisto 3, Roma", label: "Bar San Calisto, Roma" });
+    expect(parseStreet([calisto], "Bar San Calisto")).toEqual({ street: "Piazza di San Calisto 3, Roma", label: "Bar San Calisto, Roma", hints: {} });
     expect(parseStreet([{ ...calisto, address: { city: "Roma" } }], "Bar San Calisto")).toBeNull();
     expect(parseStreet([{ ...calisto, category: "boundary" }], "Bar San Calisto")).toBeNull();
     expect(parseStreet([{ ...calisto, name: "Altro posto", display_name: "Altro posto, Roma" }], "Bar San Calisto")).toBeNull();
     expect(parseStreet([], "x")).toBeNull();
-    expect(parseStreet([{ ...calisto, address: { road: "Via Garibaldi", city: "Torino" } }], "Bar San Calisto")).toEqual({ street: "Via Garibaldi, Torino", label: "Bar San Calisto, Roma" });
+    expect(parseStreet([{ ...calisto, address: { road: "Via Garibaldi", city: "Torino" } }], "Bar San Calisto")).toMatchObject({ street: "Via Garibaldi, Torino" });
+  });
+
+  it("solo nella città cercata", () => {
+    const spezia = { category: "amenity", name: "Controluce", display_name: "Controluce, La Spezia", address: { road: "Via del Prione", house_number: "1", city: "La Spezia" } };
+    expect(parseStreet([spezia], "Controluce", "Roma")).toBeNull();
+    expect(parseStreet([spezia], "Controluce", "La Spezia")).toMatchObject({ street: "Via del Prione 1, La Spezia" });
+    expect(parseStreet([spezia], "Controluce", "")).not.toBeNull();
+    expect(cityOf("Via dei Vascellari 29, 00153 Roma")).toBe("Roma");
+    expect(cityOf("Roma")).toBe("Roma");
+    expect(cityOf("Via dei Vascellari 29")).toBe("");
+    expect(sameCity("Roma", { town: "Roma" })).toBe(true);
+    expect(sameCity("Roma", { city: "Milano", county: "Città metropolitana di Milano" })).toBe(false);
   });
 
   it("si presenta a Nominatim e rispetta una richiesta al secondo", async () => {
@@ -35,6 +47,7 @@ describe("via di un locale (OpenStreetMap)", () => {
     const now = () => t;
     const a = await handleGeo({ body: { place: { name: "Bar San Calisto", address: "Roma" } }, env, fetchImpl, now, wait });
     expect(a).toEqual({ status: 200, json: { query: "Bar San Calisto, Roma", found: { street: "Piazza di San Calisto 3, Roma", label: "Bar San Calisto, Roma" } } });
+    expect(a.json.found.hints).toBeUndefined();
     const [url, opts] = fetchImpl.mock.calls[0];
     expect(url).toBe("https://osm.test/search?q=Bar+San+Calisto%2C+Roma&format=jsonv2&limit=3&addressdetails=1&accept-language=it");
     expect(opts.headers["User-Agent"]).toMatch(/^second-brain\//);
@@ -60,6 +73,29 @@ describe("via di un locale (OpenStreetMap)", () => {
     fetchImpl.mockClear();
     expect((await handleGeo({ body: { place: { name: "Sconosciuto", address: "Roma" } }, env, fetchImpl, wait })).json.found).toBeNull();
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("con l'AI il quartiere è il nome comune dato dalla via, non la zona di OpenStreetMap", async () => {
+    const giudiziaria = { category: "amenity", name: "Sakaba", display_name: "Sakaba, Roma", address: { road: "Via Emilio Faà di Bruno", house_number: "31", quarter: "Città giudiziaria", suburb: "Della Vittoria", city: "Roma" } };
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json: async () => [giudiziaria] }));
+    let prompt = "";
+    const aiFetch = vi.fn(async (url, opts) => {
+      prompt = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Prati" }) }] } }] }) };
+    });
+    const r = await handleGeo({ body: { place: { name: "Sakaba", address: "Roma" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl, aiFetch, wait: async () => {} });
+    expect(r.json.found).toMatchObject({ street: "Via Emilio Faà di Bruno 31, Roma", zona: "Prati" });
+    expect(prompt).toContain("Via Emilio Faà di Bruno 31, Roma");
+    expect(prompt).toContain("Città giudiziaria");
+    // Una risposta amministrativa non vale.
+    aiFetch.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Municipio I" }) }] } }] }) }));
+    const r2 = await handleGeo({ body: { place: { name: "Sakaba", address: "Roma" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl, aiFetch, wait: async () => {} });
+    expect(r2.json.found.zona).toBe("");
+    // Senza via, all'AI non si chiede nulla.
+    aiFetch.mockClear();
+    const none = vi.fn(async () => ({ ok: true, status: 200, json: async () => [] }));
+    await handleGeo({ body: { place: { name: "Elio", address: "Roma" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl: none, aiFetch, wait: async () => {} });
+    expect(aiFetch).not.toHaveBeenCalled();
   });
 
   it("errori chiari; senza posto 400; senza login 401", async () => {

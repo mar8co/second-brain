@@ -89,10 +89,14 @@ export function streetQueue(items) {
     places.forEach((p, index) => {
       if (!p || p.kind !== "ristorante" || !text(p.name)) return;
       const needStreet = !hasStreet(p.address) && !text(p.street) && !p.geo_at;
-      const needZona = !text(p.zona) && !p.zona_at;
+      // Quartieri della versione precedente (zone di OpenStreetMap, a volte
+      // amministrative) e vie trovate senza il controllo della città: si rifanno.
+      const needZona = !(Number(p.zona_v) >= ZONA_V);
       if (!needStreet && !needZona) return;
       const key = normalize(p.name);
-      const e = m.get(key) || { name: text(p.name), address: placeAddresses(p)[0] || text(p.address), targets: [] };
+      // Si cerca con la via scritta a mano, altrimenti con l'indirizzo letto
+      // dall'AI (non con una via trovata prima, che potrebbe essere sbagliata).
+      const e = m.get(key) || { name: text(p.name), address: (p.manual && placeAddresses(p)[0]) || text(p.address), targets: [] };
       e.targets.push({ id: item.id, index, name: text(p.name) });
       m.set(key, e);
     });
@@ -100,17 +104,28 @@ export function streetQueue(items) {
   return [...m.values()];
 }
 
+// Versione della ricerca di via e quartiere (2: città controllata, quartiere
+// col nome comune dato dall'AI).
+export const ZONA_V = 2;
+
 // Modifica da salvare nell'elemento con il risultato (found = { street, zona } o
-// null): il locale è segnato come già cercato, così non si chiede di nuovo. La
-// via trovata vale solo per i locali che non ne hanno una.
+// null): il locale è segnato come già cercato, così non si chiede di nuovo. Le
+// vie scritte a mano o lette dall'AI restano; quella di OpenStreetMap si
+// sostituisce con il nuovo risultato (o si toglie, se non si trova più).
 export function streetPatch(item, index, name, found, now = new Date()) {
   const places = item.ai?.places;
   if (!Array.isArray(places) || text(places[index]?.name) !== name) return null;
   const at = now.toISOString();
   const next = places.map((p, i) => {
     if (i !== index) return p;
-    const street = found?.street && !hasStreet(p.address) && !text(p.street) ? { street: found.street } : {};
-    return { ...p, ...street, ...(text(found?.zona) ? { zona: text(found.zona) } : {}), geo_at: p.geo_at || at, zona_at: at };
+    const out = { ...p };
+    delete out.zona;
+    if (!p.manual && !hasStreet(p.address)) {
+      delete out.street;
+      if (found?.street) out.street = found.street;
+    }
+    if (text(found?.zona)) out.zona = text(found.zona);
+    return { ...out, geo_at: at, zona_at: at, zona_v: ZONA_V };
   });
   return { ai: { ...item.ai, places: next } };
 }
@@ -143,7 +158,7 @@ export function manualStreetPatches(items, name, streets, now = new Date()) {
     const next = places.map((p) => {
       if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
       const rest = { ...p };
-      for (const f of ["street", "sedi", "manual", "geo_at", "zona", "zona_at"]) delete rest[f];
+      for (const f of ["street", "sedi", "manual", "geo_at", "zona", "zona_at", "zona_v"]) delete rest[f];
       return list.length ? { ...rest, street: list[0], sedi: list, manual: true, geo_at: now.toISOString() } : rest;
     });
     out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
