@@ -34,7 +34,6 @@ export const BOX_PALETTE = [
   { bg: "#0a0a0a", fg: "#ffffff" },
 ];
 export const BOX_FIXED = {
-  preferiti: BOX_PALETTE[0],
   ristoranti: BOX_PALETTE[2],
   eventi: BOX_PALETTE[5],
   foto: BOX_PALETTE[4],
