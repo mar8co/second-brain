@@ -31,7 +31,7 @@ export const TIPI_LOCALE = {
   vino: { label: "Vino e cocktail", plurale: "Vino e cocktail", colore: "var(--rosa)" },
   dolci: { label: "Gelato e dolci", plurale: "Gelato e dolci", colore: "var(--blu)", chiaro: true },
   mondo: { label: "Cucina dal mondo", plurale: "Cucina dal mondo", colore: "var(--rosso)" },
-  ristorante: { label: "Ristorante", plurale: "Ristoranti", colore: "var(--grigio)" },
+  ristorante: { label: "Ristorante", plurale: "Ristoranti", colore: "var(--giallo)" },
 };
 
 // Tipo dal nome, finché l'AI non l'ha dato (contenuti salvati prima).
