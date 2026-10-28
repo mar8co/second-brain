@@ -25,13 +25,13 @@ export function hasStreet(address) {
 // tavolozza; l'icona è in components/Spots.jsx.
 export const TIPI_LOCALE = {
   trattoria: { label: "Trattoria", plurale: "Trattorie", colore: "var(--arancio)" },
-  pizzeria: { label: "Pizzeria", plurale: "Pizzerie", colore: "var(--giallo)" },
+  pizzeria: { label: "Pizzeria", plurale: "Pizzerie", colore: "var(--grigio)" },
   bar: { label: "Bar e caffè", plurale: "Bar e caffè", colore: "var(--sabbia)" },
   street: { label: "Street food", plurale: "Street food", colore: "var(--verde)" },
   vino: { label: "Vino e cocktail", plurale: "Vino e cocktail", colore: "var(--rosa)" },
   dolci: { label: "Gelato e dolci", plurale: "Gelato e dolci", colore: "var(--blu)", chiaro: true },
   mondo: { label: "Cucina dal mondo", plurale: "Cucina dal mondo", colore: "var(--rosso)" },
-  ristorante: { label: "Ristorante", plurale: "Ristoranti", colore: "var(--grigio)" },
+  ristorante: { label: "Ristorante", plurale: "Ristoranti", colore: "var(--giallo)" },
 };
 
 // Tipo dal nome, finché l'AI non l'ha dato (contenuti salvati prima).
