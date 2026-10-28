@@ -541,11 +541,33 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(righe.filter({ has: page.getByText("Da Enzo al 29", { exact: true }) }).locator("[data-tipo-locale]")).toHaveText("Trattoria");
   await expect(page.locator("section[data-gruppo-locali] h3").first()).toContainText("Trastevere");
   await expect(page.locator("section[data-gruppo-locali]")).toHaveCount(1);
+  // Il pill "Ordina per" accanto ai Filtri: Nome, Tipo, Quartiere (predefinito), Città.
+  const ordina = page.getByRole("button", { name: /^Ordina per/ });
+  await expect(ordina).toHaveAccessibleName("Ordina per quartiere");
+  const scegli = async (voce) => {
+    await ordina.click();
+    await expect(page.getByRole("menuitemradio")).toHaveText(["Nome", "Tipo", "Quartiere", "Città"]);
+    await page.getByRole("menuitemradio", { name: voce }).click();
+    await expect(page.getByRole("menu", { name: "Ordina per" })).toHaveCount(0);
+  };
   // Per tipo: due gruppi, e sotto il nome il quartiere.
-  await page.getByRole("group", { name: "Raggruppa" }).getByRole("button", { name: "Tipo" }).click();
+  await scegli("Tipo");
   await expect(page.locator("section[data-gruppo-locali] h3 > span:first-child")).toHaveText(["Bar e caffè", "Trattorie"]);
   await expect(righe.first().locator("[data-tipo-locale]")).toHaveText("Trastevere");
-  await page.getByRole("group", { name: "Raggruppa" }).getByRole("button", { name: "Zona" }).click();
+  // Per città: un gruppo Roma, sotto il nome tipo e quartiere.
+  await scegli("Città");
+  await expect(page.locator("section[data-gruppo-locali] h3 > span:first-child")).toHaveText(["Roma"]);
+  await expect(righe.first().locator("[data-tipo-locale]")).toHaveText("Bar e caffè · Trastevere");
+  // Per nome: un solo elenco A–Z, senza titoli di gruppo.
+  await scegli("Nome");
+  await expect(page.locator("section[data-gruppo-locali] h3")).toHaveCount(0);
+  await expect(righe.locator("p").filter({ hasText: /^(Bar San Calisto|Da Enzo al 29)$/ })).toHaveText(["Bar San Calisto", "Da Enzo al 29"]);
+  await expect(page.getByRole("button", { name: "Ordina per nome" })).toBeVisible();
+  // Un tocco fuori chiude il menu senza cambiare scelta.
+  await ordina.click();
+  await page.mouse.click(4, 300);
+  await expect(page.getByRole("menu", { name: "Ordina per" })).toHaveCount(0);
+  await scegli("Quartiere");
   // Filtro per tipo con le pillole.
   await page.getByRole("list", { name: "Tipo di locale" }).getByRole("button", { name: /^Trattoria/ }).click();
   await expect(righe).toHaveCount(1);

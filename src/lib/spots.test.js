@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { gruppiFermi, queryOf, ZONA_V, DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { gruppiFermi, queryOf, ZONA_V, DA_CONTROLLARE, SENZA_CITTA, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -291,7 +291,9 @@ describe("tipo e zona dei locali", () => {
     const r = restaurantsOf([{ id: "a", created_at: "2026-10-01", ai: { v: 5, places } }]);
     expect(r.find((x) => x.name === "Bar San Calisto")).toMatchObject({ tipo: "bar", zona: "Trastevere", citta: "Roma" });
     expect(gruppiLocali(r).map((g) => [g.label, g.list.length])).toEqual([["Trastevere", 2], ["Milano", 1], [SENZA_ZONA, 1]]);
-    expect(gruppiLocali(r, "tipo").map((g) => g.label)).toEqual(["Bar e caffè", "Ristoranti", "Street food", "Trattorie"]);
+    expect(gruppiLocali(r, "tipo").map((g) => g.label)).toEqual(["Bar e caffè", "Ristoranti", "Street food", "Trattorie"]);    expect(gruppiLocali(r, "citta").map((g) => [g.label, g.list.length])).toEqual([["Roma", 2], ["Milano", 1], [SENZA_CITTA, 1]]);
+    expect(gruppiLocali(r, "nome").map((g) => [g.label, g.list.map((x) => x.name)])).toEqual([["", ["Bar San Calisto", "Da Enzo", "Luini", "Senza nulla"]]]);
+    expect(gruppiLocali([], "nome")).toEqual([]);
   });
 
   it("per zona, in cima i locali senza via già cercati su OpenStreetMap", () => {

@@ -1,10 +1,10 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useEffect, useState } from "react";
-import { Check, CalendarPlus, ChefHat, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
+import { ArrowUpDown, Check, CalendarPlus, ChefHat, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, mapsUrl } from "../lib/spots.js";
+import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, mapsUrl } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
@@ -125,6 +125,49 @@ function IconaTipo({ tipo, size = "h-10 w-10", icon = "h-[19px] w-[19px]" }) {
 // tipo. Ogni riga: icona del tipo, nome, tipo o zona, via con Maps; i tre
 // puntini per le vie e per eliminare. Tocco sulla riga: la scheda.
 // gruppo: "zona" | "tipo"; tipo: filtro per tipo (solo per zona).
+// Pill accanto ai Filtri: come dividere la lista dei Ristoranti (per nome,
+// tipo, quartiere o città). Tocco fuori o Esc chiudono il menu.
+export function OrdinaLocali({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("keydown", close);
+    return () => document.removeEventListener("keydown", close);
+  }, [open]);
+  const scelta = ORDINI_LOCALI.find(([k]) => k === value) || ORDINI_LOCALI[2];
+  return (
+    <span className="relative">
+      {open && <div className="fixed inset-0 z-50" aria-hidden="true" onClick={() => setOpen(false)} />}
+      <button type="button" className={`pillola${open ? " attiva" : ""}`} aria-label={`Ordina per ${scelta[1].toLowerCase()}`} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <ArrowUpDown className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+        {scelta[1]}
+      </button>
+      {open && (
+        <div role="menu" aria-label="Ordina per" className="absolute right-0 top-full z-[60] mt-1.5 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] font-sans normal-case tracking-normal">
+          <p className="micro border-b border-riga px-4 pb-1.5 pt-2.5 font-bold">Ordina per</p>
+          {ORDINI_LOCALI.map(([k, label], i) => (
+            <button
+              key={k}
+              type="button"
+              role="menuitemradio"
+              aria-checked={k === scelta[0]}
+              className={`flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em] ${i < ORDINI_LOCALI.length - 1 ? "border-b border-riga" : ""}`}
+              onClick={() => {
+                setOpen(false);
+                onChange(k);
+              }}
+            >
+              {label}
+              {k === scelta[0] && <Check className="h-4 w-4" strokeWidth={3} aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo = "zona", tipo = "", onTipo }) {
   // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
   // ({ key, mode: "modifica" | "aggiungi" }).
@@ -160,6 +203,15 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo
   const nuovi = gruppiLocali(filtro ? restaurants.filter((r) => r.tipo === filtro) : restaurants, gruppo);
   const gruppi = editing?.fermi ? gruppiFermi(editing.fermi, nuovi) : nuovi;
   const tipiPresenti = Object.keys(TIPI_LOCALE).filter((k) => conta[k]);
+
+  // Sotto il nome quello che il gruppo non dice già: il tipo e/o la zona.
+  const sottotitolo = (r) => {
+    const t = (TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante).label;
+    if (gruppo === "tipo") return r.zona || r.citta || SENZA_ZONA;
+    if (gruppo === "citta") return [t, r.zona].filter(Boolean).join(" · ");
+    if (gruppo === "nome") return [t, r.zona || r.citta].filter(Boolean).join(" · ");
+    return t;
+  };
 
   const riga = (r) => (
     <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
@@ -209,7 +261,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo
                 </span>
               )}
             </div>
-            <p className="micro mt-0.5 font-semibold" data-tipo-locale>{perTipo ? r.zona || r.citta || "Zona non indicata" : (TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante).label}</p>
+            <p className="micro mt-0.5 font-semibold" data-tipo-locale>{sottotitolo(r)}</p>
             {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
             {onStreet && editing?.key === r.key && (
               <AddressForm
@@ -254,12 +306,12 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo
       )}
       {gruppi.map((g) => (
         <section key={g.key} aria-label={g.label} data-gruppo-locali>
-          <h3 className="mt-5 flex items-baseline justify-between gap-3 border-b-[1.5px] border-inchiostro pb-1.5">
+          {g.label && <h3 className="mt-5 flex items-baseline justify-between gap-3 border-b-[1.5px] border-inchiostro pb-1.5">
             <span className="min-w-0 text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">{g.label}</span>
             <span className="micro num shrink-0 font-bold">{g.list.length === 1 ? "1 locale" : `${g.list.length} locali`}</span>
-          </h3>
+          </h3>}
           {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato la via di questi locali. Tocca i tre puntini e poi Aggiungi via.</p>}
-          <ul className="righe">{g.list.map(riga)}</ul>
+          <ul className={`righe${g.label ? "" : " mt-2"}`}>{g.list.map(riga)}</ul>
         </section>
       ))}
     </>
