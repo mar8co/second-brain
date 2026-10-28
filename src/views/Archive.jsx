@@ -1,6 +1,7 @@
 // Archivio: ricerca testuale istantanea + filtri per tipo, periodo, sito, autore, categoria.
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { setGalleria } from "../lib/galleria.js";
+import { api } from "../lib/api.js";
 import { useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ArrowUpDown, FileText, Images, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
 import { Page } from "../components/Layout.jsx";
@@ -70,6 +71,9 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
       // Non salvata (rete o accesso): la riga resta com'era e si può riprovare.
     }
   };
+
+  // Via letta da un link di Google Maps incollato al posto della via ("" se non c'è).
+  const streetFromLink = async (r, link) => (await api.geoLink({ name: r.name, address: r.citta || r.address }, link)).found?.street || "";
 
   // Elimina un locale dalla lista Ristoranti (i contenuti restano salvati),
   // con "Annulla" per qualche secondo.
@@ -308,7 +312,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : sezione ? (
           <>
             {sezione === "ristoranti" ? (
-              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onDelete={deleteRestaurant} gruppo={gruppo} tipo={tipoLocale} onTipo={(t) => setParam({ tipo: t })} />
+              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onLink={streetFromLink} onDelete={deleteRestaurant} gruppo={gruppo} tipo={tipoLocale} onTipo={(t) => setParam({ tipo: t })} />
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes], sezione === "foto" ? BOX_FIXED.foto : BOX_FIXED.file)} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (

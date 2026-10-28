@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpDown, Check, CalendarPlus, ChefHat, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, mapsUrl } from "../lib/spots.js";
+import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, linkIn, mapsUrl } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
@@ -63,15 +63,36 @@ const NAME = "text-[1.2rem] font-extrabold leading-[1.05] tracking-[-0.035em]";
 // Indirizzi del locale (anche più sedi): un campo per sede, con Aggiungi sede,
 // Salva e Annulla. Nessun indirizzo salvato = si toglie tutto e il locale torna
 // a essere cercato.
-function AddressForm({ name, start, onSave, onCancel }) {
+function AddressForm({ name, start, onSave, onCancel, onLink }) {
   const [rows, setRows] = useState(start.length ? start : [""]);
+  const [busy, setBusy] = useState(false);
+  const [errore, setErrore] = useState("");
   const set = (i, v) => setRows((r) => r.map((x, j) => (j === i ? v : x)));
+  // Un campo con un link (di Google Maps, anche copiato col testo della
+  // condivisione) si trasforma nella via letta da quel link.
+  const salva = async () => {
+    const links = onLink ? rows.map((v, i) => [linkIn(v), i]).filter(([u]) => u) : [];
+    if (!links.length) return onSave(rows);
+    setBusy(true);
+    setErrore("");
+    const next = [...rows];
+    let mancano = 0;
+    for (const [u, i] of links) {
+      const via = await onLink(u).catch(() => "");
+      if (via) next[i] = via;
+      else mancano++;
+    }
+    setRows(next);
+    setBusy(false);
+    if (mancano) setErrore("Non sono riuscito a leggere la via da questo link. Scrivila a mano o prova un altro link.");
+    else onSave(next);
+  };
   return (
     <form
       className="mt-2"
       onSubmit={(e) => {
         e.preventDefault();
-        onSave(rows);
+        if (!busy) salva();
       }}
     >
       {rows.map((v, i) => (
@@ -84,7 +105,7 @@ function AddressForm({ name, start, onSave, onCancel }) {
             autoFocus={i === rows.length - 1}
             autoComplete="off"
             autoCapitalize="words"
-            placeholder="Via e numero, città"
+            placeholder={onLink ? "Via e numero, città, o link di Maps" : "Via e numero, città"}
             onChange={(e) => set(i, e.target.value)}
           />
           <button type="button" className="tondo shrink-0" aria-label={`Togli l'indirizzo ${i + 1} di ${name}`} onClick={() => setRows((r) => (r.length > 1 ? r.filter((_, j) => j !== i) : [""]))}>
@@ -95,8 +116,11 @@ function AddressForm({ name, start, onSave, onCancel }) {
       <button type="button" className="link mt-1 text-[0.88rem]" onClick={() => setRows((r) => [...r, ""])}>
         + Aggiungi un'altra sede
       </button>
+      <p aria-live="polite" className={`micro text-[0.85rem] ${busy || errore ? "mt-1" : "sr-only"}`}>
+        {busy ? "Leggo la via dal link di Maps…" : errore}
+      </p>
       <div className="flex gap-4 text-[0.88rem]">
-        <button type="submit" className="link">Salva</button>
+        <button type="submit" className="link" disabled={busy}>Salva</button>
         <button type="button" className="link text-tenue" onClick={onCancel}>Annulla</button>
       </div>
     </form>
@@ -168,7 +192,7 @@ export function OrdinaLocali({ value, onChange }) {
   );
 }
 
-export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo = "zona", tipo = "", onTipo }) {
+export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete, gruppo = "zona", tipo = "", onTipo }) {
   // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
   // ({ key, mode: "modifica" | "aggiungi" }).
   const [menu, setMenu] = useState(null);
@@ -269,6 +293,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo
                 key={editing.mode}
                 start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets.length ? r.streets : [""]}
                 onCancel={() => setEditing(null)}
+                onLink={onLink ? (url) => onLink(r, url) : undefined}
                 onSave={(v) => {
                   setEditing(null);
                   onStreet(r.name, v);
@@ -310,7 +335,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo
             <span className="min-w-0 text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">{g.label}</span>
             <span className="micro num shrink-0 font-bold">{g.list.length === 1 ? "1 locale" : `${g.list.length} locali`}</span>
           </h3>}
-          {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato la via di questi locali. Tocca i tre puntini e poi Aggiungi via.</p>}
+          {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato la via di questi locali. Tocca i tre puntini, poi Aggiungi via: scrivila o incolla il link del locale su Google Maps.</p>}
           <ul className={`righe${g.label ? "" : " mt-2"}`}>{g.list.map(riga)}</ul>
         </section>
       ))}

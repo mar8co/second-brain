@@ -3,6 +3,7 @@
 // Lo stesso locale o evento citato in più contenuti compare una volta, con tutti
 // i link ai contenuti da cui viene.
 import { normalize } from "./search.js";
+import { extractUrl } from "./detect.js";
 
 const text = (v) => (typeof v === "string" ? v.trim() : "");
 const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(text(v));
@@ -336,3 +337,10 @@ export const docsOf = (items) => (items || []).filter((it) => it.file_path && !i
 
 // Le note scritte a mano (senza file): stanno nel box "File e note".
 export const notesOf = (items) => (items || []).filter((it) => it.type === "note" && !it.file_path);
+
+// Link scritto in un campo, anche attaccato al testo prima (incollando in un
+// campo di una riga, il ritorno a capo tra nome e link può sparire).
+export function linkIn(v) {
+  const m = String(v || "").match(/https?:\/\/\S+/i);
+  return m ? extractUrl(m[0]) : null;
+}

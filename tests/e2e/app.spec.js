@@ -774,6 +774,38 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
 });
 
+test("Archivio a box: Ristoranti, la via si prende incollando il link di Google Maps", async ({ page }) => {
+  // OpenStreetMap non trova il Bar per nome; il link di Maps passa al server vero (con il finto OSM).
+  await page.route("**/api/geo", async (route) => {
+    const body = route.request().postDataJSON();
+    if (!body.link) return route.fulfill({ json: { found: null } });
+    if (body.link.includes("sbagliato")) return route.fulfill({ json: { found: null, error: "Non ho trovato la via in questo link." } });
+    return route.continue();
+  });
+  await addLink(page, `${FIX}/trastevere`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/archivio?sezione=ristoranti");
+  const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Via da controllare" });
+  await expect(daControllare).toContainText("incolla il link del locale su Google Maps");
+  const bar = page.locator("li[data-scheda-locale]").first();
+  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
+  await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
+  const campo = bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" });
+  await expect(campo).toHaveAttribute("placeholder", /link di Maps/);
+  // Un link da cui non si legge la via: resta nel campo, con un avviso.
+  await campo.fill("https://maps.app.goo.gl/sbagliato");
+  await bar.getByRole("button", { name: "Salva" }).click();
+  await expect(bar.getByText(/Non sono riuscito a leggere la via da questo link/)).toBeVisible();
+  await expect(campo).toHaveValue("https://maps.app.goo.gl/sbagliato");
+  // Il testo copiato da "Condividi" di Google Maps (nome e link, attaccati come in un
+  // campo di una riga): la via viene dal link.
+  await campo.fill("Bar San Calistohttps://www.google.com/maps/place/Bar+San+Calisto,+Piazza+di+San+Calisto,+3,+00153+Roma+RM/@41.8889,12.4699,17z/data=!3d41.8889!4d12.4699");
+  await bar.getByRole("button", { name: "Salva" }).click();
+  await expect(bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
+  await expect(bar.getByRole("textbox")).toHaveCount(0);
+  await expect(daControllare).toHaveCount(0);
+});
+
 test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, con Annulla", async ({ page }) => {
   await page.route("**/api/geo", (route) => route.fulfill({ json: { found: null } }));
   await addLink(page, `${FIX}/trastevere`);

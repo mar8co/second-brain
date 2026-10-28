@@ -61,6 +61,8 @@ export const api = {
   pushTest: () => post("/api/push", { action: "test" }, { timeoutMs: 20000 }),
   embed: (texts, taskType = "RETRIEVAL_DOCUMENT") => post("/api/ai", { action: "embed", texts, taskType }, { timeoutMs: 25000 }),
   geo: (place) => post("/api/geo", { place }, { timeoutMs: 15000 }),
+  // Via e quartiere dal link di Google Maps di un locale → { found: { street, zona? } | null }.
+  geoLink: (place, link) => post("/api/geo", { place, link }, { timeoutMs: 30000 }),
   thumb: (id, url) => post("/api/thumb", { id, url }, { timeoutMs: 20000 }),
   // Archivi grandi: quali elementi leggere per intero → { ids }.
   // Posizione di un posto dal nome (OpenStreetMap) → { query, found }.
