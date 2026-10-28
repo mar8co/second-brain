@@ -62,8 +62,8 @@ export function cittaDi(address) {
 
 // Locali divisi per quartiere (altrimenti città), per tipo, per città o in un
 // solo elenco per nome: [{ key, label, list, controllare? }], prima i gruppi più
-// numerosi; quelli senza zona o città in fondo. Per quartiere, in cima "Via da
-// controllare": i locali di cui né l'AI né OpenStreetMap hanno trovato la via.
+// numerosi; quelli senza zona o città in fondo. Per quartiere, in fondo a tutto
+// "Via da controllare": i locali di cui né l'AI né OpenStreetMap hanno trovato la via.
 export const SENZA_ZONA = "Zona non indicata";
 export const SENZA_CITTA = "Città non indicata";
 export const DA_CONTROLLARE = "Via da controllare";
@@ -87,7 +87,7 @@ export function gruppiLocali(restaurants, per = "zona") {
     if (!m.has(k)) m.set(k, { key: k, label, list: [], ...(controllare ? { controllare: true } : {}) });
     m.get(k).list.push(r);
   }
-  const posto = (g) => (g.controllare ? -1 : g.label === SENZA_ZONA || g.label === SENZA_CITTA ? 1 : 0);
+  const posto = (g) => (g.controllare ? 2 : g.label === SENZA_ZONA || g.label === SENZA_CITTA ? 1 : 0);
   return [...m.values()].sort((a, b) => posto(a) - posto(b) || b.list.length - a.list.length || a.label.localeCompare(b.label, "it"));
 }
 
@@ -129,6 +129,19 @@ export function streetQueue(items) {
       e.targets.push({ id: item.id, index, name: text(p.name) });
       m.set(key, e);
     });
+    // Le altre sedi scritte a mano: il quartiere di ognuna, una volta.
+    places.forEach((p, index) => {
+      if (!p || p.kind !== "ristorante" || !text(p.name) || !p.manual) return;
+      placeAddresses(p)
+        .slice(1)
+        .forEach((sede) => {
+          if (typeof p.zone_sedi?.[sede] === "string") return;
+          const key = `${normalize(p.name)}|${normalize(sede)}`;
+          const e = m.get(key) || { name: text(p.name), address: sede, sede, targets: [] };
+          e.targets.push({ id: item.id, index, name: text(p.name), sede });
+          m.set(key, e);
+        });
+    });
   }
   return [...m.values()];
 }
@@ -166,6 +179,34 @@ export function streetPatch(item, index, name, found, now = new Date()) {
   return { ai: { ...item.ai, places: next } };
 }
 
+// Quartiere di una sede in più di un locale (found = { zona } o null), salvato in
+// zone_sedi[sede] ("" = cercato, non trovato); null se la sede non c'è più.
+export function sedePatch(item, index, name, sede, found) {
+  const places = item.ai?.places;
+  const p = Array.isArray(places) ? places[index] : null;
+  if (!p || text(p.name) !== name || !placeAddresses(p).slice(1).includes(sede)) return null;
+  const next = places.map((x, i) => (i === index ? { ...x, zone_sedi: { ...(x.zone_sedi || {}), [sede]: text(found?.zona) } } : x));
+  return { ai: { ...item.ai, places: next } };
+}
+
+// Righe della lista Ristoranti: un locale con più sedi scritte a mano diventa
+// una riga per sede, ognuna con la sua via e il suo quartiere (e la sua città).
+export function righeLocali(restaurants) {
+  return restaurants.flatMap((r) => {
+    if (!r.manual || r.streets.length < 2) return [{ ...r, tutte: r.streets }];
+    return r.streets.map((sede, i) => ({
+      ...r,
+      key: `${r.key}#${i}`,
+      streets: [sede],
+      tutte: r.streets,
+      sede,
+      address: sede,
+      zona: i === 0 ? r.zona : text(r.zoneSedi?.[sede]),
+      citta: cittaDi(sede),
+    }));
+  });
+}
+
 // Indirizzi di un locale: le sedi scritte a mano (sedi), altrimenti la via
 // trovata o l'indirizzo letto dall'AI.
 export function placeAddresses(p) {
@@ -194,7 +235,7 @@ export function manualStreetPatches(items, name, streets, now = new Date()) {
     const next = places.map((p) => {
       if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
       const rest = { ...p };
-      for (const f of ["street", "sedi", "manual", "geo_at", "zona", "zona_at", "zona_v"]) delete rest[f];
+      for (const f of ["street", "sedi", "manual", "geo_at", "zona", "zona_at", "zona_v", "zone_sedi"]) delete rest[f];
       return list.length ? { ...rest, street: list[0], sedi: list, manual: true, geo_at: now.toISOString() } : rest;
     });
     out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
@@ -273,7 +314,7 @@ export function restaurantsOf(items, ordine = "recenti") {
       const manual = p.manual === true && addresses.length > 0;
       const e = m.get(key);
       if (!e) {
-        m.set(key, { key, name: text(p.name), addresses, manual, items: [item], tipo: text(p.tipo), zona: text(p.zona), cercato: Boolean(p.geo_at) });
+        m.set(key, { key, name: text(p.name), addresses, manual, items: [item], tipo: text(p.tipo), zona: text(p.zona), zoneSedi: p.zone_sedi || {}, cercato: Boolean(p.geo_at) });
         continue;
       }
       if (!e.items.includes(item)) e.items.push(item);
@@ -284,6 +325,7 @@ export function restaurantsOf(items, ordine = "recenti") {
         e.addresses = addresses;
         e.manual = manual;
         e.zona = text(p.zona) || e.zona;
+        e.zoneSedi = p.zone_sedi || {};
       } else if (!e.zona) e.zona = text(p.zona);
     }
   }

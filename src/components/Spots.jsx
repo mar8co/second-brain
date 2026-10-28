@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpDown, Check, CalendarPlus, ChefHat, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, linkIn, mapsUrl } from "../lib/spots.js";
+import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
@@ -224,7 +224,8 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
   const conta = {};
   for (const r of restaurants) conta[r.tipo] = (conta[r.tipo] || 0) + 1;
   const filtro = !perTipo && conta[tipo] ? tipo : "";
-  const nuovi = gruppiLocali(filtro ? restaurants.filter((r) => r.tipo === filtro) : restaurants, gruppo);
+  // Un locale con più sedi: una riga per sede, nel quartiere di ognuna.
+  const nuovi = gruppiLocali(righeLocali(filtro ? restaurants.filter((r) => r.tipo === filtro) : restaurants), gruppo);
   const gruppi = editing?.fermi ? gruppiFermi(editing.fermi, nuovi) : nuovi;
   const tipiPresenti = Object.keys(TIPI_LOCALE).filter((k) => conta[k]);
 
@@ -239,7 +240,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
 
   const riga = (r) => (
     <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
-      <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
+      <Riga onDelete={onDelete ? () => onDelete(r) : null}>
         <div className="flex cursor-pointer gap-3 bg-[var(--sfondo)] py-3" onClick={apriCard(r.items, onOpen)}>
           <IconaTipo tipo={r.tipo} />
           <div className="min-w-0 flex-1">
@@ -274,7 +275,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
                           className="block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em] text-[#e02a0d]"
                           onClick={() => {
                             setMenu(null);
-                            onDelete(r.name);
+                            onDelete(r);
                           }}
                         >
                           Elimina
@@ -291,7 +292,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
               <AddressForm
                 name={r.name}
                 key={editing.mode}
-                start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets.length ? r.streets : [""]}
+                start={editing.mode === "aggiungi" ? [...r.tutte, ""] : r.tutte.length ? r.tutte : [""]}
                 onCancel={() => setEditing(null)}
                 onLink={onLink ? (url) => onLink(r, url) : undefined}
                 onSave={(v) => {

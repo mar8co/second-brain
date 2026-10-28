@@ -3,7 +3,7 @@
 // secondo, e il risultato si salva nell'elemento (ogni locale si cerca una volta).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api.js";
-import { queryOf, streetPatch, streetQueue } from "../lib/spots.js";
+import { queryOf, sedePatch, streetPatch, streetQueue } from "../lib/spots.js";
 
 export function useStreets(archive, active) {
   const queue = useMemo(() => (active ? streetQueue(archive.items) : []), [archive.items, active]);
@@ -34,7 +34,9 @@ export function useStreets(archive, active) {
         // La modifica si calcola al momento di scrivere, dalla versione più
         // recente: se nel frattempo l'utente ha cambiato le sedi, valgono le sue.
         for (const t of next.targets) {
-          await latest.current.updateWith(t.id, (fresh) => (queryOf(fresh, t.index) === next.address ? streetPatch(fresh, t.index, t.name, found) : null));
+          await latest.current.updateWith(t.id, (fresh) =>
+            t.sede ? sedePatch(fresh, t.index, t.name, t.sede, found) : queryOf(fresh, t.index) === next.address ? streetPatch(fresh, t.index, t.name, found) : null,
+          );
         }
       } catch {
         // Servizio non raggiungibile o troppe richieste: ci si ferma, resta "Cerca su Maps".
