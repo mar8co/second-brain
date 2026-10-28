@@ -91,6 +91,15 @@ describe("via di un locale (OpenStreetMap)", () => {
     aiFetch.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Municipio I" }) }] } }] }) }));
     const r2 = await handleGeo({ body: { place: { name: "Sakaba", address: "Roma" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl, aiFetch, wait: async () => {} });
     expect(r2.json.found.zona).toBe("");
+    // Con una via data (scritta a mano o letta dall'AI) il quartiere viene da quella, non dalla via trovata.
+    aiFetch.mockImplementation(async (url, opts) => {
+      prompt = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Monti" }) }] } }] }) };
+    });
+    const r3 = await handleGeo({ body: { place: { name: "Sakaba", address: "Via Panisperna 10, Roma" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl, aiFetch, wait: async () => {} });
+    expect(r3.json.found.zona).toBe("Monti");
+    expect(prompt).toContain("Via Panisperna 10, Roma");
+    expect(prompt).not.toContain("Faà di Bruno 31");
     // Senza via, all'AI non si chiede nulla.
     aiFetch.mockClear();
     const none = vi.fn(async () => ({ ok: true, status: 200, json: async () => [] }));

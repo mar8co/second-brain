@@ -138,7 +138,8 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
   // Il quartiere: con l'AI, il nome che usa la gente a partire dalla via (le
   // zone di OpenStreetMap sono spesso amministrative, come "Città giudiziaria");
   // senza AI, quello di OpenStreetMap.
-  const via = found?.street || (VIA.test(address) ? address : "");
+  // La via data (scritta a mano o letta dall'AI) vale più di quella trovata.
+  const via = VIA.test(address) ? address : found?.street || "";
   if (via && aiConfigured(env)) {
     try {
       const zona = await quartiereWithAi({ env, name: str(body?.place?.name, 150), address: via, hints: found?.hints || {}, fetchImpl: aiFetch });

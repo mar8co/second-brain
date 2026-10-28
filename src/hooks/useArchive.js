@@ -382,7 +382,7 @@ export function useArchive(store, { ai }) {
         const cur = itemsRef.current.find((x) => x.id === list[i].id);
         if (!cur || !vectors[i]) continue;
         await store.setEmbedding(cur.id, vectors[i]);
-        upsert(await store.update(cur.id, { ai: { ...(cur.ai || {}), emb_at: new Date().toISOString() } }));
+        await updateWith(cur.id, (fresh) => ({ ai: { ...(fresh.ai || {}), emb_at: new Date().toISOString() } }));
       }
       return list.length === EMBED_BATCH;
     })()
@@ -395,7 +395,7 @@ export function useArchive(store, { ai }) {
       .finally(() => {
         embedBusy.current = false;
       });
-  }, [store, ai, loading, items, upsert, embedRound]);
+  }, [store, ai, loading, items, updateWith, embedRound]);
 
   // Copia durevole delle miniature dei link (le copertine dei social scadono):
   // una alla volta, in silenzio, solo con l'archivio sincronizzato. Al massimo

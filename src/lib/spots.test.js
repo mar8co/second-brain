@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { queryOf, ZONA_V, DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { gruppiFermi, queryOf, ZONA_V, DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -314,5 +314,19 @@ describe("queryOf", () => {
     expect(queryOf(it0, 0)).toBe("Via Uno 1, Roma");
     expect(queryOf(it0, 1)).toBe("Roma");
     expect(queryOf({}, 0)).toBe("");
+  });
+});
+
+describe("gruppiFermi", () => {
+  it("tiene i gruppi com'erano, con i dati nuovi; i locali nuovi nel loro gruppo, se c'è", () => {
+    const a = { key: "a", name: "A", zona: "Roma" };
+    const b = { key: "b", name: "B" };
+    const fermi = [{ key: "trastevere", label: "Trastevere", list: ["a", "b"] }];
+    const nuovi = [
+      { key: "roma", label: "Roma", list: [a] },
+      { key: "trastevere", label: "Trastevere", list: [b, { key: "c", name: "C" }] },
+      { key: "milano", label: "Milano", list: [{ key: "d", name: "D" }] },
+    ];
+    expect(gruppiFermi(fermi, nuovi)).toEqual([{ key: "trastevere", label: "Trastevere", list: [a, b, { key: "c", name: "C" }] }]);
   });
 });

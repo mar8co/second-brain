@@ -78,6 +78,22 @@ export function gruppiLocali(restaurants, per = "zona") {
   return [...m.values()].sort((a, b) => posto(a) - posto(b) || b.list.length - a.list.length || a.label.localeCompare(b.label, "it"));
 }
 
+// Gruppi tenuti come erano (fermi: [{ key, label, list: [chiavi] }]) con i dati
+// aggiornati dei locali; un locale nuovo va nel gruppo che avrebbe, se c'è.
+export function gruppiFermi(fermi, nuovi) {
+  const dove = new Map();
+  for (const g of nuovi) for (const r of g.list) dove.set(r.key, { r, label: g.key });
+  const visti = new Set();
+  const out = fermi.map((g) => ({
+    ...g,
+    list: g.list.map((k) => (visti.add(k), dove.get(k)?.r)).filter(Boolean),
+  }));
+  for (const [k, { r, label }] of dove) {
+    if (!visti.has(k)) out.find((g) => g.key === label)?.list.push(r);
+  }
+  return out.filter((g) => g.list.length);
+}
+
 // Locali di cui cercare via e quartiere su OpenStreetMap: quelli senza via mai
 // cercati e quelli senza quartiere mai cercato.
 // [{ name, address, targets: [{ id, index }] }]; lo stesso locale citato in più

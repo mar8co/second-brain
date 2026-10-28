@@ -139,7 +139,11 @@ http
         : /^Via dei Vascellari/.test(q)
           ? [{ category: "highway", type: "residential", name: "Via dei Vascellari", display_name: "Via dei Vascellari, Trastevere, Roma", address: { road: "Via dei Vascellari", suburb: "Trastevere", city: "Roma" } }]
           : [];
-      return send(res, 200, "application/json", JSON.stringify(hit));
+      // Lenta con la via scritta a mano nel test: la risposta arriva mentre si
+      // modificano le sedi (i gruppi devono restare fermi).
+      const lenta = /Via Prova/.test(q) ? 1500 : 0;
+      setTimeout(() => send(res, 200, "application/json", JSON.stringify(hit)), lenta);
+      return;
     }
     if (req.url === "/reel-privato") return send(res, 302, "text/html", "", { location: "/accounts/login" });
     if (pages[req.url]) return send(res, 200, "text/html; charset=utf-8", pages[req.url]);
