@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { gruppiFermi, linkIn, queryOf, ZONA_V, DA_CONTROLLARE, SENZA_CITTA, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { gruppiFermi, linkIn, queryOf, righeLocali, sedePatch, ZONA_V, DA_CONTROLLARE, SENZA_CITTA, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -296,7 +296,7 @@ describe("tipo e zona dei locali", () => {
     expect(gruppiLocali([], "nome")).toEqual([]);
   });
 
-  it("per zona, in cima i locali senza via già cercati su OpenStreetMap", () => {
+  it("per zona, in fondo i locali senza via già cercati su OpenStreetMap", () => {
     const places = [
       { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere" },
       { name: "Introvabile", address: "Roma", kind: "ristorante", geo_at: "2026-10-28T08:00:00Z" },
@@ -304,8 +304,8 @@ describe("tipo e zona dei locali", () => {
     ];
     const r = restaurantsOf([{ id: "a", created_at: "2026-10-01", ai: { v: 5, places } }]);
     const g = gruppiLocali(r);
-    expect(g.map((x) => [x.label, x.list.map((l) => l.name)])).toEqual([[DA_CONTROLLARE, ["Introvabile"]], ["Roma", ["Ancora da cercare"]], ["Trastevere", ["Da Enzo"]]]);
-    expect(g[0].controllare).toBe(true);
+    expect(g.map((x) => [x.label, x.list.map((l) => l.name)])).toEqual([["Roma", ["Ancora da cercare"]], ["Trastevere", ["Da Enzo"]], [DA_CONTROLLARE, ["Introvabile"]]]);
+    expect(g[2].controllare).toBe(true);
     expect(gruppiLocali(r, "tipo").some((x) => x.controllare)).toBe(false);
   });
 });
@@ -339,5 +339,38 @@ describe("linkIn", () => {
     expect(linkIn("Bar San Calistohttps://maps.app.goo.gl/abc")).toBe("https://maps.app.goo.gl/abc");
     expect(linkIn("Bar San Calisto https://maps.app.goo.gl/abc?g_st=ic")).toMatch(/^https:\/\/maps\.app\.goo\.gl\/abc/);
     expect(linkIn("Via Ostiense 12, Roma")).toBeNull();
+  });
+});
+
+describe("locali con più sedi", () => {
+  const item = {
+    id: "a",
+    created_at: "2026-10-01",
+    ai: { places: [{ name: "Mazzo", address: "Roma", kind: "ristorante", tipo: "trattoria", manual: true, street: "Via degli Equi 62, Roma", sedi: ["Via degli Equi 62, Roma", "Via Gola 4, Milano"], zona: "San Lorenzo", zona_v: ZONA_V, geo_at: "x" }] },
+  };
+
+  it("ogni sede in più si cerca una volta, per il suo quartiere", () => {
+    expect(streetQueue([item])).toEqual([{ name: "Mazzo", address: "Via Gola 4, Milano", sede: "Via Gola 4, Milano", targets: [{ id: "a", index: 0, name: "Mazzo", sede: "Via Gola 4, Milano" }] }]);
+    const p = sedePatch(item, 0, "Mazzo", "Via Gola 4, Milano", { zona: "Navigli" });
+    expect(p.ai.places[0].zone_sedi).toEqual({ "Via Gola 4, Milano": "Navigli" });
+    expect(streetQueue([{ ...item, ...p }])).toEqual([]);
+    // Non trovato: segnato come cercato.
+    expect(sedePatch(item, 0, "Mazzo", "Via Gola 4, Milano", null).ai.places[0].zone_sedi).toEqual({ "Via Gola 4, Milano": "" });
+    // Sede tolta nel frattempo: non si scrive nulla.
+    expect(sedePatch(item, 0, "Mazzo", "Via Altra 1, Milano", { zona: "x" })).toBeNull();
+  });
+
+  it("una riga per sede, ognuna con la sua via, il suo quartiere e la sua città", () => {
+    const withZone = { ...item, ai: { places: [{ ...item.ai.places[0], zone_sedi: { "Via Gola 4, Milano": "Navigli" } }] } };
+    const righe = righeLocali(restaurantsOf([withZone]));
+    expect(righe.map((r) => [r.key, r.streets, r.zona, r.citta, r.sede])).toEqual([
+      ["mazzo#0", ["Via degli Equi 62, Roma"], "San Lorenzo", "Roma", "Via degli Equi 62, Roma"],
+      ["mazzo#1", ["Via Gola 4, Milano"], "Navigli", "Milano", "Via Gola 4, Milano"],
+    ]);
+    expect(righe[1].tutte).toEqual(["Via degli Equi 62, Roma", "Via Gola 4, Milano"]);
+    expect(gruppiLocali(righe).map((g) => g.label)).toEqual(["Navigli", "San Lorenzo"]);
+    // Una sola sede: una riga sola, senza "sede".
+    const una = righeLocali(restaurantsOf([{ id: "b", created_at: "2026-10-01", ai: { places: [{ name: "Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" }] } }]));
+    expect(una.map((r) => [r.key, r.sede, r.tutte])).toEqual([["enzo", undefined, ["Via dei Vascellari 29, Roma"]]]);
   });
 });

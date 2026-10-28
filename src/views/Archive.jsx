@@ -77,7 +77,14 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
 
   // Elimina un locale dalla lista Ristoranti (i contenuti restano salvati),
   // con "Annulla" per qualche secondo.
-  const deleteRestaurant = async (name) => {
+  // Una riga di un locale con più sedi toglie solo quella sede.
+  const deleteRestaurant = async (r) => {
+    if (r.sede) {
+      await saveStreet(r.name, r.tutte.filter((x) => x !== r.sede));
+      toast("Sede eliminata", { action: { label: "Annulla", run: () => saveStreet(r.name, r.tutte) } });
+      return;
+    }
+    const name = r.name;
     const apply = async (hidden) => {
       try {
         for (const { id } of hideRestaurantPatches(archive.items, name, hidden)) await archive.updateWith(id, (fresh) => hideRestaurantPatches([fresh], name, hidden)[0]?.patch || null);
