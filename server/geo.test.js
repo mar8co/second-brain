@@ -107,6 +107,18 @@ describe("via di un locale (OpenStreetMap)", () => {
     expect(aiFetch).not.toHaveBeenCalled();
   });
 
+  it("se l'AI non risponde: quartiere di OpenStreetMap dalla via, e si riprova dopo", async () => {
+    const fetchImpl = vi.fn(async (url) => ({ ok: true, status: 200, json: async () => (url.includes("Casamora") ? [] : [{ category: "highway", address: { road: "Via di Monte Testaccio", suburb: "Testaccio" } }]) }));
+    const aiFetch = vi.fn(async () => ({ ok: false, status: 429, json: async () => ({ error: { message: "quota" } }), text: async () => "quota" }));
+    const ai = { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" };
+    const r = await handleGeo({ body: { place: { name: "Casamora", address: "Via di Monte Testaccio 65b, Roma" } }, env: ai, fetchImpl, aiFetch, wait: async () => {} });
+    expect(r.json.found).toEqual({ street: "", zona: "Testaccio", riprova: true });
+    // L'AI risponde: niente riprova.
+    aiFetch.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Testaccio" }) }] } }] }) }));
+    const r2 = await handleGeo({ body: { place: { name: "Casamora", address: "Via di Monte Testaccio 65b, Roma" } }, env: ai, fetchImpl, aiFetch, wait: async () => {} });
+    expect(r2.json.found).toEqual({ street: "", zona: "Testaccio" });
+  });
+
   it("errori chiari; senza posto 400; senza login 401", async () => {
     const wait = async () => {};
     expect((await handleGeo({ body: {}, env, wait })).status).toBe(400);

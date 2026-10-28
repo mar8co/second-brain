@@ -13,7 +13,7 @@ import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, OrdinaLocali, RestaurantList } from "../components/Spots.jsx";
 import Gallery from "../components/Gallery.jsx";
-import { docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, notesOf, photosOf, restaurantsOf } from "../lib/spots.js";
+import { TIPI_LOCALE, docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, notesOf, opzioniLocali, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems, sortItems } from "../lib/search.js";
@@ -22,6 +22,9 @@ import { formatRange } from "../lib/calendar.js";
 
 const SEZIONI = ["ristoranti", "eventi", "foto", "file"];
 const FILTER_KEYS = ["type", "category", "author", "site", "from", "to", "preferiti"];
+// Filtri di ogni pagina: ognuna ha i suoi, utili per quello che mostra.
+const CHIAVI_SEZIONE = { ristoranti: ["tipo", "zona", "citta"], eventi: ["quando", "author"], foto: ["fcat", "from", "to"], file: ["fcat", "from", "to"] };
+const QUANDO = [["arrivo", "In arrivo"], ["senza", "Senza data"], ["passati", "Passati"]];
 const ORDINI = ["vecchi", "nome"]; // il predefinito ("recenti", data di archiviazione) è senza parametro
 
 // Vista scelta (box o lista), ricordata su questo telefono. Di partenza: box.
@@ -40,9 +43,9 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, query.get(k) || ""]));
   const active = FILTER_KEYS.filter((k) => filters[k]);
   const ordine = ORDINI.includes(query.get("ordine")) ? query.get("ordine") : "recenti";
-  // Box Ristoranti: divisi per zona (predefinito) o per tipo, e filtro per tipo.
+  // Box Ristoranti: divisi per quartiere (predefinito), tipo, nome o città.
   const gruppo = ["tipo", "nome", "citta"].includes(query.get("gruppo")) ? query.get("gruppo") : "zona";
-  const tipoLocale = query.get("tipo") || "";
+  const fs = (k) => query.get(k) || "";
   const [vista, setVistaState] = useState(readVista);
   const setVista = (v) => {
     setVistaState(v);
@@ -53,11 +56,11 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     }
   };
   // A box la categoria si sceglie dal box: non conta come filtro da mostrare.
-  const shown = active.filter((k) => !(vista === "box" && k === "category"));
-  const [open, setOpen] = useState(shown.length > 0);
-  // Box fissi Ristoranti ed Eventi (solo a box): quale è aperto.
   const sezioneParam = query.get("sezione");
   const sezione = vista === "box" && SEZIONI.includes(sezioneParam) ? sezioneParam : "";
+  const chiavi = sezione ? CHIAVI_SEZIONE[sezione] : FILTER_KEYS;
+  const shown = sezione ? chiavi.filter(fs) : active.filter((k) => !(vista === "box" && k === "category"));
+  const [open, setOpen] = useState(shown.length > 0);
   usePageColor(PAGE.archive);
   // Aperto il box Ristoranti, si cerca la via dei locali che hanno solo la città.
   useStreets(archive, sezione === "ristoranti");
@@ -136,18 +139,39 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   // Per i box: i risultati di ricerca e filtri, ma senza il filtro Categoria.
   const matches = useMemo(() => searchItems(items, q, { ...filters, category: "" }), [items, q, filters.type, filters.author, filters.site, filters.from, filters.to, filters.preferiti]); // eslint-disable-line react-hooks/exhaustive-deps
   const boxes = useMemo(() => groupByCategory(matches), [matches]);
-  const restaurants = useMemo(() => restaurantsOf(matches, ordine), [matches, ordine]);
-  const events = useMemo(() => eventsOf(matches), [matches]);
-  const photos = useMemo(() => photosOf(matches), [matches]);
-  const docs = useMemo(() => docsOf(matches), [matches]);
-  const notes = useMemo(() => notesOf(matches), [matches]);
-  const eventsTotal = events.upcoming.length + events.undated.length + events.past.length;
+  // Dentro Ristoranti, Eventi, Foto e File valgono la ricerca e i filtri di quella pagina.
+  const tutti = useMemo(() => searchItems(items, q, {}), [items, q]);
+  const fAuthor = filters.author;
+  const fFrom = filters.from;
+  const fTo = filters.to;
+  const base = useMemo(() => {
+    if (!sezione) return matches;
+    if (sezione === "eventi") return fAuthor ? tutti.filter((it) => it.author === fAuthor) : tutti;
+    if (sezione === "foto" || sezione === "file") return searchItems(items, q, { from: fFrom, to: fTo });
+    return tutti;
+  }, [sezione, matches, tutti, items, q, fAuthor, fFrom, fTo]);
+  const restaurants = useMemo(() => restaurantsOf(base, ordine), [base, ordine]);
+  const tuttiEventi = useMemo(() => eventsOf(base), [base]);
+  const quando = fs("quando");
+  const events = useMemo(
+    () => (quando ? { upcoming: quando === "arrivo" ? tuttiEventi.upcoming : [], undated: quando === "senza" ? tuttiEventi.undated : [], past: quando === "passati" ? tuttiEventi.past : [] } : tuttiEventi),
+    [tuttiEventi, quando],
+  );
+  const fcat = fs("fcat");
+  const conCat = (list) => (fcat ? list.filter((it) => (it.categories || []).includes(fcat)) : list);
+  const tuttiFoto = useMemo(() => photosOf(base), [base]);
+  const tuttiDocs = useMemo(() => docsOf(base), [base]);
+  const tutteNote = useMemo(() => notesOf(base), [base]);
+  const photos = conCat(tuttiFoto);
+  const docs = conCat(tuttiDocs);
+  const notes = conCat(tutteNote);
+  const eventsTotal = tuttiEventi.upcoming.length + tuttiEventi.undated.length + tuttiEventi.past.length;
   const plural = (n, uno, molti) => (n === 1 ? `1 ${uno}` : `${n} ${molti}`);
   const fissi = [
     { id: "ristoranti", name: "Ristoranti", Icon: Utensils, items: restaurants, sub: restaurants.length ? plural(restaurants.length, "locale", "locali") : "Ancora nessuno" },
-    { id: "eventi", name: "Eventi", Icon: CalendarDays, items: [], sub: !eventsTotal ? "Ancora nessuno" : events.upcoming.length ? `${events.upcoming.length} in arrivo` : plural(eventsTotal, "evento", "eventi") },
-    { id: "foto", name: "Foto e video", Icon: Images, items: photos, sub: photos.length ? plural(photos.length, "file", "file") : "Ancora nessuno" },
-    { id: "file", name: "File e note", Icon: FileText, items: [...docs, ...notes], sub: docs.length + notes.length ? [docs.length ? plural(docs.length, "file", "file") : "", notes.length ? plural(notes.length, "nota", "note") : ""].filter(Boolean).join(" · ") : "Ancora nessuno" },
+    { id: "eventi", name: "Eventi", Icon: CalendarDays, items: [], sub: !eventsTotal ? "Ancora nessuno" : tuttiEventi.upcoming.length ? `${tuttiEventi.upcoming.length} in arrivo` : plural(eventsTotal, "evento", "eventi") },
+    { id: "foto", name: "Foto e video", Icon: Images, items: tuttiFoto, sub: tuttiFoto.length ? plural(tuttiFoto.length, "file", "file") : "Ancora nessuno" },
+    { id: "file", name: "File e note", Icon: FileText, items: [...tuttiDocs, ...tutteNote], sub: tuttiDocs.length + tutteNote.length ? [tuttiDocs.length ? plural(tuttiDocs.length, "file", "file") : "", tutteNote.length ? plural(tutteNote.length, "nota", "note") : ""].filter(Boolean).join(" · ") : "Ancora nessuno" },
   ].map((t) => ({ ...t, kind: "fisso", color: BOX_FIXED[t.id] }));
   const [ordineSalvato, setOrdineSalvato] = useState(readOrder);
   const [ordina, setOrdina] = useState(false);
@@ -156,7 +180,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     const all = [...fissi, ...boxes.map(([name, its]) => ({ id: `c:${name}`, kind: "categoria", name, items: its, sub: plural(its.length, "contenuto", "contenuti"), color: categoryColor(name, nomi) }))];
     const byId = new Map(all.map((t) => [t.id, t]));
     return orderBoxes(all.map((t) => t.id), ordineSalvato).map((id) => byId.get(id));
-  }, [boxes, items, restaurants, events, photos, docs, notes, ordineSalvato]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [boxes, items, restaurants, tuttiEventi, tuttiFoto, tuttiDocs, tutteNote, ordineSalvato]); // eslint-disable-line react-hooks/exhaustive-deps
   const moveTile = (id, dir) => {
     const next = moveBox(tiles.map((t) => t.id), id, dir);
     setOrdineSalvato(next);
@@ -171,11 +195,16 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     const undo = archive.removeSoon(item);
     toast("Elemento eliminato", { action: { label: "Annulla", run: undo } });
   };
-  const clearAll = () => setParam(Object.fromEntries(FILTER_KEYS.map((k) => [k, ""])));
+  const clearAll = () => setParam(Object.fromEntries(chiavi.map((k) => [k, ""])));
+  // Scelte dei filtri delle pagine Ristoranti, Eventi, Foto e File.
+  const opzLocali = useMemo(() => (sezione === "ristoranti" ? opzioniLocali(restaurants) : null), [sezione, restaurants]);
+  const autoriEventi = useMemo(() => (sezione === "eventi" ? countValues(tutti.filter((it) => (it.ai?.events || []).some((e) => e?.name && e.hidden !== true)), "author") : []), [sezione, tutti]);
+  const catFile = useMemo(() => (sezione === "foto" ? countBy(tuttiFoto, "categories") : sezione === "file" ? countBy([...tuttiDocs, ...tutteNote], "categories") : []), [sezione, tuttiFoto, tuttiDocs, tutteNote]);
+  const etichetta = (k, v) => (k === "type" ? TYPES[v]?.label || v : k === "preferiti" ? "Preferiti" : k === "tipo" ? TIPI_LOCALE[v]?.label || v : k === "quando" ? QUANDO.find(([x]) => x === v)?.[1] || v : v);
   // Filtri attivi come pillole da togliere; Dal e Al insieme, come periodo.
   const chips = [
-    ...shown.filter((k) => k !== "from" && k !== "to").map((k) => ({ key: k, label: k === "type" ? TYPES[filters[k]]?.label || filters[k] : k === "preferiti" ? "Preferiti" : filters[k], clear: { [k]: "" } })),
-    ...(filters.from || filters.to ? [{ key: "periodo", label: formatRange(filters.from, filters.to), clear: { from: "", to: "" } }] : []),
+    ...shown.filter((k) => k !== "from" && k !== "to").map((k) => ({ key: k, label: etichetta(k, fs(k)), clear: { [k]: "" } })),
+    ...(shown.includes("from") || shown.includes("to") ? [{ key: "periodo", label: formatRange(filters.from, filters.to), clear: { from: "", to: "" } }] : []),
   ];
   // Dentro un box il titolo della pagina è il nome del box.
   const dentro = vista === "box" && filters.category;
@@ -288,14 +317,33 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
                 Azzera filtri
               </button>
             </div>
-            <Scelta label="Tipo" value={filters.type} onChange={(v) => setParam({ type: v })}
-              options={Object.entries(TYPES).map(([k, t]) => [k, t.label])} />
-            <Periodo from={filters.from} to={filters.to} onChange={(v) => setParam(v)} />
-            <Scelta label="Sito" value={filters.site} onChange={(v) => setParam({ site: v })} options={sites} />
-            <Scelta label="Autore" value={filters.author} onChange={(v) => setParam({ author: v })} options={authors} />
-            <Scelta label="Categoria" value={filters.category} onChange={(v) => setParam({ category: v })} options={cats} />
-            <Scelta label="Preferiti" value={filters.preferiti} onChange={(v) => setParam({ preferiti: v })} options={[["1", "Solo preferiti"]]} />
-            <Scelta label="Ordina per" value={ordine === "recenti" ? "" : ordine} vuoto="Più recenti" onChange={(v) => setParam({ ordine: v })} options={[["vecchi", "Meno recenti"], ["nome", "Nome A–Z"]]} />
+            {sezione === "ristoranti" ? (
+              <>
+                <Scelta label="Tipo di locale" value={fs("tipo")} onChange={(v) => setParam({ tipo: v })} options={opzLocali.tipi} />
+                <Scelta label="Quartiere" value={fs("zona")} onChange={(v) => setParam({ zona: v })} options={opzLocali.zone} />
+                <Scelta label="Città" value={fs("citta")} vuoto="Tutte" onChange={(v) => setParam({ citta: v })} options={opzLocali.citta} />
+              </>
+            ) : sezione === "eventi" ? (
+              <>
+                <Scelta label="Quando" value={quando} onChange={(v) => setParam({ quando: v })} options={QUANDO} />
+                <Scelta label="Autore" value={filters.author} onChange={(v) => setParam({ author: v })} options={autoriEventi} />
+              </>
+            ) : sezione ? (
+              <>
+                <Scelta label="Categoria" value={fcat} vuoto="Tutte" onChange={(v) => setParam({ fcat: v })} options={catFile} />
+                <Periodo from={filters.from} to={filters.to} onChange={(v) => setParam(v)} />
+              </>
+            ) : (
+              <>
+                {vista === "lista" && <Scelta label="Categoria" value={filters.category} vuoto="Tutte" onChange={(v) => setParam({ category: v })} options={cats} />}
+                <Scelta label="Tipo" value={filters.type} onChange={(v) => setParam({ type: v })} options={Object.entries(TYPES).map(([k, t]) => [k, t.label])} />
+                <Periodo from={filters.from} to={filters.to} onChange={(v) => setParam(v)} />
+                <Scelta label="Preferiti" value={filters.preferiti} onChange={(v) => setParam({ preferiti: v })} options={[["1", "Solo preferiti"]]} />
+                <Scelta label="Sito" value={filters.site} onChange={(v) => setParam({ site: v })} options={sites} />
+                <Scelta label="Autore" value={filters.author} onChange={(v) => setParam({ author: v })} options={authors} />
+                <Scelta label="Ordina per" value={ordine === "recenti" ? "" : ordine} vuoto="Più recenti" onChange={(v) => setParam({ ordine: v })} options={[["vecchi", "Meno recenti"], ["nome", "Nome A–Z"]]} />
+              </>
+            )}
           </div>
         )}
 
@@ -319,7 +367,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : sezione ? (
           <>
             {sezione === "ristoranti" ? (
-              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onLink={streetFromLink} onDelete={deleteRestaurant} gruppo={gruppo} tipo={tipoLocale} onTipo={(t) => setParam({ tipo: t })} />
+              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onLink={streetFromLink} onDelete={deleteRestaurant} gruppo={gruppo} filtri={{ tipo: fs("tipo"), zona: fs("zona"), citta: fs("citta") }} />
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes], sezione === "foto" ? BOX_FIXED.foto : BOX_FIXED.file)} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (
@@ -370,8 +418,8 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
 // etichetta e valore; toccandola si aprono le pillole delle scelte.
 function Scelta({ label, value, onChange, options, vuoto = "Tutti" }) {
   const [open, setOpen] = useState(false);
-  const id = `f-${label.toLowerCase()}`;
-  // options: [valore, etichetta] oppure [valore, conteggio]
+  const id = `f-${label.toLowerCase().replace(/\s+/g, "-")}`;
+  // options: [valore, etichetta], [valore, conteggio] o [valore, etichetta, conteggio]
   const labelOf = (v) => {
     const o = options.find(([k]) => k === v);
     return o ? (typeof o[1] === "number" ? o[0] : o[1]) : v;
@@ -393,7 +441,7 @@ function Scelta({ label, value, onChange, options, vuoto = "Tutti" }) {
       </button>
       {open && (
         <div id={`${id}-scelte`} role="listbox" aria-label={label} className="flex flex-wrap gap-1.5 pb-3">
-          {[["", vuoto], ...options].map(([k, l]) => (
+          {[["", vuoto], ...options].map(([k, l, n]) => (
             <button
               key={k || "tutti"}
               type="button"
@@ -405,7 +453,7 @@ function Scelta({ label, value, onChange, options, vuoto = "Tutti" }) {
                 setOpen(false);
               }}
             >
-              {typeof l === "number" ? <>{k} <span className="num opacity-60">{l}</span></> : l}
+              {typeof l === "number" ? <>{k} <span className="num opacity-60">{l}</span></> : typeof n === "number" ? <>{l} <span className="num opacity-60">{n}</span></> : l}
             </button>
           ))}
         </div>
@@ -443,9 +491,7 @@ function Periodo({ from, to, onChange }) {
 
 // Box Foto e video / File: i file caricati dalla Chat, con le categorie dell'AI come filtro rapido.
 function FotoBox({ items, notes, store, onOpen, vuoto }) {
-  const [cat, setCat] = useState("");
-  const cats = countBy(items, "categories");
-  const list = cat ? items.filter((it) => (it.categories || []).includes(cat)) : items;
+  const list = items;
   if (!items.length && !notes?.length) {
     return (
       <EmptyState title={vuoto}>Dal tondo + nella Chat salvi foto, video, documenti e note: li trovi tutti qui.</EmptyState>
@@ -453,20 +499,6 @@ function FotoBox({ items, notes, store, onOpen, vuoto }) {
   }
   return (
     <>
-      {cats.length > 1 && (
-        <ul className="fila-chip mt-3.5" aria-label="Categorie dei file">
-          <li className="shrink-0">
-            <button type="button" className={`pillola${cat ? "" : " attiva"}`} aria-pressed={!cat} onClick={() => setCat("")}>Tutte</button>
-          </li>
-          {cats.map(([c, n]) => (
-            <li key={c} className="shrink-0">
-              <button type="button" className={`pillola${cat === c ? " attiva" : ""}`} aria-pressed={cat === c} onClick={() => setCat(cat === c ? "" : c)}>
-                {c} <span className="num opacity-60">{n}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
       {list.length > 0 && <Gallery items={list} store={store} onOpen={onOpen} />}
       {notes?.length > 0 && (
         <>

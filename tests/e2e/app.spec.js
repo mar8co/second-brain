@@ -568,11 +568,17 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await page.mouse.click(4, 300);
   await expect(page.getByRole("menu", { name: "Ordina per" })).toHaveCount(0);
   await scegli("Quartiere");
-  // Filtro per tipo con le pillole.
-  await page.getByRole("list", { name: "Tipo di locale" }).getByRole("button", { name: /^Trattoria/ }).click();
+  // Filtro per tipo di locale, nei Filtri della pagina.
+  await page.getByRole("button", { name: /^Filtri/ }).click();
+  await page.getByRole("button", { name: /^Tipo di locale/ }).click();
+  const tipi = page.getByRole("listbox", { name: "Tipo di locale" });
+  await expect(tipi.getByRole("option")).toHaveText([/^Tutti/, /^Bar e caffè/, /^Trattoria/]);
+  await tipi.getByRole("option", { name: /^Trattoria/ }).click();
   await expect(righe).toHaveCount(1);
-  await page.getByRole("list", { name: "Tipo di locale" }).getByRole("button", { name: /^Tutti/ }).click();
+  await page.getByRole("button", { name: /^Tipo di locale/ }).click();
+  await tipi.getByRole("option", { name: /^Tutti/ }).click();
   await expect(righe).toHaveCount(2);
+  await page.getByRole("button", { name: /^Filtri/ }).click();
   // Un tocco sulla card apre la scheda, che ha il rosso del box Ristoranti.
   await righe.first().getByText("Bar San Calisto").first().click();
   await expect(page).toHaveURL(/\/elemento\//);
@@ -814,6 +820,13 @@ test("Archivio a box: Ristoranti, la via si prende incollando il link di Google 
   await bar.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByText(/Non sono riuscito a leggere la via da questo link/)).toBeVisible();
   await expect(campo).toHaveValue("https://maps.app.goo.gl/sbagliato");
+  // "Incolla link di Maps" mette quello che hai copiato nel campo vuoto e legge subito la via.
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.evaluate(() => navigator.clipboard.writeText("https://maps.app.goo.gl/sbagliato2"));
+  await campo.fill("");
+  await bar.getByRole("button", { name: "Incolla link di Maps" }).click();
+  await expect(campo).toHaveValue("https://maps.app.goo.gl/sbagliato2");
+  await expect(bar.getByText(/Non sono riuscito a leggere la via da questo link/)).toBeVisible();
   // Il testo copiato da "Condividi" di Google Maps (nome e link, attaccati come in un
   // campo di una riga): la via viene dal link.
   await campo.fill("Bar San Calistohttps://www.google.com/maps/place/Bar+San+Calisto,+Piazza+di+San+Calisto,+3,+00153+Roma+RM/@41.8889,12.4699,17z/data=!3d41.8889!4d12.4699");
@@ -1392,7 +1405,7 @@ test("Archivio: Preferiti non è tra le categorie ma nei Filtri, con 'Ordina per
   await page.goto("/archivio");
   await expect(page.getByRole("list", { name: "Categorie" }).getByRole("button", { name: /^Preferiti/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Filtri" }).click();
-  await expect(page.locator("#f-ordina\\ per")).toContainText("Più recenti");
+  await expect(page.locator("#f-ordina-per")).toContainText("Più recenti");
   await page.locator("#f-preferiti").click();
   await page.getByRole("option", { name: "Solo preferiti" }).click();
   await expect(page.getByText("Nota con stella").first()).toBeVisible();
