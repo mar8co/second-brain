@@ -219,10 +219,15 @@ describe("AI", () => {
       ...Array.from({ length: 10 }, (_, i) => ({ name: `Posto ${i}`, address: "" })),
     ];
     const out = sanitizeClassify({ places }).places;
-    expect(out[0]).toEqual({ name: "Trattoria Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" });
+    // Ristorante senza tipo (o con un tipo sconosciuto): tipo vuoto, lo ricava l'app dal nome.
+    expect(out[0]).toEqual({ name: "Trattoria Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", tipo: "" });
     // Tipo mancante o sconosciuto: "altro".
     expect(out[1]).toEqual({ name: "Bar Senza Indirizzo", address: "", kind: "altro" });
     expect(out).toHaveLength(8);
+    expect(sanitizeClassify({ places: [{ name: "Ai Marmi", address: "Roma", kind: "ristorante", tipo: " Pizzeria " }, { name: "Museo", address: "", kind: "altro", tipo: "bar" }] }).places).toEqual([
+      { name: "Ai Marmi", address: "Roma", kind: "ristorante", tipo: "pizzeria" },
+      { name: "Museo", address: "", kind: "altro" },
+    ]);
   });
 
   it("sanitize degli eventi: data vera o vuota, fine solo dopo l'inizio, senza doppioni, al massimo 8", () => {

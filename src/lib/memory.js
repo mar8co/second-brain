@@ -71,7 +71,10 @@ export function needsDigest(item, now = Date.now(), canReread = () => true) {
   if (needsReread(item, now) && canReread(item)) return false;
   // Link non ancora letto: la rielaborazione arriva dopo la lettura.
   if (item.url && !item.file_path && !item.processed_at) return false;
-  return !item.ai || !(Number(item.ai.v) >= DIGEST_VERSION);
+  if (!item.ai || !(Number(item.ai.v) >= DIGEST_VERSION)) return true;
+  // Locali letti prima che l'AI ne desse il tipo (pizzeria, bar…): solo i
+  // contenuti con dei ristoranti si rileggono, non tutto l'archivio.
+  return Array.isArray(item.ai.places) && item.ai.places.some((p) => p && p.kind === "ristorante" && p.hidden !== true && !("tipo" in p));
 }
 
 // Perché il tasto "Rianalizza" tocca un elemento (senza i limiti della

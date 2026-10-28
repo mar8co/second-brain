@@ -10,6 +10,9 @@ describe("quali elementi rielaborare", () => {
     expect(needsDigest({ ...reel, ai: { summary: "x", categories: [], tags: [] } }, NOW)).toBe(true);
     expect(needsDigest({ ...reel, ai: { v: 5, summary: "x" } }, NOW)).toBe(false);
     expect(needsDigest({ ...reel, ai: { v: 2, summary: "x" } }, NOW)).toBe(true);
+    // Ristoranti letti prima del tipo di locale: si rilegge solo quel contenuto.
+    expect(needsDigest({ ...reel, ai: { v: 5, places: [{ name: "Da Enzo", kind: "ristorante" }] } }, NOW)).toBe(true);
+    expect(needsDigest({ ...reel, ai: { v: 5, places: [{ name: "Da Enzo", kind: "ristorante", tipo: "" }, { name: "Museo", kind: "altro" }] } }, NOW)).toBe(false);
   });
   it("non durante la lettura, senza contenuto o prima che il link sia letto", () => {
     expect(needsDigest({ ...reel, status: "processing" }, NOW)).toBe(false);

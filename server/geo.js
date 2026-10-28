@@ -47,36 +47,74 @@ export function parseStreet(list, name) {
     if (!road || !sameName(name, r.name || r.display_name)) continue;
     const number = str(a.house_number, 12);
     const city = str(a.city || a.town || a.village || a.municipality, 80);
-    return { street: [number ? `${road} ${number}` : road, city].filter(Boolean).join(", "), label: str(r.display_name, 300) || null };
+    const zona = zonaOf(a);
+    return { street: [number ? `${road} ${number}` : road, city].filter(Boolean).join(", "), label: str(r.display_name, 300) || null, ...(zona ? { zona } : {}) };
   }
   return null;
 }
+
+// Quartiere di un indirizzo di OpenStreetMap (Trastevere, Brera…), senza i
+// municipi o le circoscrizioni amministrative; "" se non c'è.
+const AMMINISTRATIVO = /^(municipio|circoscrizione|quartiere\s+\d|zona\s+\d|\d)/i;
+export function zonaOf(a) {
+  for (const f of ["quarter", "suburb", "neighbourhood", "city_district"]) {
+    const v = str(a?.[f], 60);
+    if (v && !AMMINISTRATIVO.test(v)) return v;
+  }
+  return "";
+}
+
+// Quartiere di una via (quando il locale non si trova per nome): il primo
+// risultato con un quartiere.
+export function parseZona(list) {
+  for (const r of Array.isArray(list) ? list : []) {
+    const zona = zonaOf(r?.address);
+    if (zona) return zona;
+  }
+  return "";
+}
+
+const VIA = /\b\d{1,4}[a-z]?\b|\b(via|viale|piazza|piazzale|corso|largo|vicolo|lungotevere|borgo|strada|street|road|avenue|rue|calle)\b/i;
 
 export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, now = Date.now, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const auth = await verifyRequest({ authHeader, env });
   if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
   const q = geocodeQuery(body?.place);
   if (!q) return { status: 400, json: { error: "Posto mancante." } };
-
-  const gap = last + 1100 - now();
-  if (gap > 0) await wait(gap);
-  last = now();
-
   const base = (env.GEOCODE_API_BASE || DEFAULT_BASE).replace(/\/$/, "");
-  const url = `${base}/search?${new URLSearchParams({ q, format: "jsonv2", limit: "3", addressdetails: "1", "accept-language": "it" })}`;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetchImpl(url, {
-      signal: ctrl.signal,
-      headers: { "User-Agent": "second-brain/1.0 (archivio personale; https://second-brain-qqwi.vercel.app)", Accept: "application/json" },
-    });
-    if (res.status === 429) return { status: 429, json: { error: "Troppe richieste a OpenStreetMap: riprovo più tardi." } };
-    if (!res.ok) return { status: 502, json: { error: "OpenStreetMap non risponde." } };
-    return { status: 200, json: { query: q, found: parseStreet(await res.json(), str(body?.place?.name, 150)) } };
-  } catch {
-    return { status: 502, json: { error: "Impossibile contattare OpenStreetMap." } };
-  } finally {
-    clearTimeout(timer);
+
+  // Una ricerca su Nominatim: elenco dei risultati, o { status, error }.
+  const search = async (text) => {
+    const gap = last + 1100 - now();
+    if (gap > 0) await wait(gap);
+    last = now();
+    const url = `${base}/search?${new URLSearchParams({ q: text, format: "jsonv2", limit: "3", addressdetails: "1", "accept-language": "it" })}`;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+    try {
+      const res = await fetchImpl(url, {
+        signal: ctrl.signal,
+        headers: { "User-Agent": "second-brain/1.0 (archivio personale; https://second-brain-qqwi.vercel.app)", Accept: "application/json" },
+      });
+      if (res.status === 429) return { status: 429, error: "Troppe richieste a OpenStreetMap: riprovo più tardi." };
+      if (!res.ok) return { status: 502, error: "OpenStreetMap non risponde." };
+      return await res.json();
+    } catch {
+      return { status: 502, error: "Impossibile contattare OpenStreetMap." };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const list = await search(q);
+  if (list?.error) return { status: list.status, json: { error: list.error } };
+  let found = parseStreet(list, str(body?.place?.name, 150));
+  // Locale non trovato per nome ma con la via: il quartiere si ricava dalla via.
+  const address = str(body?.place?.address, 200);
+  if (!found && VIA.test(address)) {
+    const byStreet = await search(address);
+    const zona = byStreet?.error ? "" : parseZona(byStreet);
+    if (zona) found = { street: "", zona };
   }
+  return { status: 200, json: { query: q, found } };
 }

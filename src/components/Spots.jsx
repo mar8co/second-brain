@@ -1,13 +1,12 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useEffect, useState } from "react";
-import { Check, CalendarPlus, Ellipsis, MapPin, X } from "lucide-react";
+import { Check, CalendarPlus, ChefHat, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { formatEventDate, hasStreet, mapsUrl } from "../lib/spots.js";
+import { TIPI_LOCALE, formatEventDate, gruppiLocali, hasStreet, mapsUrl } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
-import { formatDate } from "../lib/format.js";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
 // Tocco sulla card (non su link, pulsanti o campi): apre direttamente la scheda.
@@ -16,12 +15,11 @@ const apriCard = (items, onOpen) => (e) => {
   if (items[0]) onOpen(items[0]);
 };
 
-function SourceLinks({ items, onOpen, extra, quando = false }) {
+function SourceLinks({ items, onOpen }) {
   return (
     <ul className="mt-1.5 space-y-0.5 text-[0.88rem] font-bold">
-      {items.map((it, i) => (
+      {items.map((it) => (
         <li key={it.id} className="flex flex-wrap items-center gap-x-3">
-          {quando && <span className="micro font-semibold">{[it.author, formatDate(it.created_at)].filter(Boolean).join(" · ")}</span>}
           {/^https?:\/\//.test(it.url || "") && (
             <a href={it.url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-[3px]">
               Apri su {it.site_name || displayHost(it.url)} ↗
@@ -38,7 +36,6 @@ function SourceLinks({ items, onOpen, extra, quando = false }) {
           >
             Scheda
           </a>
-          {i === 0 && extra}
         </li>
       ))}
     </ul>
@@ -61,7 +58,6 @@ function MapsLink({ name, where, plain = false, isStreet = false, pin = false })
   );
 }
 
-const NAME_BIG = "text-[1.5rem] font-extrabold leading-[1.02] tracking-[-0.04em]";
 const NAME = "text-[1.2rem] font-extrabold leading-[1.05] tracking-[-0.035em]";
 
 // Indirizzi del locale (anche più sedi): un campo per sede, con Aggiungi sede,
@@ -112,7 +108,24 @@ function Riga({ onDelete, children }) {
   return onDelete ? <SwipeElimina onDelete={onDelete}>{children}</SwipeElimina> : children;
 }
 
-export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
+const ICONA_TIPO = { trattoria: Utensils, pizzeria: Pizza, bar: Coffee, street: Sandwich, vino: Wine, dolci: IceCreamCone, mondo: Soup, ristorante: ChefHat };
+
+// Cerchio colorato con l'icona del tipo di locale.
+function IconaTipo({ tipo, size = "h-10 w-10", icon = "h-[19px] w-[19px]" }) {
+  const t = TIPI_LOCALE[tipo] || TIPI_LOCALE.ristorante;
+  const Icona = ICONA_TIPO[tipo] || ChefHat;
+  return (
+    <span className={`grid shrink-0 place-items-center rounded-full ${size}`} style={{ background: t.colore, color: t.chiaro ? "#ffffff" : "#0a0a0a", boxShadow: "inset 0 0 0 1.5px #0a0a0a" }} aria-hidden="true">
+      <Icona className={icon} strokeWidth={2.4} />
+    </span>
+  );
+}
+
+// Box Ristoranti: i locali divisi per zona (quartiere, altrimenti città) o per
+// tipo. Ogni riga: icona del tipo, nome, tipo o zona, via con Maps; i tre
+// puntini per le vie e per eliminare. Tocco sulla riga: la scheda.
+// gruppo: "zona" | "tipo"; tipo: filtro per tipo (solo per zona).
+export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo = "zona", tipo = "", onTipo }) {
   // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
   // ({ key, mode: "modifica" | "aggiungi" }).
   const [menu, setMenu] = useState(null);
@@ -134,37 +147,30 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
       </EmptyState>
     );
   }
-  // Altri locali citati nello stesso post: senza miniatura, è il modo per capire
-  // che vengono dallo stesso Reel.
-  const perPost = new Map();
-  for (const r of restaurants) for (const it of r.items) perPost.set(it.id, [...(perPost.get(it.id) || []), r.name]);
-  const stessoPost = (r) => [...new Set(r.items.flatMap((it) => perPost.get(it.id) || []))].filter((n) => n !== r.name);
   const choose = (r, mode) => {
     setMenu(null);
     setEditing({ key: r.key, mode });
   };
-  return (
-    <>
-      {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
-    <ul className="mt-3.5 space-y-3.5">
-      {restaurants.map((r) => {
-        const insieme = stessoPost(r);
-        return (
-        <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
-          <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
-          <div className="cursor-pointer rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]" onClick={apriCard(r.items, onOpen)}>
-          <div className="min-w-0 px-4 py-3.5">
-          <p className={NAME_BIG}>{r.name}</p>
-          <SourceLinks
-            items={r.items}
-            onOpen={onOpen}
-            quando
-            extra={
-              onStreet && editing?.key !== r.key ? (
-                <span className="relative">
+  const perTipo = gruppo === "tipo";
+  const conta = {};
+  for (const r of restaurants) conta[r.tipo] = (conta[r.tipo] || 0) + 1;
+  const filtro = !perTipo && conta[tipo] ? tipo : "";
+  const gruppi = gruppiLocali(filtro ? restaurants.filter((r) => r.tipo === filtro) : restaurants, gruppo);
+  const tipiPresenti = Object.keys(TIPI_LOCALE).filter((k) => conta[k]);
+
+  const riga = (r) => (
+    <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
+      <Riga onDelete={onDelete ? () => onDelete(r.name) : null}>
+        <div className="flex cursor-pointer gap-3 bg-[var(--sfondo)] py-3" onClick={apriCard(r.items, onOpen)}>
+          <IconaTipo tipo={r.tipo} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className={NAME}>{r.name}</p>
+              {onStreet && editing?.key !== r.key && (
+                <span className="relative shrink-0">
                   <button
                     type="button"
-                    className="-my-1 grid h-7 w-8 place-items-center"
+                    className="-my-1 -mr-1 grid h-7 w-8 place-items-center"
                     aria-label={`Indirizzi di ${r.name}`}
                     aria-haspopup="menu"
                     aria-expanded={menu === r.key}
@@ -173,7 +179,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
                     <Ellipsis className="h-5 w-5" strokeWidth={3} aria-hidden="true" />
                   </button>
                   {menu === r.key && (
-                    <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute left-0 top-full z-[60] mt-1.5 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]">
+                    <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-0 top-full z-[60] mt-1.5 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]">
                       {r.streets.length > 0 && (
                         <button type="button" role="menuitem" className="block w-full border-b border-riga px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "modifica")}>
                           Modifica via
@@ -198,35 +204,60 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete }) {
                     </div>
                   )}
                 </span>
-              ) : null
-            }
-          />
-          {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
-          {insieme.length > 0 && (
-            <p className="micro mt-1.5 text-[0.85rem]" data-stesso-post>
-              Nello stesso post: {insieme.slice(0, 3).join(", ")}
-              {insieme.length > 3 ? ` e altri ${insieme.length - 3}` : ""}
-            </p>
-          )}
-          {onStreet && editing?.key === r.key && (
-            <AddressForm
-              name={r.name}
-              key={editing.mode}
-              start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets.length ? r.streets : [""]}
-              onCancel={() => setEditing(null)}
-              onSave={(v) => {
-                setEditing(null);
-                onStreet(r.name, v);
-              }}
-            />
-          )}
+              )}
+            </div>
+            <p className="micro mt-0.5 font-semibold" data-tipo-locale>{perTipo ? r.zona || r.citta || "Zona non indicata" : (TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante).label}</p>
+            {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
+            {onStreet && editing?.key === r.key && (
+              <AddressForm
+                name={r.name}
+                key={editing.mode}
+                start={editing.mode === "aggiungi" ? [...r.streets, ""] : r.streets.length ? r.streets : [""]}
+                onCancel={() => setEditing(null)}
+                onSave={(v) => {
+                  setEditing(null);
+                  onStreet(r.name, v);
+                }}
+              />
+            )}
           </div>
-          </div>
-          </Riga>
-        </li>
-        );
-      })}
-    </ul>
+        </div>
+      </Riga>
+    </li>
+  );
+
+  return (
+    <>
+      {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
+      {!perTipo && tipiPresenti.length > 1 && onTipo && (
+        <ul className="fila-chip mt-3.5" aria-label="Tipo di locale">
+          <li className="shrink-0">
+            <button type="button" className={`pillola${filtro ? "" : " attiva"}`} aria-pressed={!filtro} onClick={() => onTipo("")}>
+              Tutti <span className="num opacity-60">{restaurants.length}</span>
+            </button>
+          </li>
+          {tipiPresenti.map((k) => {
+            const Icona = ICONA_TIPO[k];
+            return (
+              <li key={k} className="shrink-0">
+                <button type="button" className={`pillola${filtro === k ? " attiva" : ""}`} aria-pressed={filtro === k} onClick={() => onTipo(filtro === k ? "" : k)}>
+                  <Icona className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                  {TIPI_LOCALE[k].label} <span className="num opacity-60">{conta[k]}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {gruppi.map((g) => (
+        <section key={g.key} aria-label={g.label} data-gruppo-locali>
+          <h3 className="mt-5 flex items-baseline justify-between gap-3 border-b-[1.5px] border-inchiostro pb-1.5">
+            <span className="min-w-0 text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">{g.label}</span>
+            <span className="micro num shrink-0 font-bold">{g.list.length === 1 ? "1 locale" : `${g.list.length} locali`}</span>
+          </h3>
+          <ul className="righe">{g.list.map(riga)}</ul>
+        </section>
+      ))}
     </>
   );
 }

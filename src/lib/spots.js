@@ -21,7 +21,61 @@ export function hasStreet(address) {
   return STREET.test(text(address));
 }
 
-// Locali di cui cercare la via: quelli senza via nell'indirizzo, mai cercati.
+// Tipi di locale (li dà l'AI, server/ai.js TIPI_LOCALE): nome e colore della
+// tavolozza; l'icona è in components/Spots.jsx.
+export const TIPI_LOCALE = {
+  trattoria: { label: "Trattoria", plurale: "Trattorie", colore: "var(--arancio)" },
+  pizzeria: { label: "Pizzeria", plurale: "Pizzerie", colore: "var(--giallo)" },
+  bar: { label: "Bar e caffè", plurale: "Bar e caffè", colore: "var(--sabbia)" },
+  street: { label: "Street food", plurale: "Street food", colore: "var(--verde)" },
+  vino: { label: "Vino e cocktail", plurale: "Vino e cocktail", colore: "var(--rosa)" },
+  dolci: { label: "Gelato e dolci", plurale: "Gelato e dolci", colore: "var(--blu)", chiaro: true },
+  mondo: { label: "Cucina dal mondo", plurale: "Cucina dal mondo", colore: "var(--rosso)" },
+  ristorante: { label: "Ristorante", plurale: "Ristoranti", colore: "var(--grigio)" },
+};
+
+// Tipo dal nome, finché l'AI non l'ha dato (contenuti salvati prima).
+const DAL_NOME = [
+  ["pizzeria", /pizz/],
+  ["dolci", /gelat|pasticc|dolc|cioccolat|bakery|cornett|maritozz|patisserie/],
+  ["vino", /enotec|wine|vino|vini\b|cocktail|\bpub\b|birr|brew|drink|spritz/],
+  ["bar", /\bbar\b|caff|coffee|\bcafe\b|torrefaz/],
+  ["trattoria", /trattori|osteri|hostaria|taverna|locanda/],
+  ["street", /suppl|panin|street|kebab|burger|trapizz|friggitori|rosticc|focacc|fritt|piadin/],
+  ["mondo", /sushi|ramen|poke|thai|indian|cines|giappon|messic|taco|bao|dim sum|korean|corean|libanes|etiop|peruv/],
+];
+export function tipoLocale(p) {
+  const t = text(p?.tipo).toLowerCase();
+  if (TIPI_LOCALE[t]) return t;
+  const n = normalize(text(p?.name));
+  return DAL_NOME.find(([, re]) => re.test(n))?.[0] || "ristorante";
+}
+
+// Città di un indirizzo ("Via dei Vascellari 29, 00153 Roma" → "Roma"), per
+// raggruppare i locali di cui non si conosce il quartiere.
+export function cittaDi(address) {
+  const parts = text(address).split(",").map((x) => x.replace(/\b\d{5}\b/g, "").trim()).filter(Boolean);
+  const last = parts[parts.length - 1] || "";
+  return hasStreet(last) ? "" : last;
+}
+
+// Locali divisi per zona (quartiere, altrimenti città) o per tipo:
+// [{ key, label, list }], prima i gruppi più numerosi; "Zona non indicata" in fondo.
+export const SENZA_ZONA = "Zona non indicata";
+export function gruppiLocali(restaurants, per = "zona") {
+  const m = new Map();
+  for (const r of restaurants) {
+    const label = per === "tipo" ? TIPI_LOCALE[r.tipo]?.plurale || "Ristoranti" : r.zona || r.citta || SENZA_ZONA;
+    const k = normalize(label);
+    if (!m.has(k)) m.set(k, { key: k, label, list: [] });
+    m.get(k).list.push(r);
+  }
+  const ultimo = (g) => (g.label === SENZA_ZONA ? 1 : 0);
+  return [...m.values()].sort((a, b) => ultimo(a) - ultimo(b) || b.list.length - a.list.length || a.label.localeCompare(b.label, "it"));
+}
+
+// Locali di cui cercare via e quartiere su OpenStreetMap: quelli senza via mai
+// cercati e quelli senza quartiere mai cercato.
 // [{ name, address, targets: [{ id, index }] }]; lo stesso locale citato in più
 // contenuti si cerca una volta e il risultato va a tutti.
 export function streetQueue(items) {
@@ -29,9 +83,12 @@ export function streetQueue(items) {
   for (const item of items) {
     const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
     places.forEach((p, index) => {
-      if (!p || p.kind !== "ristorante" || !text(p.name) || hasStreet(p.address) || text(p.street) || p.geo_at) return;
+      if (!p || p.kind !== "ristorante" || !text(p.name)) return;
+      const needStreet = !hasStreet(p.address) && !text(p.street) && !p.geo_at;
+      const needZona = !text(p.zona) && !p.zona_at;
+      if (!needStreet && !needZona) return;
       const key = normalize(p.name);
-      const e = m.get(key) || { name: text(p.name), address: text(p.address), targets: [] };
+      const e = m.get(key) || { name: text(p.name), address: placeAddresses(p)[0] || text(p.address), targets: [] };
       e.targets.push({ id: item.id, index, name: text(p.name) });
       m.set(key, e);
     });
@@ -39,12 +96,18 @@ export function streetQueue(items) {
   return [...m.values()];
 }
 
-// Modifica da salvare nell'elemento con il risultato (found = { street } o null):
-// il locale è segnato come già cercato, così non si chiede di nuovo.
+// Modifica da salvare nell'elemento con il risultato (found = { street, zona } o
+// null): il locale è segnato come già cercato, così non si chiede di nuovo. La
+// via trovata vale solo per i locali che non ne hanno una.
 export function streetPatch(item, index, name, found, now = new Date()) {
   const places = item.ai?.places;
   if (!Array.isArray(places) || text(places[index]?.name) !== name) return null;
-  const next = places.map((p, i) => (i === index ? { ...p, ...(found?.street ? { street: found.street } : {}), geo_at: now.toISOString() } : p));
+  const at = now.toISOString();
+  const next = places.map((p, i) => {
+    if (i !== index) return p;
+    const street = found?.street && !hasStreet(p.address) && !text(p.street) ? { street: found.street } : {};
+    return { ...p, ...street, ...(text(found?.zona) ? { zona: text(found.zona) } : {}), geo_at: p.geo_at || at, zona_at: at };
+  });
   return { ai: { ...item.ai, places: next } };
 }
 
@@ -76,7 +139,7 @@ export function manualStreetPatches(items, name, streets, now = new Date()) {
     const next = places.map((p) => {
       if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
       const rest = { ...p };
-      for (const f of ["street", "sedi", "manual", "geo_at"]) delete rest[f];
+      for (const f of ["street", "sedi", "manual", "geo_at", "zona", "zona_at"]) delete rest[f];
       return list.length ? { ...rest, street: list[0], sedi: list, manual: true, geo_at: now.toISOString() } : rest;
     });
     out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
@@ -139,9 +202,10 @@ function add(map, key, base, item) {
   return map;
 }
 
-// [{ key, name, address, addresses, streets, manual, items }] in ordine
-// alfabetico. `addresses`: le sedi note; `streets`: quelle con una via vera (le
-// sedi scritte a mano contano sempre); `address`: la prima, per la ricerca.
+// [{ key, name, address, addresses, streets, manual, items, tipo, zona, citta }].
+// `addresses`: le sedi note; `streets`: quelle con una via vera (le sedi scritte
+// a mano contano sempre); `address`: la prima, per la ricerca; `zona`: il
+// quartiere trovato su OpenStreetMap; `citta`: dall'indirizzo.
 // ordine: "recenti" (default, archiviati più di recente prima), "vecchi", "nome".
 export function restaurantsOf(items, ordine = "recenti") {
   const m = new Map();
@@ -154,15 +218,17 @@ export function restaurantsOf(items, ordine = "recenti") {
       const manual = p.manual === true && addresses.length > 0;
       const e = m.get(key);
       if (!e) {
-        m.set(key, { key, name: text(p.name), addresses, manual, items: [item] });
+        m.set(key, { key, name: text(p.name), addresses, manual, items: [item], tipo: text(p.tipo), zona: text(p.zona) });
         continue;
       }
       if (!e.items.includes(item)) e.items.push(item);
+      if (!TIPI_LOCALE[e.tipo] && text(p.tipo)) e.tipo = text(p.tipo);
       // Le sedi scritte a mano vincono; poi un indirizzo con la via su uno solo con la città.
       if ((manual && !e.manual) || (!e.manual && !manual && !e.addresses.some(hasStreet) && addresses.some(hasStreet))) {
         e.addresses = addresses;
         e.manual = manual;
-      }
+        e.zona = text(p.zona) || e.zona;
+      } else if (!e.zona) e.zona = text(p.zona);
     }
   }
   // Data di archiviazione del locale: quella dell'elemento archiviato più di recente.
@@ -170,7 +236,7 @@ export function restaurantsOf(items, ordine = "recenti") {
   const byName = (a, b) => a.name.localeCompare(b.name, "it");
   const sorter = ordine === "nome" ? byName : ordine === "vecchi" ? (a, b) => saved(a) - saved(b) || byName(a, b) : (a, b) => saved(b) - saved(a) || byName(a, b);
   return [...m.values()]
-    .map((r) => ({ ...r, address: r.addresses[0] || "", streets: r.manual ? r.addresses : r.addresses.filter(hasStreet) }))
+    .map((r) => ({ ...r, address: r.addresses[0] || "", streets: r.manual ? r.addresses : r.addresses.filter(hasStreet), tipo: tipoLocale(r), citta: cittaDi(r.addresses[0]) }))
     .sort(sorter);
 }
 

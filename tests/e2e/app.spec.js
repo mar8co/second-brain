@@ -535,9 +535,22 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   const g2 = await page.getByRole("button", { name: "Impostazioni" }).boundingBox();
   expect(g2.y).toBeLessThan(t2.y + t2.height);
   await expect(righe.first()).toContainText("Bar San Calisto");
-  // Senza miniatura (più locali vengono dallo stesso post): si dice invece quali.
+  // Senza miniatura: icona e nome del tipo di locale (dall'AI o dal nome), divisi per quartiere (OpenStreetMap).
   await expect(righe.locator("img")).toHaveCount(0);
-  await expect(righe.first().locator("[data-stesso-post]")).toContainText("Nello stesso post: Da Enzo al 29");
+  await expect(righe.first().locator("[data-tipo-locale]")).toHaveText("Bar e caffè");
+  await expect(righe.filter({ has: page.getByText("Da Enzo al 29", { exact: true }) }).locator("[data-tipo-locale]")).toHaveText("Trattoria");
+  await expect(page.locator("section[data-gruppo-locali] h3").first()).toContainText("Trastevere");
+  await expect(page.locator("section[data-gruppo-locali]")).toHaveCount(1);
+  // Per tipo: due gruppi, e sotto il nome il quartiere.
+  await page.getByRole("group", { name: "Raggruppa" }).getByRole("button", { name: "Tipo" }).click();
+  await expect(page.locator("section[data-gruppo-locali] h3 > span:first-child")).toHaveText(["Bar e caffè", "Trattorie"]);
+  await expect(righe.first().locator("[data-tipo-locale]")).toHaveText("Trastevere");
+  await page.getByRole("group", { name: "Raggruppa" }).getByRole("button", { name: "Zona" }).click();
+  // Filtro per tipo con le pillole.
+  await page.getByRole("list", { name: "Tipo di locale" }).getByRole("button", { name: /^Trattoria/ }).click();
+  await expect(righe).toHaveCount(1);
+  await page.getByRole("list", { name: "Tipo di locale" }).getByRole("button", { name: /^Tutti/ }).click();
+  await expect(righe).toHaveCount(2);
   // Un tocco sulla card apre la scheda, che ha il rosso del box Ristoranti.
   await righe.first().getByText("Bar San Calisto").first().click();
   await expect(page).toHaveURL(/\/elemento\//);
@@ -597,16 +610,14 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await page.getByRole("button", { name: "Salva" }).click();
   await expect(page.getByRole("link", { name: /Via Seconda 7, Milano/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
-  await expect(enzo.getByRole("link", { name: /Apri su Guida di prova/ })).toHaveAttribute("href", `${FIX}/trastevere`);
-  await expect(enzo.getByRole("link", { name: "Scheda" })).toBeVisible();
-  // Prima "Apri su …" e Scheda, sotto la via con il link a Maps.
-  const apri = await enzo.getByRole("link", { name: /Apri su Guida di prova/ }).boundingBox();
-  const via = await mappa.boundingBox();
-  expect(via.y).toBeGreaterThan(apri.y + apri.height - 1);
+  // Niente link al post nella riga: si apre dalla scheda. Sotto il tipo, la via con il link a Maps.
+  await expect(enzo.getByRole("link", { name: /Apri su/ })).toHaveCount(0);
+  const tipo = await enzo.locator("[data-tipo-locale]").boundingBox();
+  expect((await mappa.boundingBox()).y).toBeGreaterThan(tipo.y + tipo.height - 1);
   await expect(page.getByText("Museo di Trastevere")).toHaveCount(0);
 
   // La scheda ha il link a Maps dei locali con la via (non quello generico di una località).
-  await enzo.getByRole("link", { name: "Scheda" }).click();
+  await enzo.getByText("Da Enzo al 29", { exact: true }).click();
   await expect(page.getByRole("link", { name: /Da Enzo al 29 · Via dei Vascellari 29, Roma/ })).toHaveAttribute("href", /query=Da%20Enzo%20al%2029%2C%20Via%20dei%20Vascellari%2029%2C%20Roma$/);
   await expect(page.getByRole("link", { name: /Bar San Calisto · Via Prova 5, Roma/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Apri in Mappe/ })).toHaveCount(0);
@@ -740,10 +751,11 @@ test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, c
   const righe = page.locator("li[data-scheda-locale]");
   await expect(righe).toHaveCount(2);
   const bar = righe.first();
-  // I puntini stanno a destra di "Scheda".
+  // I puntini stanno a destra del nome, sulla stessa riga.
   const pt = await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).boundingBox();
-  const scheda = await bar.getByRole("link", { name: "Scheda" }).boundingBox();
-  expect(pt.x).toBeGreaterThanOrEqual(scheda.x + scheda.width - 1);
+  const nome = await bar.getByText("Bar San Calisto", { exact: true }).boundingBox();
+  expect(pt.x).toBeGreaterThanOrEqual(nome.x + nome.width - 1);
+  expect(Math.abs(pt.y + pt.height / 2 - (nome.y + nome.height / 2))).toBeLessThan(12);
   // Menu > Elimina: il locale sparisce, Annulla lo rimette.
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
   await bar.getByRole("menuitem", { name: "Elimina" }).click();

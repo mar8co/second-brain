@@ -223,6 +223,9 @@ const strArr = (v, n, each) => (Array.isArray(v) ? v.filter((x) => typeof x === 
 
 // ---------- classify (rielaborazione in una scheda di memoria) ----------
 
+// Tipi di locale dei Ristoranti (icona e colore nell'app: src/lib/spots.js).
+export const TIPI_LOCALE = ["ristorante", "trattoria", "pizzeria", "bar", "street", "vino", "dolci", "mondo"];
+
 export const ENTITY_KINDS = ["persona", "organizzazione", "luogo", "evento", "prodotto", "altro"];
 
 const CLASSIFY_SCHEMA = {
@@ -239,7 +242,7 @@ const CLASSIFY_SCHEMA = {
     tags: { type: "ARRAY", items: { type: "STRING" } },
     places: {
       type: "ARRAY",
-      items: { type: "OBJECT", properties: { name: { type: "STRING" }, address: { type: "STRING" }, kind: { type: "STRING" } }, required: ["name", "address", "kind"] },
+      items: { type: "OBJECT", properties: { name: { type: "STRING" }, address: { type: "STRING" }, kind: { type: "STRING" }, tipo: { type: "STRING" } }, required: ["name", "address", "kind", "tipo"] },
     },
     events: {
       type: "ARRAY",
@@ -279,7 +282,7 @@ export function buildClassifyPrompt(item, knownCategories) {
     "- keywords: da 5 a 15 parole o brevi espressioni minuscole per ritrovare l'elemento, compresi sinonimi e termini generali che nel testo non compaiono (es. per un corso di intelligenza artificiale: \"intelligenza artificiale\", \"ia\", \"ai\", \"corso\", \"formazione\").",
     `- categories: 1 o 2 categorie, scelte in base all'ARGOMENTO di cui parla il contenuto (es. tassi dei conti deposito, investimenti, mutui, tasse → Finanza), non a chi potrebbe trovarlo utile. "Lavoro" solo per carriera, offerte di lavoro, colloqui o attività professionale dell'utente. Preferisci le categorie esistenti: ${JSON.stringify(knownCategories.slice(0, 40))}. Se nessuna descrive bene l'argomento, creane una nuova (breve, iniziale maiuscola).`,
     "- tags: da 2 a 6 tag brevi, minuscoli, in italiano (nomi propri invariati), utili a ritrovare l'elemento.",
-    `- places: i posti fisici che si possono visitare e di cui il contenuto parla (ristoranti, bar, negozi, musei, hotel, spiagge, parchi, sedi di eventi): { name, address, kind }. address = indirizzo completo: via, numero civico e città (es. "Via dei Vascellari 29, Roma"). Prendilo dai dati (anche dal post o dal profilo dell'autore) oppure, se è un posto molto noto, dalla tua conoscenza, ma solo se sei sicuro della via: mai una via inventata. Se la via non si ricava e non la conosci con certezza, scrivi solo la città; se non c'è nemmeno quella, stringa vuota. kind = "ristorante" per i locali dove si mangia o si beve (ristoranti, trattorie, pizzerie, bar, caffetterie, pasticcerie, street food), altrimenti "altro". Non mettere città, regioni o nazioni da sole, né posti online. Al massimo 8; lista vuota se non ce ne sono.`,
+    `- places: i posti fisici che si possono visitare e di cui il contenuto parla (ristoranti, bar, negozi, musei, hotel, spiagge, parchi, sedi di eventi): { name, address, kind }. address = indirizzo completo: via, numero civico e città (es. "Via dei Vascellari 29, Roma"). Prendilo dai dati (anche dal post o dal profilo dell'autore) oppure, se è un posto molto noto, dalla tua conoscenza, ma solo se sei sicuro della via: mai una via inventata. Se la via non si ricava e non la conosci con certezza, scrivi solo la città; se non c'è nemmeno quella, stringa vuota. kind = "ristorante" per i locali dove si mangia o si beve (ristoranti, trattorie, pizzerie, bar, caffetterie, pasticcerie, street food), altrimenti "altro". tipo = per i ristoranti, che locale è, uno tra ${TIPI_LOCALE.map((k) => `"${k}"`).join(", ")} (trattoria = anche osteria e cucina tipica; street = street food, panini, supplì, fritti; vino = enoteca, wine bar, cocktail bar, pub, birreria; dolci = gelateria, pasticceria, cioccolateria; mondo = cucine straniere come sushi, ramen, messicano, indiano; ristorante = tutti gli altri); per gli altri posti stringa vuota. Non mettere città, regioni o nazioni da sole, né posti online. Al massimo 8; lista vuota se non ce ne sono.`,
     "- events: gli eventi con una data di cui il contenuto parla (concerti, workshop, mostre, feste, corsi, fiere): { name, date, end_date, place }. date e end_date nel formato AAAA-MM-GG; end_date è stringa vuota se l'evento dura un giorno solo; date è stringa vuota se non si ricava un giorno preciso. Se la data non ha l'anno, usa l'anno di pubblicato_il (o di salvato_il) e, se così la data cadrebbe più di due mesi prima di quella di pubblicazione, l'anno dopo. place = dove si svolge: nome del luogo e, se si ricavano dai dati, via con numero civico e città; stringa vuota se non c'è. Al massimo 8; lista vuota se non ce ne sono. Non inventare eventi né date.",
     "Il parlato in prima persona di un video è di norma dell'autore del post: in quel caso attribuisci a lui ciò che dice (es. \"Mario Rossi (@mario) organizza…\").",
     "Usa SOLO i dati forniti: niente fatti, date, prezzi o nomi che non ci sono (unica eccezione: la via di un posto molto noto, come detto sopra).",
@@ -315,11 +318,16 @@ function sanitizePlaces(list) {
   const seen = new Set();
   return (Array.isArray(list) ? list : [])
     .filter((p) => p && typeof p.name === "string" && p.name.trim())
-    .map((p) => ({
-      name: p.name.replace(/\s+/g, " ").trim().slice(0, 120),
-      address: str(p.address, 200).replace(/\s+/g, " ").trim(),
-      kind: String(p.kind || "").toLowerCase().trim() === "ristorante" ? "ristorante" : "altro",
-    }))
+    .map((p) => {
+      const kind = String(p.kind || "").toLowerCase().trim() === "ristorante" ? "ristorante" : "altro";
+      const tipo = String(p.tipo || "").toLowerCase().trim();
+      return {
+        name: p.name.replace(/\s+/g, " ").trim().slice(0, 120),
+        address: str(p.address, 200).replace(/\s+/g, " ").trim(),
+        kind,
+        ...(kind === "ristorante" ? { tipo: TIPI_LOCALE.includes(tipo) ? tipo : "" } : {}),
+      };
+    })
     .filter((p) => !seen.has(p.name.toLowerCase()) && seen.add(p.name.toLowerCase()))
     .slice(0, 8);
 }

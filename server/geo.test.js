@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { geocodeQuery, handleGeo, parseStreet, sameName } from "./geo.js";
+import { geocodeQuery, handleGeo, parseStreet, parseZona, sameName, zonaOf } from "./geo.js";
 
 const env = { ALLOW_NO_AUTH: "1", GEOCODE_API_BASE: "https://osm.test/" };
 const calisto = { category: "amenity", name: "Bar San Calisto", display_name: "Bar San Calisto, Roma", address: { road: "Piazza di San Calisto", house_number: "3", city: "Roma" } };
@@ -41,6 +41,25 @@ describe("via di un locale (OpenStreetMap)", () => {
     t += 300;
     await handleGeo({ body: { place: { name: "Mole" } }, env, fetchImpl, now, wait });
     expect(wait).toHaveBeenCalledWith(800);
+  });
+
+  it("quartiere: senza municipi; dal locale o, se non si trova, dalla via", async () => {
+    expect(zonaOf({ suburb: "Trastevere", city_district: "Municipio Roma I" })).toBe("Trastevere");
+    expect(zonaOf({ quarter: "Brera", suburb: "Municipio 1" })).toBe("Brera");
+    expect(zonaOf({ suburb: "Municipio 1" })).toBe("");
+    expect(zonaOf(null)).toBe("");
+    expect(parseZona([{ address: { road: "x" } }, { address: { suburb: "Prati" } }])).toBe("Prati");
+    expect(parseStreet([{ ...calisto, address: { ...calisto.address, suburb: "Trastevere" } }], "Bar San Calisto")).toMatchObject({ zona: "Trastevere" });
+    const fetchImpl = vi.fn(async (url) => ({ ok: true, status: 200, json: async () => (url.includes("Sconosciuto") ? [] : [{ category: "highway", address: { road: "Via dei Vascellari", suburb: "Trastevere" } }]) }));
+    const wait = async () => {};
+    const r = await handleGeo({ body: { place: { name: "Sconosciuto", address: "Via dei Vascellari 29, Roma" } }, env, fetchImpl, wait });
+    expect(r.json.found).toEqual({ street: "", zona: "Trastevere" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[1][0]).toContain("q=Via+dei+Vascellari+29%2C+Roma");
+    // Solo la città: nessuna seconda ricerca.
+    fetchImpl.mockClear();
+    expect((await handleGeo({ body: { place: { name: "Sconosciuto", address: "Roma" } }, env, fetchImpl, wait })).json.found).toBeNull();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it("errori chiari; senza posto 400; senza login 401", async () => {
