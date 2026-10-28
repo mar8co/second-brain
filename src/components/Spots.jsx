@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpDown, Check, CalendarPlus, ChefHat, ClipboardPaste, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
+import { formatVia } from "../lib/indirizzi.js";
 import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, filtraRighe, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, isEstero, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
@@ -45,7 +46,8 @@ function SourceLinks({ items, onOpen }) {
 // Link a Maps: con la via completa mostra la via; senza, "Cerca su Maps" (la
 // ricerca usa comunque nome e città). `plain`: il luogo di un evento si legge
 // comunque, anche senza via.
-function MapsLink({ name, where, plain = false, isStreet = false, pin = false }) {
+function MapsLink({ name, where: raw, plain = false, isStreet = false, pin = false }) {
+  const where = formatVia(raw);
   const street = isStreet || hasStreet(where);
   return (
     <>
@@ -64,7 +66,7 @@ const NAME = "text-[1.2rem] font-extrabold leading-[1.05] tracking-[-0.035em]";
 // Salva e Annulla. Nessun indirizzo salvato = si toglie tutto e il locale torna
 // a essere cercato.
 function AddressForm({ name, start, onSave, onCancel, onLink }) {
-  const [rows, setRows] = useState(start.length ? start : [""]);
+  const [rows, setRows] = useState(start.length ? start.map(formatVia) : [""]);
   const [busy, setBusy] = useState(false);
   const [errore, setErrore] = useState("");
   const set = (i, v) => setRows((r) => r.map((x, j) => (j === i ? v : x)));
