@@ -70,9 +70,21 @@ export function parseStreet(list, name, city = "") {
     const number = str(a.house_number, 12);
     const found = str(a.city || a.town || a.village || a.municipality, 80);
     const zona = zonaOf(a);
-    return { street: [number ? `${road} ${number}` : road, found].filter(Boolean).join(", "), label: str(r.display_name, 300) || null, ...(zona ? { zona } : {}), hints: hintsOf(a) };
+    const paese = paeseOf(a);
+    return { street: [number ? `${road} ${number}` : road, found].filter(Boolean).join(", "), label: str(r.display_name, 300) || null, ...(zona ? { zona } : {}), ...(paese ? { paese } : {}), hints: hintsOf(a) };
   }
   return null;
+}
+
+// Paese in italiano dal codice di OpenStreetMap ("pt" → "Portogallo"); "" se non c'è.
+export function paeseOf(a) {
+  const code = str(a?.country_code, 2).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+  try {
+    return new Intl.DisplayNames(["it"], { type: "region" }).of(code) || "";
+  } catch {
+    return "";
+  }
 }
 
 // Nomi di zona di OpenStreetMap, come indizi per l'AI.
@@ -165,8 +177,9 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
 
   const search = (text) => nominatim("search", { q: text, limit: "3" });
 
-  // Quartiere col nome comune dato dall'AI a partire dalla via ("" se non sa,
-  // null senza AI o se l'AI non ha risposto: allora aiFailed).
+  // Quartiere col nome comune dato dall'AI a partire dalla via, e paese:
+  // { quartiere, paese } ("" se non sa), null senza AI o se l'AI non ha
+  // risposto (allora aiFailed).
   let aiFailed = false;
   const quartiere = async (via, hints = {}) => {
     if (!via || !aiConfigured(env)) return null;
@@ -189,7 +202,10 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
   // senza AI, quello di OpenStreetMap.
   // La via data (scritta a mano o letta dall'AI) vale più di quella trovata.
   const via = VIA.test(address) ? address : found?.street || "";
-  const zonaAi = await quartiere(via, found?.hints || {});
+  // Senza via all'AI si chiede solo il paese (dalla città): il quartiere no.
+  const ai = await quartiere(via || address, found?.hints || {});
+  const zonaAi = ai && via ? ai.quartiere : null;
+  const paese = ai?.paese || found?.paese || "";
   if (zonaAi !== null) {
     found = { ...(found || { street: "" }), zona: zonaAi };
   } else if (!found?.zona && VIA.test(address)) {
@@ -199,6 +215,7 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
     const zona = byStreet?.error ? "" : parseZona(byStreet);
     if (zona) found = { ...(found || { street: "" }), zona };
   }
+  if (paese) found = { ...(found || { street: "" }), paese };
   // L'AI non ha risposto: il quartiere va richiesto un'altra volta.
   if (aiFailed) found = { ...(found || { street: "" }), riprova: true };
   if (found) delete found.hints;
@@ -276,6 +293,7 @@ async function geoFromLink({ link, body, env, linkFetch, nominatim, search, quar
     }
   }
   if (!street) return { status: 200, json: { found: null, error: "Non ho trovato la via in questo link." } };
-  const zona = (await quartiere(street, hints)) ?? osmZona;
+  const ai = await quartiere(street, hints);
+  const zona = ai ? ai.quartiere : osmZona;
   return { status: 200, json: { found: { street, ...(zona ? { zona } : {}), ...(lat !== null ? { lat, lng } : {}) } } };
 }

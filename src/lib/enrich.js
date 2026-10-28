@@ -133,7 +133,7 @@ export function carryStreets(places, previous) {
     const o = p && p.kind === "ristorante" ? old.find((x) => key(x) === key(p) && (x.street || x.geo_at || x.zona_at || x.hidden)) : null;
     if (!o) return p;
     used.add(key(o));
-    const keep = Object.fromEntries(["street", "sedi", "manual", "geo_at", "zona", "zona_at", "zona_v", "zone_sedi", "hidden"].filter((f) => o[f]).map((f) => [f, o[f]]));
+    const keep = Object.fromEntries(["street", "sedi", "manual", "geo_at", "zona", "zona_at", "zona_v", "zone_sedi", "paese", "hidden"].filter((f) => o[f]).map((f) => [f, o[f]]));
     return { ...p, ...keep };
   });
   for (const o of old) if (o.manual && o.street && !used.has(key(o))) out.push({ tipo: "", ...o });
