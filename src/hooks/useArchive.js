@@ -109,13 +109,41 @@ export function useArchive(store, { ai }) {
     [store, upsert, runProcess],
   );
 
-  const update = useCallback(
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  // Scritture in fila per ogni elemento: una modifica calcolata dall'elemento
+  // (updateWith) parte dalla versione più recente, anche da quella appena
+  // scritta e non ancora mostrata, così non cancella una modifica dell'utente.
+  const chains = useRef(new Map());
+  const written = useRef(new Map());
+  const enqueue = useCallback((id, job) => {
+    const run = (chains.current.get(id) || Promise.resolve()).catch(() => {}).then(job);
+    chains.current.set(id, run);
+    return run;
+  }, []);
+  const write = useCallback(
     async (id, patch) => {
       const it = await store.update(id, patch);
+      written.current.set(id, it);
       upsert(it);
       return it;
     },
     [store, upsert],
+  );
+  const update = useCallback((id, patch) => enqueue(id, () => write(id, patch)), [enqueue, write]);
+  const updateWith = useCallback(
+    (id, make) =>
+      enqueue(id, async () => {
+        const mine = written.current.get(id);
+        const shown = itemsRef.current.find((x) => x.id === id);
+        const base = mine && (!shown || String(mine.updated_at || "") >= String(shown.updated_at || "")) ? mine : shown;
+        const patch = base ? make(base) : null;
+        return patch ? write(id, patch) : null;
+      }),
+    [enqueue, write],
   );
 
   const remove = useCallback(
@@ -207,10 +235,6 @@ export function useArchive(store, { ai }) {
   // elementi senza scheda e rilegge quelli rimasti a metà. Parte quando
   // l'archivio è caricato e a ogni cambiamento, se non è già in corso; dopo
   // errori ripetuti aspetta qualche minuto.
-  const itemsRef = useRef(items);
-  useEffect(() => {
-    itemsRef.current = items;
-  }, [items]);
   const upkeep = useRef({ running: false, tried: new Set(), pausedUntil: 0, store: null, log: rereadLog() });
   useEffect(() => {
     const u = upkeep.current;
@@ -476,5 +500,5 @@ export function useArchive(store, { ai }) {
   // Gli elementi in attesa di eliminazione non si vedono da nessuna parte.
   const visible = useMemo(() => (hidden.size ? items.filter((x) => !hidden.has(x.id)) : items), [items, hidden]);
 
-  return { items: visible, loading, error, reload, add, update, remove, removeSoon, reprocess, classify, categories, reanalysis, reanalyzable, reanalyzeAll, recategorizing, recategorizeAll };
+  return { items: visible, loading, error, reload, add, update, updateWith, remove, removeSoon, reprocess, classify, categories, reanalysis, reanalyzable, reanalyzeAll, recategorizing, recategorizeAll };
 }

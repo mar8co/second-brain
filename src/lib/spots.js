@@ -96,12 +96,19 @@ export function streetQueue(items) {
       const key = normalize(p.name);
       // Si cerca con la via scritta a mano, altrimenti con l'indirizzo letto
       // dall'AI (non con una via trovata prima, che potrebbe essere sbagliata).
-      const e = m.get(key) || { name: text(p.name), address: (p.manual && placeAddresses(p)[0]) || text(p.address), targets: [] };
+      const e = m.get(key) || { name: text(p.name), address: queryOf(item, index), targets: [] };
       e.targets.push({ id: item.id, index, name: text(p.name) });
       m.set(key, e);
     });
   }
   return [...m.values()];
+}
+
+// Indirizzo con cui si cerca il locale index dell'elemento: la via scritta a
+// mano, altrimenti quello letto dall'AI.
+export function queryOf(item, index) {
+  const p = item?.ai?.places?.[index];
+  return (p?.manual && placeAddresses(p)[0]) || text(p?.address);
 }
 
 // Versione della ricerca di via e quartiere (2: città controllata, quartiere

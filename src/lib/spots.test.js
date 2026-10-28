@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { ZONA_V, DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { queryOf, ZONA_V, DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -305,5 +305,14 @@ describe("tipo e zona dei locali", () => {
     expect(g.map((x) => [x.label, x.list.map((l) => l.name)])).toEqual([[DA_CONTROLLARE, ["Introvabile"]], ["Roma", ["Ancora da cercare"]], ["Trastevere", ["Da Enzo"]]]);
     expect(g[0].controllare).toBe(true);
     expect(gruppiLocali(r, "tipo").some((x) => x.controllare)).toBe(false);
+  });
+});
+
+describe("queryOf", () => {
+  it("cerca con la via scritta a mano, altrimenti con l'indirizzo dell'AI", () => {
+    const it0 = { ai: { places: [{ name: "A", address: "Roma", manual: true, sedi: ["Via Uno 1, Roma", "Via Due 2, Milano"] }, { name: "B", address: "Roma", street: "Via Osm 3" }] } };
+    expect(queryOf(it0, 0)).toBe("Via Uno 1, Roma");
+    expect(queryOf(it0, 1)).toBe("Roma");
+    expect(queryOf({}, 0)).toBe("");
   });
 });
