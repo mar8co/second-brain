@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -101,14 +101,31 @@ describe("hasStreet", () => {
 
 describe("via dei locali", () => {
   const item = (id, places) => ({ id, ai: { v: 5, places } });
-  it("mette in coda solo i locali con la sola città, una volta per locale", () => {
+  it("mette in coda i locali senza via o senza quartiere mai cercati, una volta per locale", () => {
+    const fatto = { geo_at: "2026-10-15T08:00:00Z", zona_at: "2026-10-28T08:00:00Z" };
     const q = streetQueue([
       item("a", [{ name: "Bar San Calisto", address: "Roma", kind: "ristorante" }, { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" }, { name: "Museo", address: "Roma", kind: "altro" }]),
-      item("b", [{ name: "bar san calisto", address: "Roma", kind: "ristorante" }, { name: "Già cercato", address: "Roma", kind: "ristorante", geo_at: "2026-10-15T08:00:00Z" }, { name: "Con via", address: "Roma", street: "Via X 1, Roma", kind: "ristorante" }]),
+      item("b", [
+        { name: "bar san calisto", address: "Roma", kind: "ristorante" },
+        { name: "Già cercato", address: "Roma", kind: "ristorante", ...fatto },
+        { name: "Con quartiere", address: "Via Y 2, Roma", kind: "ristorante", zona: "Prati" },
+        { name: "Cercato prima dei quartieri", address: "Roma", street: "Via X 1, Roma", kind: "ristorante", geo_at: "2026-10-15T08:00:00Z" },
+      ]),
     ]);
-    expect(q).toHaveLength(1);
-    expect(q[0]).toMatchObject({ name: "Bar San Calisto", address: "Roma" });
+    expect(q.map((x) => x.name)).toEqual(["Bar San Calisto", "Da Enzo", "Cercato prima dei quartieri"]);
+    expect(q[0]).toMatchObject({ address: "Roma" });
     expect(q[0].targets.map((t) => t.id)).toEqual(["a", "b"]);
+    // Si cerca con la via già nota.
+    expect(q[2].address).toBe("Via X 1, Roma");
+  });
+
+  it("salva il quartiere senza cambiare una via già nota", () => {
+    const at = new Date("2026-10-28T08:00:00Z");
+    const conVia = item("a", [{ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" }]);
+    const p = streetPatch(conVia, 0, "Da Enzo", { street: "Via Sbagliata 1, Roma", zona: "Trastevere" }, at);
+    expect(p.ai.places[0]).toEqual({ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere", geo_at: at.toISOString(), zona_at: at.toISOString() });
+    const vecchio = item("b", [{ name: "Bar", address: "Roma", street: "Via X 1, Roma", geo_at: "2026-10-15T08:00:00Z", kind: "ristorante" }]);
+    expect(streetPatch(vecchio, 0, "Bar", null, at).ai.places[0]).toMatchObject({ street: "Via X 1, Roma", geo_at: "2026-10-15T08:00:00Z", zona_at: at.toISOString() });
   });
 
   it("salva la via trovata, o solo che è già stato cercato", () => {
@@ -144,7 +161,8 @@ describe("via scritta a mano", () => {
     expect(patches[1].patch.ai.places[0].street).toBe("Via Prova 5, Roma");
     const after = { ...a, ai: patches[0].patch.ai };
     expect(restaurantsOf([after])[0]).toMatchObject({ address: "Via Prova 5, Roma", streets: ["Via Prova 5, Roma"], manual: true });
-    expect(streetQueue([after])).toEqual([]);
+    // La via a mano non si cerca più; si cerca una volta il suo quartiere.
+    expect(streetQueue([after]).map((x) => x.address)).toEqual(["Via Prova 5, Roma"]);
   });
 
   it("più sedi: tutte salvate, senza doppioni, e mostrate tutte", () => {
@@ -174,11 +192,12 @@ describe("via scritta a mano", () => {
   });
 
   it("resta quando l'AI rifà la scheda; un locale a mano che l'AI non cita più si tiene", () => {
-    const manual = [{ name: "Da Enzo", address: "Roma", kind: "ristorante", street: "Via Prova 5, Roma", manual: true, geo_at: "x" }, { name: "Sparito", address: "", kind: "ristorante", street: "Via X 1, Roma", manual: true }];
-    const next = carryStreets([{ name: "da enzo", address: "Roma", kind: "ristorante" }, { name: "Museo", address: "", kind: "altro" }], manual);
-    expect(next[0]).toMatchObject({ street: "Via Prova 5, Roma", manual: true, geo_at: "x" });
+    const manual = [{ name: "Da Enzo", address: "Roma", kind: "ristorante", street: "Via Prova 5, Roma", manual: true, geo_at: "x", zona: "Trastevere", zona_at: "y" }, { name: "Sparito", address: "", kind: "ristorante", street: "Via X 1, Roma", manual: true }];
+    const next = carryStreets([{ name: "da enzo", address: "Roma", kind: "ristorante", tipo: "trattoria" }, { name: "Museo", address: "", kind: "altro" }], manual);
+    expect(next[0]).toMatchObject({ street: "Via Prova 5, Roma", manual: true, geo_at: "x", zona: "Trastevere", zona_at: "y", tipo: "trattoria" });
     expect(next[1].name).toBe("Museo");
-    expect(next[2].name).toBe("Sparito");
+    // Ha un tipo (vuoto), così non fa rileggere il contenuto all'infinito.
+    expect(next[2]).toMatchObject({ name: "Sparito", tipo: "" });
     // Un locale nuovo, senza via già nota, resta com'è.
     expect(carryStreets([{ name: "Nuovo", kind: "ristorante" }], manual)[0]).toEqual({ name: "Nuovo", kind: "ristorante" });
   });
@@ -238,5 +257,36 @@ describe("ristoranti: ordine", () => {
   it("meno recenti prima, e per nome", () => {
     expect(restaurantsOf(lista, "vecchi").map((r) => r.name)).toEqual(["Alfa", "Mela", "Zeta"]);
     expect(restaurantsOf(lista, "nome").map((r) => r.name)).toEqual(["Alfa", "Mela", "Zeta"]);
+  });
+});
+
+describe("tipo e zona dei locali", () => {
+  it("tipo dell'AI, altrimenti dal nome, altrimenti ristorante", () => {
+    expect(tipoLocale({ name: "Da Enzo", tipo: "trattoria" })).toBe("trattoria");
+    expect(tipoLocale({ name: "Pizzeria Ai Marmi", tipo: "" })).toBe("pizzeria");
+    expect(tipoLocale({ name: "Bar San Calisto" })).toBe("bar");
+    expect(tipoLocale({ name: "Gelateria del Teatro" })).toBe("dolci");
+    expect(tipoLocale({ name: "Osteria Fernanda" })).toBe("trattoria");
+    expect(tipoLocale({ name: "Mezé Bistrot", tipo: "sconosciuto" })).toBe("ristorante");
+  });
+
+  it("città dall'indirizzo", () => {
+    expect(cittaDi("Via dei Vascellari 29, 00153 Roma")).toBe("Roma");
+    expect(cittaDi("Roma")).toBe("Roma");
+    expect(cittaDi("Via dei Vascellari 29")).toBe("");
+    expect(cittaDi("")).toBe("");
+  });
+
+  it("gruppi per zona (quartiere, poi città, poi in fondo senza zona) e per tipo", () => {
+    const places = [
+      { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", tipo: "trattoria", zona: "Trastevere" },
+      { name: "Bar San Calisto", address: "Roma", kind: "ristorante", zona: "Trastevere" },
+      { name: "Luini", address: "Via Santa Radegonda 16, Milano", kind: "ristorante", tipo: "street" },
+      { name: "Senza nulla", address: "", kind: "ristorante" },
+    ];
+    const r = restaurantsOf([{ id: "a", created_at: "2026-10-01", ai: { v: 5, places } }]);
+    expect(r.find((x) => x.name === "Bar San Calisto")).toMatchObject({ tipo: "bar", zona: "Trastevere", citta: "Roma" });
+    expect(gruppiLocali(r).map((g) => [g.label, g.list.length])).toEqual([["Trastevere", 2], ["Milano", 1], [SENZA_ZONA, 1]]);
+    expect(gruppiLocali(r, "tipo").map((g) => g.label)).toEqual(["Bar e caffè", "Ristoranti", "Street food", "Trattorie"]);
   });
 });

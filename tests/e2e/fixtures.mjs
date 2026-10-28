@@ -85,7 +85,7 @@ function fakeGemini(prompt) {
       categories: ["Cibo"],
       tags: ["roma"],
       places: [
-        { name: "Da Enzo al 29", address: "Via dei Vascellari 29, Roma", kind: "ristorante" },
+        { name: "Da Enzo al 29", address: "Via dei Vascellari 29, Roma", kind: "ristorante", tipo: "trattoria" },
         { name: "Bar San Calisto", address: "Roma", kind: "ristorante" },
         { name: "Museo di Trastevere", address: "", kind: "altro" },
       ],
@@ -125,12 +125,15 @@ http
       });
       return;
     }
-    // Finto OpenStreetMap (Nominatim): trova solo il Bar San Calisto.
+    // Finto OpenStreetMap (Nominatim): trova solo il Bar San Calisto e, cercando
+    // la sola via, il quartiere di via dei Vascellari.
     if (req.url.startsWith("/search?")) {
       const q = new URL(req.url, "http://x").searchParams.get("q") || "";
       const hit = /San Calisto/.test(q)
-        ? [{ category: "amenity", type: "cafe", name: "Bar San Calisto", display_name: "Bar San Calisto, Piazza di San Calisto, Roma", address: { road: "Piazza di San Calisto", house_number: "3", city: "Roma" } }]
-        : [];
+        ? [{ category: "amenity", type: "cafe", name: "Bar San Calisto", display_name: "Bar San Calisto, Piazza di San Calisto, Roma", address: { road: "Piazza di San Calisto", house_number: "3", suburb: "Trastevere", city: "Roma" } }]
+        : /^Via dei Vascellari/.test(q)
+          ? [{ category: "highway", type: "residential", name: "Via dei Vascellari", display_name: "Via dei Vascellari, Trastevere, Roma", address: { road: "Via dei Vascellari", suburb: "Trastevere", city: "Roma" } }]
+          : [];
       return send(res, 200, "application/json", JSON.stringify(hit));
     }
     if (req.url === "/reel-privato") return send(res, 302, "text/html", "", { location: "/accounts/login" });

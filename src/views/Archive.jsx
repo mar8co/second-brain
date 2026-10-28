@@ -39,6 +39,9 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const filters = Object.fromEntries(FILTER_KEYS.map((k) => [k, query.get(k) || ""]));
   const active = FILTER_KEYS.filter((k) => filters[k]);
   const ordine = ORDINI.includes(query.get("ordine")) ? query.get("ordine") : "recenti";
+  // Box Ristoranti: divisi per zona (predefinito) o per tipo, e filtro per tipo.
+  const gruppo = query.get("gruppo") === "tipo" ? "tipo" : "zona";
+  const tipoLocale = query.get("tipo") || "";
   const [vista, setVistaState] = useState(readVista);
   const setVista = (v) => {
     setVistaState(v);
@@ -241,6 +244,12 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
               )}
               <span aria-live="polite" className="sr-only">{conteggio}</span>
             </span>
+            {sezione === "ristoranti" && restaurants.length > 0 && (
+              <span className="gruppo-locali" role="group" aria-label="Raggruppa">
+                <button type="button" aria-pressed={gruppo === "zona"} onClick={() => setParam({ gruppo: "" })}>Zona</button>
+                <button type="button" aria-pressed={gruppo === "tipo"} onClick={() => setParam({ gruppo: "tipo", tipo: "" })}>Tipo</button>
+              </span>
+            )}
             {sezione && filtriBtn}
             {!sezione && items.length > 0 && (
               <span className="flex shrink-0 gap-1.5" role="group" aria-label="Vista">
@@ -298,7 +307,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : sezione ? (
           <>
             {sezione === "ristoranti" ? (
-              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onDelete={deleteRestaurant} />
+              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onDelete={deleteRestaurant} gruppo={gruppo} tipo={tipoLocale} onTipo={(t) => setParam({ tipo: t })} />
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes], sezione === "foto" ? BOX_FIXED.foto : BOX_FIXED.file)} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (
