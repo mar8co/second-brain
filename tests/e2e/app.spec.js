@@ -612,6 +612,10 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page.getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
   // Niente link al post nella riga: si apre dalla scheda. Sotto il tipo, la via con il link a Maps.
   await expect(enzo.getByRole("link", { name: /Apri su/ })).toHaveCount(0);
+  // La via scritta a mano fa ricercare il quartiere (qui l'AI finta non lo sa):
+  // il Bar passa sotto "Roma". Si misura a gruppi fermi.
+  await expect(page.locator("section[data-gruppo-locali]", { hasText: "Bar San Calisto" }).locator("h3")).toContainText("Roma");
+  await expect(page.locator("section[data-gruppo-locali]")).toHaveCount(2);
   const tipo = await enzo.locator("[data-tipo-locale]").boundingBox();
   expect((await mappa.boundingBox()).y).toBeGreaterThan(tipo.y + tipo.height - 1);
   await expect(page.getByText("Museo di Trastevere")).toHaveCount(0);

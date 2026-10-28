@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, CalendarPlus, ChefHat, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { TIPI_LOCALE, formatEventDate, gruppiLocali, hasStreet, mapsUrl } from "../lib/spots.js";
+import { TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, mapsUrl } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
@@ -149,13 +149,16 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo
   }
   const choose = (r, mode) => {
     setMenu(null);
-    setEditing({ key: r.key, mode });
+    // Mentre si scrive, i gruppi restano fermi: se la ricerca del quartiere
+    // finisce in quel momento, la riga non cambia gruppo e il modulo non si perde.
+    setEditing({ key: r.key, mode, fermi: gruppi.map((g) => ({ ...g, list: g.list.map((x) => x.key) })) });
   };
   const perTipo = gruppo === "tipo";
   const conta = {};
   for (const r of restaurants) conta[r.tipo] = (conta[r.tipo] || 0) + 1;
   const filtro = !perTipo && conta[tipo] ? tipo : "";
-  const gruppi = gruppiLocali(filtro ? restaurants.filter((r) => r.tipo === filtro) : restaurants, gruppo);
+  const nuovi = gruppiLocali(filtro ? restaurants.filter((r) => r.tipo === filtro) : restaurants, gruppo);
+  const gruppi = editing?.fermi ? gruppiFermi(editing.fermi, nuovi) : nuovi;
   const tipiPresenti = Object.keys(TIPI_LOCALE).filter((k) => conta[k]);
 
   const riga = (r) => (

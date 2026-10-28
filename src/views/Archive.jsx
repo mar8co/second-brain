@@ -62,10 +62,10 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   useStreets(archive, sezione === "ristoranti");
 
   // Via di un locale scritta a mano nel box Ristoranti: si salva in ogni
-  // contenuto che lo cita.
+  // contenuto che lo cita (partendo dalla versione più recente di ognuno).
   const saveStreet = async (name, street) => {
     try {
-      for (const { id, patch } of manualStreetPatches(archive.items, name, street)) await archive.update(id, patch);
+      for (const { id } of manualStreetPatches(archive.items, name, street)) await archive.updateWith(id, (fresh) => manualStreetPatches([fresh], name, street)[0]?.patch || null);
     } catch {
       // Non salvata (rete o accesso): la riga resta com'era e si può riprovare.
     }
@@ -76,7 +76,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const deleteRestaurant = async (name) => {
     const apply = async (hidden) => {
       try {
-        for (const { id, patch } of hideRestaurantPatches(archive.items, name, hidden)) await archive.update(id, patch);
+        for (const { id } of hideRestaurantPatches(archive.items, name, hidden)) await archive.updateWith(id, (fresh) => hideRestaurantPatches([fresh], name, hidden)[0]?.patch || null);
       } catch {
         // Non salvato (rete o accesso): la riga resta com'era e si può riprovare.
       }
@@ -88,7 +88,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const deleteEvent = async (key) => {
     const apply = async (hidden) => {
       try {
-        for (const { id, patch } of hideEventPatches(archive.items, key, hidden)) await archive.update(id, patch);
+        for (const { id } of hideEventPatches(archive.items, key, hidden)) await archive.updateWith(id, (fresh) => hideEventPatches([fresh], key, hidden)[0]?.patch || null);
       } catch {
         // Non salvato: la riga resta com'era.
       }
