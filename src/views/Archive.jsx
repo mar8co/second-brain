@@ -10,7 +10,7 @@ import { BOX_FIXED, PAGE, categoryColor } from "../lib/colors.js";
 import { moveBox, orderBoxes, readOrder, saveOrder } from "../lib/boxorder.js";
 import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
-import { EventList, RestaurantList } from "../components/Spots.jsx";
+import { EventList, OrdinaLocali, RestaurantList } from "../components/Spots.jsx";
 import Gallery from "../components/Gallery.jsx";
 import { docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, notesOf, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
@@ -40,7 +40,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const active = FILTER_KEYS.filter((k) => filters[k]);
   const ordine = ORDINI.includes(query.get("ordine")) ? query.get("ordine") : "recenti";
   // Box Ristoranti: divisi per zona (predefinito) o per tipo, e filtro per tipo.
-  const gruppo = query.get("gruppo") === "tipo" ? "tipo" : "zona";
+  const gruppo = ["tipo", "nome", "citta"].includes(query.get("gruppo")) ? query.get("gruppo") : "zona";
   const tipoLocale = query.get("tipo") || "";
   const [vista, setVistaState] = useState(readVista);
   const setVista = (v) => {
@@ -244,13 +244,14 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
               )}
               <span aria-live="polite" className="sr-only">{conteggio}</span>
             </span>
-            {sezione === "ristoranti" && restaurants.length > 0 && (
-              <span className="gruppo-locali" role="group" aria-label="Raggruppa">
-                <button type="button" aria-pressed={gruppo === "zona"} onClick={() => setParam({ gruppo: "" })}>Zona</button>
-                <button type="button" aria-pressed={gruppo === "tipo"} onClick={() => setParam({ gruppo: "tipo", tipo: "" })}>Tipo</button>
+            {sezione === "ristoranti" && restaurants.length > 0 ? (
+              <span className="flex shrink-0 items-center gap-1.5">
+                <OrdinaLocali value={gruppo} onChange={(v) => setParam({ gruppo: v === "zona" ? "" : v, ...(v === "tipo" ? { tipo: "" } : {}) })} />
+                {filtriBtn}
               </span>
+            ) : (
+              sezione && filtriBtn
             )}
-            {sezione && filtriBtn}
             {!sezione && items.length > 0 && (
               <span className="flex shrink-0 gap-1.5" role="group" aria-label="Vista">
                 <button type="button" className={`pillola${vista === "box" ? " attiva" : ""}`} aria-pressed={vista === "box"} onClick={() => setVista("box")}>

@@ -59,22 +59,34 @@ export function cittaDi(address) {
   return hasStreet(last) ? "" : last;
 }
 
-// Locali divisi per zona (quartiere, altrimenti città) o per tipo:
-// [{ key, label, list, controllare? }], prima i gruppi più numerosi; "Zona non
-// indicata" in fondo. Per zona, in cima "Via da controllare": i locali di cui
-// né l'AI né OpenStreetMap hanno trovato la via (da scrivere a mano).
+// Locali divisi per quartiere (altrimenti città), per tipo, per città o in un
+// solo elenco per nome: [{ key, label, list, controllare? }], prima i gruppi più
+// numerosi; quelli senza zona o città in fondo. Per quartiere, in cima "Via da
+// controllare": i locali di cui né l'AI né OpenStreetMap hanno trovato la via.
 export const SENZA_ZONA = "Zona non indicata";
+export const SENZA_CITTA = "Città non indicata";
 export const DA_CONTROLLARE = "Via da controllare";
+export const ORDINI_LOCALI = [
+  ["nome", "Nome"],
+  ["tipo", "Tipo"],
+  ["zona", "Quartiere"],
+  ["citta", "Città"],
+];
 export function gruppiLocali(restaurants, per = "zona") {
+  if (per === "nome") {
+    const list = [...restaurants].sort((a, b) => a.name.localeCompare(b.name, "it", { sensitivity: "base" }));
+    return list.length ? [{ key: "nome", label: "", list }] : [];
+  }
   const m = new Map();
   for (const r of restaurants) {
     const controllare = per === "zona" && !r.streets?.length && r.cercato;
-    const label = per === "tipo" ? TIPI_LOCALE[r.tipo]?.plurale || "Ristoranti" : controllare ? DA_CONTROLLARE : r.zona || r.citta || SENZA_ZONA;
+    const label =
+      per === "tipo" ? TIPI_LOCALE[r.tipo]?.plurale || "Ristoranti" : per === "citta" ? r.citta || SENZA_CITTA : controllare ? DA_CONTROLLARE : r.zona || r.citta || SENZA_ZONA;
     const k = normalize(label);
     if (!m.has(k)) m.set(k, { key: k, label, list: [], ...(controllare ? { controllare: true } : {}) });
     m.get(k).list.push(r);
   }
-  const posto = (g) => (g.controllare ? -1 : g.label === SENZA_ZONA ? 1 : 0);
+  const posto = (g) => (g.controllare ? -1 : g.label === SENZA_ZONA || g.label === SENZA_CITTA ? 1 : 0);
   return [...m.values()].sort((a, b) => posto(a) - posto(b) || b.list.length - a.list.length || a.label.localeCompare(b.label, "it"));
 }
 
