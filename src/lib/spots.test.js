@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { gruppiFermi, linkIn, queryOf, righeLocali, sedePatch, ZONA_V, DA_CONTROLLARE, SENZA_CITTA, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { filtraRighe, opzioniLocali, gruppiFermi, linkIn, queryOf, righeLocali, sedePatch, ZONA_V, DA_CONTROLLARE, SENZA_CITTA, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -118,6 +118,26 @@ describe("via dei locali", () => {
     // Si ricerca con l'indirizzo dell'AI, non con la via trovata prima; con la via a mano se c'è.
     expect(q[3].address).toBe("Roma");
     expect(q[4].address).toBe("Via M 3, Roma");
+  });
+
+  it("dalla versione 2 si rifanno solo i locali con la via ma senza quartiere; se l'AI non ha risposto si riprova", () => {
+    const v2 = { geo_at: "2026-10-28T08:00:00Z", zona_at: "2026-10-28T08:00:00Z", zona_v: 2 };
+    const q = streetQueue([
+      item("a", [
+        { name: "Casamora", address: "Via di Monte Testaccio 65b, Roma", kind: "ristorante", ...v2 },
+        { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere", ...v2 },
+        { name: "Elio", address: "Roma", kind: "ristorante", ...v2 },
+      ]),
+    ]);
+    expect(q.map((x) => x.name)).toEqual(["Casamora"]);
+    const at = new Date("2026-10-28T09:00:00Z");
+    const casa = item("a", [{ name: "Casamora", address: "Via di Monte Testaccio 65b, Roma", kind: "ristorante", ...v2 }]);
+    const p = streetPatch(casa, 0, "Casamora", { street: "", zona: "Testaccio", riprova: true }, at).ai.places[0];
+    expect(p).toMatchObject({ zona: "Testaccio" });
+    expect(p.zona_v).toBeUndefined();
+    expect(streetQueue([{ id: "a", ai: { v: 5, places: [p] } }])).toHaveLength(1);
+    const ok = streetPatch(casa, 0, "Casamora", { street: "", zona: "Testaccio" }, at).ai.places[0];
+    expect(streetQueue([{ id: "a", ai: { v: 5, places: [ok] } }])).toHaveLength(0);
   });
 
   it("vie e quartieri: OpenStreetMap si sostituisce, a mano e AI restano", () => {
@@ -290,10 +310,19 @@ describe("tipo e zona dei locali", () => {
     ];
     const r = restaurantsOf([{ id: "a", created_at: "2026-10-01", ai: { v: 5, places } }]);
     expect(r.find((x) => x.name === "Bar San Calisto")).toMatchObject({ tipo: "bar", zona: "Trastevere", citta: "Roma" });
-    expect(gruppiLocali(r).map((g) => [g.label, g.list.length])).toEqual([["Trastevere", 2], ["Milano", 1], [SENZA_ZONA, 1]]);
-    expect(gruppiLocali(r, "tipo").map((g) => g.label)).toEqual(["Bar e caffè", "Ristoranti", "Street food", "Trattorie"]);    expect(gruppiLocali(r, "citta").map((g) => [g.label, g.list.length])).toEqual([["Roma", 2], ["Milano", 1], [SENZA_CITTA, 1]]);
+    expect(gruppiLocali(r).map((g) => [g.label, g.list.length])).toEqual([["Milano", 1], ["Trastevere", 2], [SENZA_ZONA, 1]]);
+    expect(gruppiLocali(r, "tipo").map((g) => g.label)).toEqual(["Bar e caffè", "Ristoranti", "Street food", "Trattorie"]);
+    expect(gruppiLocali(r, "citta").map((g) => [g.label, g.list.length])).toEqual([["Milano", 1], ["Roma", 2], [SENZA_CITTA, 1]]);
     expect(gruppiLocali(r, "nome").map((g) => [g.label, g.list.map((x) => x.name)])).toEqual([["", ["Bar San Calisto", "Da Enzo", "Luini", "Senza nulla"]]]);
     expect(gruppiLocali([], "nome")).toEqual([]);
+    const opz = opzioniLocali(r);
+    expect(opz.tipi.map((t) => t[1])).toEqual(["Bar e caffè", "Ristorante", "Street food", "Trattoria"]);
+    expect(opz.zone).toEqual([["Trastevere", 2]]);
+    expect(opz.citta).toEqual([["Milano", 1], ["Roma", 2]]);
+    const righe = righeLocali(r);
+    expect(filtraRighe(righe, { zona: "Trastevere" }).map((x) => x.name).sort()).toEqual(["Bar San Calisto", "Da Enzo"]);
+    expect(filtraRighe(righe, { tipo: "street", citta: "Roma" })).toEqual([]);
+    expect(filtraRighe(righe)).toHaveLength(4);
   });
 
   it("per zona, in fondo i locali senza via già cercati su OpenStreetMap", () => {

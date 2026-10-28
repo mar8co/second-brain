@@ -88,7 +88,8 @@ export function gruppiLocali(restaurants, per = "zona") {
     m.get(k).list.push(r);
   }
   const posto = (g) => (g.controllare ? 2 : g.label === SENZA_ZONA || g.label === SENZA_CITTA ? 1 : 0);
-  return [...m.values()].sort((a, b) => posto(a) - posto(b) || b.list.length - a.list.length || a.label.localeCompare(b.label, "it"));
+  // In ordine alfabetico; "Senza quartiere/città" e "Via da controllare" in fondo.
+  return [...m.values()].sort((a, b) => posto(a) - posto(b) || a.label.localeCompare(b.label, "it", { sensitivity: "base" }));
 }
 
 // Gruppi tenuti come erano (fermi: [{ key, label, list: [chiavi] }]) con i dati
@@ -120,7 +121,10 @@ export function streetQueue(items) {
       const needStreet = !hasStreet(p.address) && !text(p.street) && !p.geo_at;
       // Quartieri della versione precedente (zone di OpenStreetMap, a volte
       // amministrative) e vie trovate senza il controllo della città: si rifanno.
-      const needZona = !(Number(p.zona_v) >= ZONA_V);
+      // Dalla versione 3: si rifanno anche i locali con la via ma senza
+      // quartiere (l'AI non aveva risposto).
+      const v = Number(p.zona_v) || 0;
+      const needZona = v < 2 || (v < ZONA_V && !text(p.zona) && hasStreet(queryOf(item, index)));
       if (!needStreet && !needZona) return;
       const key = normalize(p.name);
       // Si cerca con la via scritta a mano, altrimenti con l'indirizzo letto
@@ -154,8 +158,8 @@ export function queryOf(item, index) {
 }
 
 // Versione della ricerca di via e quartiere (2: città controllata, quartiere
-// col nome comune dato dall'AI).
-export const ZONA_V = 2;
+// col nome comune dato dall'AI; 3: si rifanno i locali con la via ma senza quartiere).
+export const ZONA_V = 3;
 
 // Modifica da salvare nell'elemento con il risultato (found = { street, zona } o
 // null): il locale è segnato come già cercato, così non si chiede di nuovo. Le
@@ -174,6 +178,12 @@ export function streetPatch(item, index, name, found, now = new Date()) {
       if (found?.street) out.street = found.street;
     }
     if (text(found?.zona)) out.zona = text(found.zona);
+    // L'AI non ha risposto: il quartiere si richiede la prossima volta.
+    if (found?.riprova) {
+      delete out.zona_at;
+      delete out.zona_v;
+      return { ...out, geo_at: at };
+    }
     return { ...out, geo_at: at, zona_at: at, zona_v: ZONA_V };
   });
   return { ai: { ...item.ai, places: next } };
@@ -185,6 +195,7 @@ export function sedePatch(item, index, name, sede, found) {
   const places = item.ai?.places;
   const p = Array.isArray(places) ? places[index] : null;
   if (!p || text(p.name) !== name || !placeAddresses(p).slice(1).includes(sede)) return null;
+  if (found?.riprova && !text(found.zona)) return null;
   const next = places.map((x, i) => (i === index ? { ...x, zone_sedi: { ...(x.zone_sedi || {}), [sede]: text(found?.zona) } } : x));
   return { ai: { ...item.ai, places: next } };
 }
@@ -205,6 +216,26 @@ export function righeLocali(restaurants) {
       citta: cittaDi(sede),
     }));
   });
+}
+
+// Scelte dei Filtri della pagina Ristoranti (in ordine alfabetico), con quanti locali (righe) ha ognuna:
+// { tipi: [[tipo, etichetta, n]], zone: [[quartiere, n]], citta: [[città, n]] }.
+export function opzioniLocali(restaurants) {
+  const righe = righeLocali(restaurants);
+  const conta = (f) => {
+    const m = new Map();
+    for (const r of righe) if (f(r)) m.set(f(r), (m.get(f(r)) || 0) + 1);
+    return [...m].sort((a, b) => String(a[0]).localeCompare(String(b[0]), "it", { sensitivity: "base" }));
+  };
+  const tipi = conta((r) => r.tipo)
+    .map(([k, n]) => [k, (TIPI_LOCALE[k] || TIPI_LOCALE.ristorante).label, n])
+    .sort((a, b) => a[1].localeCompare(b[1], "it", { sensitivity: "base" }));
+  return { tipi, zone: conta((r) => r.zona), citta: conta((r) => r.citta) };
+}
+
+// Righe che passano i Filtri della pagina Ristoranti (tipo, quartiere, città).
+export function filtraRighe(righe, { tipo = "", zona = "", citta = "" } = {}) {
+  return righe.filter((r) => (!tipo || r.tipo === tipo) && (!zona || r.zona === zona) && (!citta || r.citta === citta));
 }
 
 // Indirizzi di un locale: le sedi scritte a mano (sedi), altrimenti la via

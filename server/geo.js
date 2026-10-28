@@ -165,12 +165,15 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
 
   const search = (text) => nominatim("search", { q: text, limit: "3" });
 
-  // Quartiere col nome comune dato dall'AI a partire dalla via ("" se non sa).
+  // Quartiere col nome comune dato dall'AI a partire dalla via ("" se non sa,
+  // null senza AI o se l'AI non ha risposto: allora aiFailed).
+  let aiFailed = false;
   const quartiere = async (via, hints = {}) => {
     if (!via || !aiConfigured(env)) return null;
     try {
       return await quartiereWithAi({ env, name: str(body?.place?.name, 150), address: via, hints, fetchImpl: aiFetch });
     } catch {
+      aiFailed = true;
       return null;
     }
   };
@@ -189,12 +192,15 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
   const zonaAi = await quartiere(via, found?.hints || {});
   if (zonaAi !== null) {
     found = { ...(found || { street: "" }), zona: zonaAi };
-  } else if (!found && via && !aiConfigured(env)) {
-    // Locale non trovato per nome ma con la via: il quartiere si ricava dalla via.
+  } else if (!found?.zona && VIA.test(address)) {
+    // Senza AI, o se l'AI non ha risposto (per esempio troppe richieste): il
+    // quartiere di OpenStreetMap dalla via.
     const byStreet = await search(address);
     const zona = byStreet?.error ? "" : parseZona(byStreet);
-    if (zona) found = { street: "", zona };
+    if (zona) found = { ...(found || { street: "" }), zona };
   }
+  // L'AI non ha risposto: il quartiere va richiesto un'altra volta.
+  if (aiFailed) found = { ...(found || { street: "" }), riprova: true };
   if (found) delete found.hints;
   return { status: 200, json: { query: q, found } };
 }

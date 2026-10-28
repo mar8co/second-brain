@@ -1,10 +1,10 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useEffect, useState } from "react";
-import { ArrowUpDown, Check, CalendarPlus, ChefHat, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
+import { ArrowUpDown, Check, CalendarPlus, ChefHat, ClipboardPaste, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
+import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, filtraRighe, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
@@ -70,7 +70,7 @@ function AddressForm({ name, start, onSave, onCancel, onLink }) {
   const set = (i, v) => setRows((r) => r.map((x, j) => (j === i ? v : x)));
   // Un campo con un link (di Google Maps, anche copiato col testo della
   // condivisione) si trasforma nella via letta da quel link.
-  const salva = async () => {
+  const salva = async (rows) => {
     const links = onLink ? rows.map((v, i) => [linkIn(v), i]).filter(([u]) => u) : [];
     if (!links.length) return onSave(rows);
     setBusy(true);
@@ -87,12 +87,31 @@ function AddressForm({ name, start, onSave, onCancel, onLink }) {
     if (mancano) setErrore("Non sono riuscito a leggere la via da questo link. Scrivila a mano o prova un altro link.");
     else onSave(next);
   };
+  // Incolla dagli appunti nel primo campo vuoto (o in una sede nuova); con un
+  // link di Maps la via si legge subito.
+  const incolla = async () => {
+    let testo = "";
+    try {
+      testo = (await navigator.clipboard.readText()).trim();
+    } catch {
+      testo = "";
+    }
+    if (!testo) {
+      setErrore("Non riesco a leggere quello che hai copiato: tieni premuto nel campo e scegli Incolla.");
+      return;
+    }
+    const vuoto = rows.findIndex((x) => !x.trim());
+    const next = vuoto >= 0 ? rows.map((x, j) => (j === vuoto ? testo : x)) : [...rows, testo];
+    setRows(next);
+    setErrore("");
+    if (linkIn(testo)) salva(next);
+  };
   return (
     <form
       className="mt-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!busy) salva();
+        if (!busy) salva(rows);
       }}
     >
       {rows.map((v, i) => (
@@ -113,9 +132,17 @@ function AddressForm({ name, start, onSave, onCancel, onLink }) {
           </button>
         </div>
       ))}
-      <button type="button" className="link mt-1 text-[0.88rem]" onClick={() => setRows((r) => [...r, ""])}>
-        + Aggiungi un'altra sede
-      </button>
+      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.88rem]">
+        {onLink && typeof navigator !== "undefined" && navigator.clipboard?.readText && (
+          <button type="button" className="link inline-flex items-center gap-1" disabled={busy} onClick={incolla}>
+            <ClipboardPaste className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+            Incolla link di Maps
+          </button>
+        )}
+        <button type="button" className="link" onClick={() => setRows((r) => [...r, ""])}>
+          + Aggiungi un'altra sede
+        </button>
+      </div>
       <p aria-live="polite" className={`micro text-[0.85rem] ${busy || errore ? "mt-1" : "sr-only"}`}>
         {busy ? "Leggo la via dal link di Maps…" : errore}
       </p>
@@ -192,7 +219,7 @@ export function OrdinaLocali({ value, onChange }) {
   );
 }
 
-export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete, gruppo = "zona", tipo = "", onTipo }) {
+export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete, gruppo = "zona", filtri = {} }) {
   // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
   // ({ key, mode: "modifica" | "aggiungi" }).
   const [menu, setMenu] = useState(null);
@@ -220,14 +247,9 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
     // finisce in quel momento, la riga non cambia gruppo e il modulo non si perde.
     setEditing({ key: r.key, mode, fermi: gruppi.map((g) => ({ ...g, list: g.list.map((x) => x.key) })) });
   };
-  const perTipo = gruppo === "tipo";
-  const conta = {};
-  for (const r of restaurants) conta[r.tipo] = (conta[r.tipo] || 0) + 1;
-  const filtro = !perTipo && conta[tipo] ? tipo : "";
-  // Un locale con più sedi: una riga per sede, nel quartiere di ognuna.
-  const nuovi = gruppiLocali(righeLocali(filtro ? restaurants.filter((r) => r.tipo === filtro) : restaurants), gruppo);
+  // Un locale con più sedi: una riga per sede, nel quartiere di ognuna; poi i Filtri.
+  const nuovi = gruppiLocali(filtraRighe(righeLocali(restaurants), filtri), gruppo);
   const gruppi = editing?.fermi ? gruppiFermi(editing.fermi, nuovi) : nuovi;
-  const tipiPresenti = Object.keys(TIPI_LOCALE).filter((k) => conta[k]);
 
   // Sotto il nome quello che il gruppo non dice già: il tipo e/o la zona.
   const sottotitolo = (r) => {
@@ -310,26 +332,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
   return (
     <>
       {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
-      {!perTipo && tipiPresenti.length > 1 && onTipo && (
-        <ul className="fila-chip mt-3.5" aria-label="Tipo di locale">
-          <li className="shrink-0">
-            <button type="button" className={`pillola${filtro ? "" : " attiva"}`} aria-pressed={!filtro} onClick={() => onTipo("")}>
-              Tutti <span className="num opacity-60">{restaurants.length}</span>
-            </button>
-          </li>
-          {tipiPresenti.map((k) => {
-            const Icona = ICONA_TIPO[k];
-            return (
-              <li key={k} className="shrink-0">
-                <button type="button" className={`pillola${filtro === k ? " attiva" : ""}`} aria-pressed={filtro === k} onClick={() => onTipo(filtro === k ? "" : k)}>
-                  <Icona className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
-                  {TIPI_LOCALE[k].label} <span className="num opacity-60">{conta[k]}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      {!gruppi.length && <p className="micro mt-5">Nessun locale con questi filtri.</p>}
       {gruppi.map((g) => (
         <section key={g.key} aria-label={g.label} data-gruppo-locali>
           {g.label && <h3 className="mt-5 flex items-baseline justify-between gap-3 border-b-[1.5px] border-inchiostro pb-1.5">
