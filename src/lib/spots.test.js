@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { gruppiFermi, queryOf, ZONA_V, DA_CONTROLLARE, SENZA_CITTA, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { gruppiFermi, linkIn, queryOf, ZONA_V, DA_CONTROLLARE, SENZA_CITTA, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -330,5 +330,14 @@ describe("gruppiFermi", () => {
       { key: "milano", label: "Milano", list: [{ key: "d", name: "D" }] },
     ];
     expect(gruppiFermi(fermi, nuovi)).toEqual([{ key: "trastevere", label: "Trastevere", list: [a, b, { key: "c", name: "C" }] }]);
+  });
+});
+
+describe("linkIn", () => {
+  it("trova il link anche attaccato al nome copiato da Condividi", () => {
+    expect(linkIn("https://maps.app.goo.gl/abc")).toBe("https://maps.app.goo.gl/abc");
+    expect(linkIn("Bar San Calistohttps://maps.app.goo.gl/abc")).toBe("https://maps.app.goo.gl/abc");
+    expect(linkIn("Bar San Calisto https://maps.app.goo.gl/abc?g_st=ic")).toMatch(/^https:\/\/maps\.app\.goo\.gl\/abc/);
+    expect(linkIn("Via Ostiense 12, Roma")).toBeNull();
   });
 });

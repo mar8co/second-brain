@@ -6,6 +6,8 @@
 
 import { verifyRequest } from "./auth.js";
 import { aiConfigured, quartiereWithAi } from "./ai.js";
+import { isAppleMaps, isGoogleMaps, parsePlaceFromUrl } from "../src/lib/detect.js";
+import { safeFetch } from "./net.js";
 
 const DEFAULT_BASE = "https://nominatim.openstreetmap.org";
 const TIMEOUT_MS = 8000;
@@ -99,21 +101,51 @@ export function parseZona(list) {
   return "";
 }
 
+// Parte di un indirizzo che è una via (nel testo di Google Maps).
+const VIA_NOME = /^(via|viale|piazza|piazzale|corso|largo|vicolo|lungotevere|borgo|strada|salita|circonvallazione|lungomare|contrada|località|loc\.)\b/i;
 const VIA = /\b\d{1,4}[a-z]?\b|\b(via|viale|piazza|piazzale|corso|largo|vicolo|lungotevere|borgo|strada|street|road|avenue|rue|calle)\b/i;
 
-export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFetch = fetch, now = Date.now, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
+// Indirizzo scritto nel link di Google Maps ("/maps/place/Nome, Via X, 44,
+// 00153 Roma RM, Italia" → "Via X 44, Roma"); "" se nel link c'è solo il nome.
+export function addressFromMapsName(text) {
+  const parts = str(text, 300).split(",").map((x) => x.trim()).filter(Boolean);
+  const i = parts.findIndex((x, j) => j > 0 && VIA_NOME.test(x));
+  if (i < 0) return "";
+  let rest = parts.slice(i).filter((x) => !/^(italia|italy)$/i.test(x));
+  // Il civico separato da una virgola va con la via.
+  rest = rest.reduce((acc, x) => (/^\d{1,4}[a-z]?(\/[a-z0-9]+)?$/i.test(x) && acc.length ? [...acc.slice(0, -1), `${acc[acc.length - 1]} ${x}`] : [...acc, x]), []);
+  const via = rest[0];
+  const city = rest
+    .slice(1)
+    .map((x) => x.replace(/\b\d{5}\b/g, "").replace(/\s+[A-Z]{2}$/, "").trim())
+    .filter(Boolean)
+    .pop();
+  return [via, city].filter(Boolean).join(", ");
+}
+
+// Via di un risultato di OpenStreetMap (ricerca inversa da coordinate).
+export function streetOfAddress(a) {
+  const road = str(a?.road || a?.pedestrian || a?.footway || a?.square, 120);
+  if (!road) return "";
+  const number = str(a?.house_number, 12);
+  const city = str(a?.city || a?.town || a?.village || a?.municipality, 80);
+  return [number ? `${road} ${number}` : road, city].filter(Boolean).join(", ");
+}
+
+export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFetch = fetch, linkFetch = safeFetch, now = Date.now, wait = (ms) => new Promise((r) => setTimeout(r, ms)) }) {
   const auth = await verifyRequest({ authHeader, env });
   if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
+  const link = str(body?.link, 2000);
   const q = geocodeQuery(body?.place);
-  if (!q) return { status: 400, json: { error: "Posto mancante." } };
+  if (!q && !link) return { status: 400, json: { error: "Posto mancante." } };
   const base = (env.GEOCODE_API_BASE || DEFAULT_BASE).replace(/\/$/, "");
 
-  // Una ricerca su Nominatim: elenco dei risultati, o { status, error }.
-  const search = async (text) => {
+  // Una richiesta a Nominatim (al massimo una al secondo): JSON, o { status, error }.
+  const nominatim = async (path, params) => {
     const gap = last + 1100 - now();
     if (gap > 0) await wait(gap);
     last = now();
-    const url = `${base}/search?${new URLSearchParams({ q: text, format: "jsonv2", limit: "3", addressdetails: "1", "accept-language": "it" })}`;
+    const url = `${base}/${path}?${new URLSearchParams({ ...params, format: "jsonv2", addressdetails: "1", "accept-language": "it" })}`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
     try {
@@ -131,6 +163,20 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
     }
   };
 
+  const search = (text) => nominatim("search", { q: text, limit: "3" });
+
+  // Quartiere col nome comune dato dall'AI a partire dalla via ("" se non sa).
+  const quartiere = async (via, hints = {}) => {
+    if (!via || !aiConfigured(env)) return null;
+    try {
+      return await quartiereWithAi({ env, name: str(body?.place?.name, 150), address: via, hints, fetchImpl: aiFetch });
+    } catch {
+      return null;
+    }
+  };
+
+  if (link) return geoFromLink({ link, body, env, linkFetch, nominatim, search, quartiere });
+
   const list = await search(q);
   if (list?.error) return { status: list.status, json: { error: list.error } };
   const address = str(body?.place?.address, 200);
@@ -140,14 +186,10 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
   // senza AI, quello di OpenStreetMap.
   // La via data (scritta a mano o letta dall'AI) vale più di quella trovata.
   const via = VIA.test(address) ? address : found?.street || "";
-  if (via && aiConfigured(env)) {
-    try {
-      const zona = await quartiereWithAi({ env, name: str(body?.place?.name, 150), address: via, hints: found?.hints || {}, fetchImpl: aiFetch });
-      found = { ...(found || { street: "" }), zona };
-    } catch {
-      // AI non raggiungibile: resta il quartiere di OpenStreetMap, se c'è.
-    }
-  } else if (!found && via) {
+  const zonaAi = await quartiere(via, found?.hints || {});
+  if (zonaAi !== null) {
+    found = { ...(found || { street: "" }), zona: zonaAi };
+  } else if (!found && via && !aiConfigured(env)) {
     // Locale non trovato per nome ma con la via: il quartiere si ricava dalla via.
     const byStreet = await search(address);
     const zona = byStreet?.error ? "" : parseZona(byStreet);
@@ -155,4 +197,79 @@ export async function handleGeo({ authHeader, body, env, fetchImpl = fetch, aiFe
   }
   if (found) delete found.hints;
   return { status: 200, json: { query: q, found } };
+}
+
+// Via e quartiere dal link di Google Maps (o Apple Mappe) che l'utente incolla:
+// si leggono l'indirizzo e le coordinate scritti nel link e nei suoi
+// reindirizzamenti, senza leggere la pagina di Google. Con le coordinate la via
+// si chiede a OpenStreetMap (ricerca inversa); se il link ha solo il nome, si
+// cerca il locale per nome come di solito.
+async function geoFromLink({ link, body, env, linkFetch, nominatim, search, quartiere }) {
+  if (!isGoogleMaps(link) && !isAppleMaps(link)) return { status: 400, json: { error: "Non è un link di Google Maps." } };
+  const chain = [link];
+  let place = parsePlaceFromUrl(link);
+  if (place?.lat === null || place?.lat === undefined || !addressFromMapsName(place?.name)) {
+    try {
+      const r = await linkFetch(link, { allowPrivate: env.EXTRACT_ALLOW_PRIVATE === "1", maxBytes: 64 * 1024 });
+      chain.push(...r.redirects, r.finalUrl);
+      // Pagina del consenso di Google (Europa): il link del posto sta in ?continue=.
+      for (const u of [...chain]) {
+        try {
+          const c = new URL(u).searchParams.get("continue");
+          if (c && /^https:\/\//.test(c)) chain.push(c);
+        } catch {
+          // indirizzo non valido
+        }
+      }
+    } catch {
+      // Link non raggiungibile: si usa quello che c'è nel link stesso.
+    }
+  }
+  let name = "";
+  let written = "";
+  let lat = null;
+  let lng = null;
+  for (const u of chain) {
+    const p = parsePlaceFromUrl(u);
+    if (p?.name && !written) {
+      written = addressFromMapsName(p.name);
+      name = name || str(p.name.split(",")[0], 150);
+    }
+    if (p?.lat !== null && p?.lat !== undefined && lat === null) [lat, lng] = [p.lat, p.lng];
+    // Ricerca Google (link share.google): "?q=Nome, Via…" o solo il nome.
+    try {
+      const x = new URL(u);
+      const qq = /(^|\.)google\.[a-z.]+$/i.test(x.hostname) && /^\/(search|maps)/.test(x.pathname) ? str(x.searchParams.get("q"), 300) : "";
+      if (qq && !/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(qq)) {
+        written = written || addressFromMapsName(qq);
+        name = name || str(qq.split(",")[0], 150);
+      }
+    } catch {
+      // indirizzo non valido
+    }
+  }
+  let street = written;
+  let hints = {};
+  let osmZona = "";
+  if (lat !== null) {
+    const rev = await nominatim("reverse", { lat: String(lat), lon: String(lng), zoom: "18" });
+    if (!rev?.error && rev?.address) {
+      street = street || streetOfAddress(rev.address);
+      hints = Object.fromEntries(["suburb", "quarter", "neighbourhood"].map((f) => [f, str(rev.address[f], 60)]).filter(([, v]) => v));
+      osmZona = zonaOf(rev.address);
+    }
+  }
+  if (!street && (name || body?.place?.name)) {
+    const who = str(body?.place?.name, 150) || name;
+    const list = await search(geocodeQuery({ name: who, address: body?.place?.address }));
+    const f = list?.error ? null : parseStreet(list, who, cityOf(body?.place?.address));
+    if (f) {
+      street = f.street;
+      hints = f.hints || {};
+      osmZona = f.zona || "";
+    }
+  }
+  if (!street) return { status: 200, json: { found: null, error: "Non ho trovato la via in questo link." } };
+  const zona = (await quartiere(street, hints)) ?? osmZona;
+  return { status: 200, json: { found: { street, ...(zona ? { zona } : {}), ...(lat !== null ? { lat, lng } : {}) } } };
 }

@@ -145,6 +145,10 @@ http
       setTimeout(() => send(res, 200, "application/json", JSON.stringify(hit)), lenta);
       return;
     }
+    // Finta ricerca inversa (coordinate → indirizzo) di OpenStreetMap.
+    if (req.url.startsWith("/reverse?")) {
+      return send(res, 200, "application/json", JSON.stringify({ address: { road: "Piazza di San Calisto", house_number: "3", suburb: "Trastevere", city: "Roma" } }));
+    }
     if (req.url === "/reel-privato") return send(res, 302, "text/html", "", { location: "/accounts/login" });
     if (pages[req.url]) return send(res, 200, "text/html; charset=utf-8", pages[req.url]);
     send(res, 404, "text/html", "<title>404</title>");
