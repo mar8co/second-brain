@@ -255,6 +255,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onDelete, gruppo
             <span className="min-w-0 text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">{g.label}</span>
             <span className="micro num shrink-0 font-bold">{g.list.length === 1 ? "1 locale" : `${g.list.length} locali`}</span>
           </h3>
+          {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato la via di questi locali. Tocca i tre puntini e poi Aggiungi via.</p>}
           <ul className="righe">{g.list.map(riga)}</ul>
         </section>
       ))}

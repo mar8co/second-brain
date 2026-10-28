@@ -723,6 +723,10 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await page.goto("/archivio?sezione=ristoranti");
   const bar = page.locator("li[data-scheda-locale]").first();
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toBeVisible();
+  // In cima, il gruppo dei locali di cui va controllata la via.
+  const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Via da controllare" });
+  await expect(daControllare).toContainText("Bar San Calisto");
+  await expect(page.locator("section[data-gruppo-locali] h3").first()).toContainText("Via da controllare");
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
   await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via", "Elimina"]);
   await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
@@ -731,6 +735,7 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await bar.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
+  await expect(daControllare).toHaveCount(0);
   // Ora c'è una via: il menu ha Modifica e Aggiungi; "Modifica via" apre la via nota.
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
   await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via", "Elimina"]);
@@ -750,6 +755,8 @@ test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, c
   await page.goto("/archivio?sezione=ristoranti");
   const righe = page.locator("li[data-scheda-locale]");
   await expect(righe).toHaveCount(2);
+  // Aspetta la ricerca su OpenStreetMap (non trova nulla): il Bar passa in "Via da controllare".
+  await expect(page.locator("section[data-gruppo-locali]", { hasText: "Via da controllare" })).toContainText("Bar San Calisto");
   const bar = righe.first();
   // I puntini stanno a destra del nome, sulla stessa riga.
   const pt = await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).boundingBox();

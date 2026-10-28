@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { carryStreets } from "./enrich.js";
-import { SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
+import { DA_CONTROLLARE, SENZA_ZONA, cittaDi, gruppiLocali, tipoLocale, eventKey, eventsOf, formatEventDate, hasStreet, hideEventPatches, hideRestaurantPatches, manualStreetPatches, mapsUrl, restaurantsOf, streetPatch, streetQueue, todayISO } from "./spots.js";
 
 const reel = {
   id: "r1",
@@ -288,5 +288,18 @@ describe("tipo e zona dei locali", () => {
     expect(r.find((x) => x.name === "Bar San Calisto")).toMatchObject({ tipo: "bar", zona: "Trastevere", citta: "Roma" });
     expect(gruppiLocali(r).map((g) => [g.label, g.list.length])).toEqual([["Trastevere", 2], ["Milano", 1], [SENZA_ZONA, 1]]);
     expect(gruppiLocali(r, "tipo").map((g) => g.label)).toEqual(["Bar e caffè", "Ristoranti", "Street food", "Trattorie"]);
+  });
+
+  it("per zona, in cima i locali senza via già cercati su OpenStreetMap", () => {
+    const places = [
+      { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere" },
+      { name: "Introvabile", address: "Roma", kind: "ristorante", geo_at: "2026-10-28T08:00:00Z" },
+      { name: "Ancora da cercare", address: "Roma", kind: "ristorante" },
+    ];
+    const r = restaurantsOf([{ id: "a", created_at: "2026-10-01", ai: { v: 5, places } }]);
+    const g = gruppiLocali(r);
+    expect(g.map((x) => [x.label, x.list.map((l) => l.name)])).toEqual([[DA_CONTROLLARE, ["Introvabile"]], ["Roma", ["Ancora da cercare"]], ["Trastevere", ["Da Enzo"]]]);
+    expect(g[0].controllare).toBe(true);
+    expect(gruppiLocali(r, "tipo").some((x) => x.controllare)).toBe(false);
   });
 });
