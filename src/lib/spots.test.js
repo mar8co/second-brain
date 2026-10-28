@@ -102,7 +102,7 @@ describe("hasStreet", () => {
 describe("via dei locali", () => {
   const item = (id, places) => ({ id, ai: { v: 5, places } });
   it("mette in coda i locali senza via o con il quartiere di una versione precedente, una volta per locale", () => {
-    const fatto = { geo_at: "2026-10-15T08:00:00Z", zona_at: "2026-10-28T08:00:00Z", zona_v: ZONA_V };
+    const fatto = { geo_at: "2026-10-15T08:00:00Z", zona_at: "2026-10-28T08:00:00Z", zona_v: ZONA_V, paese: "Italia" };
     const q = streetQueue([
       item("a", [{ name: "Bar San Calisto", address: "Roma", kind: "ristorante" }, { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante" }, { name: "Museo", address: "Roma", kind: "altro" }]),
       item("b", [
@@ -121,7 +121,7 @@ describe("via dei locali", () => {
   });
 
   it("dalla versione 2 si rifanno solo i locali con la via ma senza quartiere; se l'AI non ha risposto si riprova", () => {
-    const v2 = { geo_at: "2026-10-28T08:00:00Z", zona_at: "2026-10-28T08:00:00Z", zona_v: 2 };
+    const v2 = { geo_at: "2026-10-28T08:00:00Z", zona_at: "2026-10-28T08:00:00Z", zona_v: 2, paese: "Italia" };
     const q = streetQueue([
       item("a", [
         { name: "Casamora", address: "Via di Monte Testaccio 65b, Roma", kind: "ristorante", ...v2 },
@@ -142,7 +142,7 @@ describe("via dei locali", () => {
 
   it("vie e quartieri: OpenStreetMap si sostituisce, a mano e AI restano", () => {
     const at = new Date("2026-10-28T08:00:00Z");
-    const done = { geo_at: at.toISOString(), zona_at: at.toISOString(), zona_v: ZONA_V };
+    const done = { geo_at: at.toISOString(), zona_at: at.toISOString(), zona_v: ZONA_V, paese: "" };
     const conVia = item("a", [{ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Città giudiziaria" }]);
     expect(streetPatch(conVia, 0, "Da Enzo", { street: "Via Sbagliata 1, Roma", zona: "Trastevere" }, at).ai.places[0]).toEqual({ name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere", ...done });
     // Via di OpenStreetMap sbagliata (altra città): non si trova più, si toglie.
@@ -325,6 +325,27 @@ describe("tipo e zona dei locali", () => {
     expect(filtraRighe(righe)).toHaveLength(4);
   });
 
+  it("i locali esteri vanno in fondo, per paese, prima di Senza quartiere e Via da controllare", () => {
+    const places = [
+      { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere", paese: "Italia" },
+      { name: "Baia Do Bago", address: "Porto da Cruz, Madeira", street: "Estrada Regional 101, Porto da Cruz", kind: "ristorante", paese: "Portogallo", geo_at: "x" },
+      { name: "La Torrada", address: "Lázaro Cardenas 2500, San Pedro Garza García, México", kind: "ristorante", zona: "Valle Oriente", paese: "Messico" },
+      { name: "Senza nulla", address: "", kind: "ristorante" },
+      { name: "Introvabile", address: "Roma", kind: "ristorante", geo_at: "x", paese: "Italia" },
+      { name: "Luini", address: "Via Santa Radegonda 16, Milano", kind: "ristorante", zona: "Duomo" },
+    ];
+    const r = restaurantsOf([{ id: "a", created_at: "2026-10-01", ai: { v: 5, places } }]);
+    expect(gruppiLocali(r).map((g) => g.label)).toEqual(["Duomo", "Trastevere", "Messico", "Portogallo", SENZA_ZONA, DA_CONTROLLARE]);
+    expect(gruppiLocali(r, "citta").map((g) => g.label).slice(0, 2)).toEqual(["Milano", "Roma"]);
+    expect(gruppiLocali(r, "citta").at(-1).label).toBe(SENZA_CITTA);
+    // Paese mai cercato: il locale va in coda (una volta); "" = cercato.
+    expect(streetQueue([{ id: "a", ai: { v: 5, places: [{ name: "Luini", address: "Via Santa Radegonda 16, Milano", kind: "ristorante", zona: "Duomo", zona_v: ZONA_V, geo_at: "x" }] } }])).toHaveLength(1);
+    expect(streetQueue([{ id: "a", ai: { v: 5, places: [{ name: "Luini", address: "Via Santa Radegonda 16, Milano", kind: "ristorante", zona: "Duomo", zona_v: ZONA_V, geo_at: "x", paese: "" }] } }])).toHaveLength(0);
+    const item = { id: "a", ai: { v: 5, places: [{ name: "Baia", address: "Porto da Cruz", kind: "ristorante" }] } };
+    expect(streetPatch(item, 0, "Baia", { street: "", paese: "Portogallo" }).ai.places[0].paese).toBe("Portogallo");
+    expect(streetPatch(item, 0, "Baia", { street: "", riprova: true }).ai.places[0].paese).toBeUndefined();
+  });
+
   it("per zona, in fondo i locali senza via già cercati su OpenStreetMap", () => {
     const places = [
       { name: "Da Enzo", address: "Via dei Vascellari 29, Roma", kind: "ristorante", zona: "Trastevere" },
@@ -375,7 +396,7 @@ describe("locali con più sedi", () => {
   const item = {
     id: "a",
     created_at: "2026-10-01",
-    ai: { places: [{ name: "Mazzo", address: "Roma", kind: "ristorante", tipo: "trattoria", manual: true, street: "Via degli Equi 62, Roma", sedi: ["Via degli Equi 62, Roma", "Via Gola 4, Milano"], zona: "San Lorenzo", zona_v: ZONA_V, geo_at: "x" }] },
+    ai: { places: [{ name: "Mazzo", address: "Roma", kind: "ristorante", tipo: "trattoria", manual: true, street: "Via degli Equi 62, Roma", sedi: ["Via degli Equi 62, Roma", "Via Gola 4, Milano"], zona: "San Lorenzo", zona_v: ZONA_V, paese: "Italia", geo_at: "x" }] },
   };
 
   it("ogni sede in più si cerca una volta, per il suo quartiere", () => {

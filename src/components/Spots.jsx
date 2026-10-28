@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowUpDown, Check, CalendarPlus, ChefHat, ClipboardPaste, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
-import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, filtraRighe, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
+import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, filtraRighe, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, isEstero, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
 
@@ -257,6 +257,8 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
     if (gruppo === "tipo") return r.zona || r.citta || SENZA_ZONA;
     if (gruppo === "citta") return [t, r.zona].filter(Boolean).join(" · ");
     if (gruppo === "nome") return [t, r.zona || r.citta].filter(Boolean).join(" · ");
+    // Nel gruppo di un paese estero: anche la città.
+    if (isEstero(r)) return [t, r.citta].filter(Boolean).join(" · ");
     return t;
   };
 

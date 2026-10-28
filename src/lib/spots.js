@@ -73,6 +73,8 @@ export const ORDINI_LOCALI = [
   ["zona", "Quartiere"],
   ["citta", "Città"],
 ];
+export const isEstero = (r) => Boolean(text(r?.paese)) && normalize(r.paese) !== "italia";
+
 export function gruppiLocali(restaurants, per = "zona") {
   if (per === "nome") {
     const list = [...restaurants].sort((a, b) => a.name.localeCompare(b.name, "it", { sensitivity: "base" }));
@@ -81,14 +83,24 @@ export function gruppiLocali(restaurants, per = "zona") {
   const m = new Map();
   for (const r of restaurants) {
     const controllare = per === "zona" && !r.streets?.length && r.cercato;
+    // Locali fuori dall'Italia: per quartiere un gruppo per paese, sempre dopo quelli italiani.
+    const estero = per !== "tipo" && !controllare && isEstero(r);
     const label =
-      per === "tipo" ? TIPI_LOCALE[r.tipo]?.plurale || "Ristoranti" : per === "citta" ? r.citta || SENZA_CITTA : controllare ? DA_CONTROLLARE : r.zona || r.citta || SENZA_ZONA;
+      per === "tipo"
+        ? TIPI_LOCALE[r.tipo]?.plurale || "Ristoranti"
+        : per === "citta"
+          ? r.citta || SENZA_CITTA
+          : controllare
+            ? DA_CONTROLLARE
+            : estero
+              ? r.paese
+              : r.zona || r.citta || SENZA_ZONA;
     const k = normalize(label);
-    if (!m.has(k)) m.set(k, { key: k, label, list: [], ...(controllare ? { controllare: true } : {}) });
+    if (!m.has(k)) m.set(k, { key: k, label, list: [], ...(controllare ? { controllare: true } : {}), ...(estero ? { estero: true } : {}) });
     m.get(k).list.push(r);
   }
-  const posto = (g) => (g.controllare ? 2 : g.label === SENZA_ZONA || g.label === SENZA_CITTA ? 1 : 0);
-  // In ordine alfabetico; "Senza quartiere/città" e "Via da controllare" in fondo.
+  const posto = (g) => (g.controllare ? 3 : g.label === SENZA_ZONA || g.label === SENZA_CITTA ? 2 : g.estero ? 1 : 0);
+  // In ordine alfabetico; poi i paesi esteri, "Senza quartiere/città" e "Via da controllare" in fondo.
   return [...m.values()].sort((a, b) => posto(a) - posto(b) || a.label.localeCompare(b.label, "it", { sensitivity: "base" }));
 }
 
@@ -124,7 +136,8 @@ export function streetQueue(items) {
       // Dalla versione 3: si rifanno anche i locali con la via ma senza
       // quartiere (l'AI non aveva risposto).
       const v = Number(p.zona_v) || 0;
-      const needZona = v < 2 || (v < ZONA_V && !text(p.zona) && hasStreet(queryOf(item, index)));
+      // E i locali di cui non si è ancora cercato il paese.
+      const needZona = v < 2 || (v < ZONA_V && !text(p.zona) && hasStreet(queryOf(item, index))) || typeof p.paese !== "string";
       if (!needStreet && !needZona) return;
       const key = normalize(p.name);
       // Si cerca con la via scritta a mano, altrimenti con l'indirizzo letto
@@ -178,6 +191,9 @@ export function streetPatch(item, index, name, found, now = new Date()) {
       if (found?.street) out.street = found.street;
     }
     if (text(found?.zona)) out.zona = text(found.zona);
+    // Paese ("" = cercato, non trovato), per mettere in fondo i locali esteri.
+    if (text(found?.paese)) out.paese = text(found.paese);
+    else if (!found?.riprova && typeof out.paese !== "string") out.paese = "";
     // L'AI non ha risposto: il quartiere si richiede la prossima volta.
     if (found?.riprova) {
       delete out.zona_at;
@@ -266,7 +282,7 @@ export function manualStreetPatches(items, name, streets, now = new Date()) {
     const next = places.map((p) => {
       if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
       const rest = { ...p };
-      for (const f of ["street", "sedi", "manual", "geo_at", "zona", "zona_at", "zona_v", "zone_sedi"]) delete rest[f];
+      for (const f of ["street", "sedi", "manual", "geo_at", "zona", "zona_at", "zona_v", "zone_sedi", "paese"]) delete rest[f];
       return list.length ? { ...rest, street: list[0], sedi: list, manual: true, geo_at: now.toISOString() } : rest;
     });
     out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
@@ -345,12 +361,13 @@ export function restaurantsOf(items, ordine = "recenti") {
       const manual = p.manual === true && addresses.length > 0;
       const e = m.get(key);
       if (!e) {
-        m.set(key, { key, name: text(p.name), addresses, manual, items: [item], tipo: text(p.tipo), zona: text(p.zona), zoneSedi: p.zone_sedi || {}, cercato: Boolean(p.geo_at) });
+        m.set(key, { key, name: text(p.name), addresses, manual, items: [item], tipo: text(p.tipo), zona: text(p.zona), paese: text(p.paese), zoneSedi: p.zone_sedi || {}, cercato: Boolean(p.geo_at) });
         continue;
       }
       if (!e.items.includes(item)) e.items.push(item);
       if (p.geo_at) e.cercato = true;
       if (!TIPI_LOCALE[e.tipo] && text(p.tipo)) e.tipo = text(p.tipo);
+      if (!e.paese && text(p.paese)) e.paese = text(p.paese);
       // Le sedi scritte a mano vincono; poi un indirizzo con la via su uno solo con la città.
       if ((manual && !e.manual) || (!e.manual && !manual && !e.addresses.some(hasStreet) && addresses.some(hasStreet))) {
         e.addresses = addresses;

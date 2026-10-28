@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { addressFromMapsName, cityOf, geocodeQuery, handleGeo, streetOfAddress, parseStreet, parseZona, sameCity, sameName, zonaOf } from "./geo.js";
+import { addressFromMapsName, cityOf, geocodeQuery, handleGeo, paeseOf, streetOfAddress, parseStreet, parseZona, sameCity, sameName, zonaOf } from "./geo.js";
 
 const env = { ALLOW_NO_AUTH: "1", GEOCODE_API_BASE: "https://osm.test/" };
 const calisto = { category: "amenity", name: "Bar San Calisto", display_name: "Bar San Calisto, Roma", address: { road: "Piazza di San Calisto", house_number: "3", city: "Roma" } };
@@ -100,11 +100,33 @@ describe("via di un locale (OpenStreetMap)", () => {
     expect(r3.json.found.zona).toBe("Monti");
     expect(prompt).toContain("Via Panisperna 10, Roma");
     expect(prompt).not.toContain("Faà di Bruno 31");
-    // Senza via, all'AI non si chiede nulla.
+    // Senza via, all'AI si chiede solo il paese: il quartiere che dà non vale.
     aiFetch.mockClear();
+    aiFetch.mockImplementation(async (url, opts) => {
+      prompt = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Monti", paese: "italia" }) }] } }] }) };
+    });
     const none = vi.fn(async () => ({ ok: true, status: 200, json: async () => [] }));
-    await handleGeo({ body: { place: { name: "Elio", address: "Roma" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl: none, aiFetch, wait: async () => {} });
+    const r4 = await handleGeo({ body: { place: { name: "Elio", address: "Roma" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl: none, aiFetch, wait: async () => {} });
+    expect(r4.json.found).toEqual({ street: "", paese: "Italia" });
+    // Senza via né città, all'AI non si chiede nulla.
+    aiFetch.mockClear();
+    await handleGeo({ body: { place: { name: "Elio", address: "" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl: none, aiFetch, wait: async () => {} });
     expect(aiFetch).not.toHaveBeenCalled();
+  });
+
+  it("paese di un locale estero: dall'AI, o dal codice di OpenStreetMap", async () => {
+    expect(paeseOf({ country_code: "pt" })).toBe("Portogallo");
+    expect(paeseOf({ country_code: "it" })).toBe("Italia");
+    expect(paeseOf({})).toBe("");
+    const baia = { category: "amenity", name: "Restaurante Baia Do Bago", display_name: "Baia Do Bago", address: { road: "Estrada Regional 101", village: "Porto da Cruz", county: "Machico", country_code: "pt" } };
+    const fetchImpl = vi.fn(async () => ({ ok: true, status: 200, json: async () => [baia] }));
+    const r = await handleGeo({ body: { place: { name: "Restaurante Baia Do Bago", address: "Porto da Cruz" } }, env, fetchImpl, wait: async () => {} });
+    expect(r.json.found).toMatchObject({ street: "Estrada Regional 101, Porto da Cruz", paese: "Portogallo" });
+    const none = vi.fn(async () => ({ ok: true, status: 200, json: async () => [] }));
+    const aiFetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "", paese: "Portogallo" }) }] } }] }) }));
+    const r2 = await handleGeo({ body: { place: { name: "Restaurante Baia Do Bago", address: "Porto da Cruz, Madeira" } }, env: { ...env, GEMINI_API_KEY: "k", GEMINI_API_BASE: "https://ai.test" }, fetchImpl: none, aiFetch, wait: async () => {} });
+    expect(r2.json.found).toEqual({ street: "", paese: "Portogallo" });
   });
 
   it("se l'AI non risponde: quartiere di OpenStreetMap dalla via, e si riprova dopo", async () => {
@@ -114,9 +136,9 @@ describe("via di un locale (OpenStreetMap)", () => {
     const r = await handleGeo({ body: { place: { name: "Casamora", address: "Via di Monte Testaccio 65b, Roma" } }, env: ai, fetchImpl, aiFetch, wait: async () => {} });
     expect(r.json.found).toEqual({ street: "", zona: "Testaccio", riprova: true });
     // L'AI risponde: niente riprova.
-    aiFetch.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Testaccio" }) }] } }] }) }));
+    aiFetch.mockImplementation(async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ quartiere: "Testaccio", paese: "Italia" }) }] } }] }) }));
     const r2 = await handleGeo({ body: { place: { name: "Casamora", address: "Via di Monte Testaccio 65b, Roma" } }, env: ai, fetchImpl, aiFetch, wait: async () => {} });
-    expect(r2.json.found).toEqual({ street: "", zona: "Testaccio" });
+    expect(r2.json.found).toEqual({ street: "", zona: "Testaccio", paese: "Italia" });
   });
 
   it("errori chiari; senza posto 400; senza login 401", async () => {
