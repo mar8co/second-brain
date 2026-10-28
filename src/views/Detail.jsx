@@ -16,6 +16,7 @@ import { STATUSES, TYPES } from "../lib/constants.js";
 import { isImage, isVideo } from "../lib/files.js";
 import { useCoverUrl } from "../lib/fileurl.js";
 import { TRANSCRIPT_SOURCE, unreadFile } from "../lib/enrich.js";
+import { formatVia } from "../lib/indirizzi.js";
 import { mapsUrl, restaurantsOf } from "../lib/spots.js";
 import { coloreGalleria, togliDallaGalleria, vicini } from "../lib/galleria.js";
 
@@ -207,8 +208,8 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
           <ul className="righe mt-2 text-left text-[0.9rem] leading-snug">
             {luoghi.map(({ r, a }) => (
               <li key={`${r.key}|${a}`}>
-                <a href={mapsUrl(r.name, a)} target="_blank" rel="noopener noreferrer" className="flex items-start justify-between gap-3 py-2.5">
-                  <span><b className="font-extrabold">{r.name}</b> · {a}</span>
+                <a href={mapsUrl(r.name, formatVia(a))} target="_blank" rel="noopener noreferrer" className="flex items-start justify-between gap-3 py-2.5">
+                  <span><b className="font-extrabold">{r.name}</b> · {formatVia(a)}</span>
                   <span aria-hidden="true" className="shrink-0 font-bold">↗</span>
                 </a>
               </li>

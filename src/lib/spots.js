@@ -2,6 +2,7 @@
 // scheda di memoria di ogni contenuto (ai.places con kind "ristorante", ai.events).
 // Lo stesso locale o evento citato in più contenuti compare una volta, con tutti
 // i link ai contenuti da cui viene.
+import { formatVia } from "./indirizzi.js";
 import { normalize } from "./search.js";
 import { extractUrl } from "./detect.js";
 
@@ -55,7 +56,7 @@ export function tipoLocale(p) {
 // Città di un indirizzo ("Via dei Vascellari 29, 00153 Roma" → "Roma"), per
 // raggruppare i locali di cui non si conosce il quartiere.
 export function cittaDi(address) {
-  const parts = text(address).split(",").map((x) => x.replace(/\b\d{5}\b/g, "").trim()).filter(Boolean);
+  const parts = formatVia(text(address)).split(",").map((x) => x.trim()).filter(Boolean);
   const last = parts[parts.length - 1] || "";
   return hasStreet(last) ? "" : last;
 }
@@ -271,7 +272,8 @@ export function manualStreetPatches(items, name, streets, now = new Date()) {
   const key = normalize(name);
   const list = [];
   for (const v of Array.isArray(streets) ? streets : [streets]) {
-    const t = text(v).replace(/\s+/g, " ").slice(0, 200);
+    // Sempre "Via e civico, Città" (senza CAP, provincia, nazione).
+    const t = formatVia(text(v)).slice(0, 200);
     if (t && !list.includes(t)) list.push(t);
   }
   list.splice(10);
