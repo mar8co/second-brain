@@ -349,6 +349,15 @@ button { cursor: pointer; }
 /* Chat: il campo resta in fondo con la barra sopra. Sul telefono, mentre si
    scrive, la barra sparisce e il campo scende subito sopra la tastiera. */
 .chat-composer { padding: 8px 16px calc(78px + env(safe-area-inset-bottom)); background: var(--sfondo); }
+/* Le altezze vere di testata e campo le misura la chat (--alto-testata e
+   --alto-campo): in fondo alla pagina resta solo lo spazio del campo, molto più
+   basso con la tastiera aperta, e le risposte si fermano a filo sotto la
+   testata e sopra il campo. */
+.pagina.chat-pagina { padding-bottom: calc(var(--alto-campo, 132px + env(safe-area-inset-bottom)) + 28px); }
+.chat-pagina [data-risposta] {
+  scroll-margin-top: calc(var(--alto-testata, 88px) + 8px);
+  scroll-margin-bottom: calc(var(--alto-campo, 132px + env(safe-area-inset-bottom)) + 12px);
+}
 .campo-chat {
   flex: 1; min-width: 0; min-height: 46px; max-height: 10rem; overflow-y: auto; resize: none; outline: none;
   padding: 11px 16px; border: 1.5px solid #0a0a0a; border-radius: 23px; background: #fff; color: #0a0a0a;
