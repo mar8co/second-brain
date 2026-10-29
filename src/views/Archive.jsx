@@ -2,8 +2,8 @@
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { setGalleria } from "../lib/galleria.js";
 import { api } from "../lib/api.js";
-import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Check, ChevronLeft, ArrowUpDown, Ellipsis, FileText, Images, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CalendarDays, Check, ChevronLeft, ArrowUpDown, FileText, Images, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
 import { Page } from "../components/Layout.jsx";
 import Calendario from "../components/Calendario.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -37,6 +37,23 @@ function readVista() {
   }
 }
 
+// Come dividere i Ristoranti (quartiere, tipo, nome, città): l'ultima scelta resta.
+const GRUPPO_KEY = "sb-gruppo-locali";
+function readGruppo() {
+  try {
+    return localStorage.getItem(GRUPPO_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+function saveGruppo(v) {
+  try {
+    localStorage.setItem(GRUPPO_KEY, v);
+  } catch {
+    // Senza memoria del telefono la scelta vale solo finché la pagina è aperta.
+  }
+}
+
 export default function Archive({ archive, store, toast, query, navigate, openItem }) {
   const { items, loading, error, reload } = archive;
   const q = query.get("q") || "";
@@ -44,7 +61,8 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const active = FILTER_KEYS.filter((k) => filters[k]);
   const ordine = ORDINI.includes(query.get("ordine")) ? query.get("ordine") : "recenti";
   // Box Ristoranti: divisi per quartiere (predefinito), tipo, nome o città.
-  const gruppo = ["tipo", "nome", "citta"].includes(query.get("gruppo")) ? query.get("gruppo") : "zona";
+  // Senza scelta nell'indirizzo vale l'ultima usata, ricordata sul telefono.
+  const gruppo = ["tipo", "nome", "citta"].includes(query.get("gruppo") || readGruppo()) ? query.get("gruppo") || readGruppo() : "zona";
   const fs = (k) => query.get(k) || "";
   const [vista, setVistaState] = useState(readVista);
   const setVista = (v) => {
@@ -214,6 +232,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
       {chips.length > 0 && <span className="conta num" aria-hidden="true">{chips.length}</span>}
     </button>
   );
+  const principale = !sezione && !dentro && items.length > 0;
   const sezioneTile = fissi.find((t) => t.id === sezione);
   const titolo = sezione ? sezioneTile.name : dentro ? filters.category : "Archivio";
   const indietro = sezione ? () => closeBox({ sezione: "" }) : dentro ? () => closeBox({ category: "" }) : null;
@@ -276,6 +295,27 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
                 </button>
               )}
               {dentro && filtriBtn}
+              {/* Pagina principale: a sinistra vista Box/Lista e Riordina; a destra i Filtri. */}
+              {principale && !ordina && (
+                <>
+                  <span className="flex gap-1" role="group" aria-label="Vista">
+                    <button type="button" className={`pillola${vista === "box" ? " attiva" : ""}`} aria-pressed={vista === "box"} onClick={() => setVista("box")}>
+                      <LayoutGrid className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                      Box
+                    </button>
+                    <button type="button" className={`pillola${vista === "lista" ? " attiva" : ""}`} aria-pressed={vista === "lista"} onClick={() => setVista("lista")}>
+                      <List className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                      Lista
+                    </button>
+                  </span>
+                  {vista === "box" && (
+                    <button type="button" className="pillola" onClick={() => setOrdina(true)}>
+                      <ArrowUpDown className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
+                      Riordina
+                    </button>
+                  )}
+                </>
+              )}
               {ordina && (
                 <button type="button" className="pillola attiva" onClick={() => setOrdina(false)}>
                   <Check className="h-3.5 w-3.5" strokeWidth={2.8} aria-hidden="true" />
@@ -286,23 +326,13 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
             </span>
             {sezione === "ristoranti" && restaurants.length > 0 ? (
               <span className="flex shrink-0 items-center gap-1.5">
-                <OrdinaLocali value={gruppo} onChange={(v) => setParam({ gruppo: v === "zona" ? "" : v, ...(v === "tipo" ? { tipo: "" } : {}) })} />
+                <OrdinaLocali value={gruppo} onChange={(v) => saveGruppo(v) || setParam({ gruppo: v === "zona" ? "" : v, ...(v === "tipo" ? { tipo: "" } : {}) })} />
                 {filtriBtn}
               </span>
             ) : (
               sezione && filtriBtn
             )}
-            {/* Nella pagina principale un solo menu: filtri, vista e ordine dei box. */}
-            {!sezione && !dentro && items.length > 0 && (
-              <MenuOpzioni
-                attivi={chips.length}
-                voci={[
-                  { label: chips.length ? `Filtri (${chips.length})` : "Filtri", icon: SlidersHorizontal, run: () => setOpen((o) => !o) },
-                  vista === "box" ? { label: "Mostra come lista", icon: List, run: () => setVista("lista") } : { label: "Mostra come box", icon: LayoutGrid, run: () => setVista("box") },
-                  ...(vista === "box" ? [{ label: "Riordina i box", icon: ArrowUpDown, run: () => setOrdina(true) }] : []),
-                ]}
-              />
-            )}
+            {principale && !ordina && filtriBtn}
           </h2>
         )}
 
@@ -509,42 +539,3 @@ function FotoBox({ items, notes, store, onOpen, vuoto }) {
   );
 }
 
-// Menu "…" della pagina principale dell'Archivio: le opzioni che non servono
-// sempre (filtri, vista, ordine dei box). Si chiude toccando fuori o con Esc.
-function MenuOpzioni({ voci, attivi = 0 }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return undefined;
-    const close = (e) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [open]);
-  return (
-    <span className="relative shrink-0">
-      {open && <div className="fixed inset-0 z-50" aria-hidden="true" onClick={() => setOpen(false)} />}
-      <button type="button" className={`pillola relative${open ? " attiva" : ""}`} aria-label={attivi ? `Opzioni, ${attivi} filtri attivi` : "Opzioni"} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <Ellipsis className="h-4 w-4" strokeWidth={3} aria-hidden="true" />
-        {attivi > 0 && <span className="conta num" aria-hidden="true">{attivi}</span>}
-      </button>
-      {open && (
-        <div role="menu" aria-label="Opzioni" className="absolute right-0 top-full z-[60] mt-1.5 min-w-[12rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)] font-sans normal-case tracking-normal">
-          {voci.map(({ label, icon: Icona, run }, i) => (
-            <button
-              key={label}
-              type="button"
-              role="menuitem"
-              className={`flex w-full items-center gap-2.5 px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em] ${i < voci.length - 1 ? "border-b border-riga" : ""}`}
-              onClick={() => {
-                setOpen(false);
-                run();
-              }}
-            >
-              <Icona className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-    </span>
-  );
-}

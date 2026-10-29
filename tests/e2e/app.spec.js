@@ -14,17 +14,16 @@ test.beforeEach(async ({ page }, info) => {
 
 // "Altri campi (facoltativi)" è chiuso: lo apre se serve (titolo, nota del link, categorie, tag).
 // Menu "…" della pagina principale dell'Archivio: filtri, vista e ordine dei box.
+// Comandi dell'Archivio: pill Box/Lista e Riordina a sinistra, Filtri a destra.
 async function opzione(page, voce) {
-  await page.getByRole("button", { name: /^Opzioni/ }).click();
-  await page.getByRole("menuitem", { name: voce }).click();
+  const nomi = { "Mostra come lista": "Lista", "Mostra come box": "Box", "Riordina i box": "Riordina" };
+  if (nomi[voce]) return page.getByRole("button", { name: nomi[voce], exact: true }).click();
+  await page.getByRole("button", { name: voce }).click();
 }
 
 // Vista dell'Archivio (box o lista) dal menu "…"; se è già quella, si richiude.
 async function vista(page, v) {
-  await page.getByRole("button", { name: /^Opzioni/ }).click();
-  const voce = page.getByRole("menuitem", { name: `Mostra come ${v}` });
-  if (await voce.count()) await voce.click();
-  else await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: v === "box" ? "Box" : "Lista", exact: true }).click();
 }
 
 async function apriAltri(page) {
@@ -76,8 +75,9 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   expect(ing.y).toBeLessThan(tit.y + tit.height);
   expect(ing.y + ing.height).toBeGreaterThan(tit.y);
   expect(ing.x).toBeGreaterThan(tit.x + 100);
-  // Archivio vuoto: niente menu delle opzioni, solo la ricerca.
-  await expect(page.getByRole("button", { name: /^Opzioni/ })).toHaveCount(0);
+  // Archivio vuoto: niente comandi, solo la ricerca.
+  await expect(page.getByRole("button", { name: "Lista", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Filtri/ })).toHaveCount(0);
   await expect(page.getByText("Filtri", { exact: true })).toHaveCount(0);
   // Aggiungi non sta più nelle Impostazioni.
   await page.goto("/impostazioni");
@@ -459,9 +459,15 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
 
   // Di partenza: box, uno per categoria, con il numero dei contenuti.
   await page.goto("/archivio");
-  await page.getByRole("button", { name: /^Opzioni/ }).click();
-  await expect(page.getByRole("menuitem", { name: "Mostra come lista" })).toBeVisible();
-  await page.keyboard.press("Escape");
+  // Box/Lista e Riordina a sinistra, Filtri a destra, sulla stessa riga.
+  await expect(page.getByRole("button", { name: "Box", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const lst = await page.getByRole("button", { name: "Lista", exact: true }).boundingBox();
+  const rio = await page.getByRole("button", { name: "Riordina", exact: true }).boundingBox();
+  const fil0 = await page.getByRole("button", { name: /^Filtri/ }).boundingBox();
+  expect(lst.x).toBeLessThan(rio.x);
+  expect(rio.x + rio.width).toBeLessThan(fil0.x);
+  expect(fil0.x + fil0.width).toBeGreaterThan(page.viewportSize().width - 30);
+  expect(Math.abs(lst.y - fil0.y)).toBeLessThan(4);
   await expect(page.getByRole("button", { name: "Ricette, 1 contenuto" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
   await expect(page.locator("ul.righe")).toHaveCount(0);
@@ -566,6 +572,10 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(page.locator("section[data-gruppo-locali] h3")).toHaveCount(0);
   await expect(righe.locator("p").filter({ hasText: /^(Bar San Calisto|Da Enzo al 29)$/ })).toHaveText(["Bar San Calisto", "Da Enzo al 29"]);
   await expect(page.getByRole("button", { name: "Ordina per nome" })).toBeVisible();
+  // La scelta resta: riaprendo i Ristoranti (anche senza ?gruppo=) torna per nome.
+  await page.goto("/archivio?sezione=ristoranti");
+  await expect(page.getByRole("button", { name: "Ordina per nome" })).toBeVisible();
+  await expect(page.locator("section[data-gruppo-locali] h3")).toHaveCount(0);
   // Un tocco fuori chiude il menu senza cambiare scelta.
   await ordina.click();
   await page.mouse.click(4, 300);
@@ -586,7 +596,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await righe.first().getByText("Bar San Calisto").first().click();
   const foglio = page.getByRole("dialog", { name: "Scheda di Bar San Calisto" });
   await expect(foglio).toBeVisible();
-  await foglio.getByRole("button", { name: /^Apri «/ }).first().click();
+  await foglio.getByRole("button", { name: /^Apri scheda/ }).first().click();
   await expect(page).toHaveURL(/\/elemento\//);
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 59, 28)");
   await page.goBack();
@@ -662,7 +672,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
 
   // Il contenuto salvato ha il link a Maps dei locali con la via (non quello generico di una località).
   await enzo.getByText("Da Enzo al 29", { exact: true }).click();
-  await page.getByRole("dialog", { name: "Scheda di Da Enzo al 29" }).getByRole("button", { name: /^Apri «/ }).first().click();
+  await page.getByRole("dialog", { name: "Scheda di Da Enzo al 29" }).getByRole("button", { name: /^Apri scheda/ }).first().click();
   await expect(page.getByRole("link", { name: /Da Enzo al 29 · Via dei Vascellari 29, Roma/ })).toHaveAttribute("href", /query=Da%20Enzo%20al%2029%2C%20Via%20dei%20Vascellari%2029%2C%20Roma$/);
   await expect(page.getByRole("link", { name: /Bar San Calisto · Via Prova 5, Roma/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Apri in Mappe/ })).toHaveCount(0);
