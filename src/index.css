@@ -287,13 +287,17 @@ button { cursor: pointer; }
   .schede a[aria-current="page"] { background: #f3f1ec; color: #0a0a0a; }
 
   /* Avviso breve, appena sopra la barra; "Annulla" in giallo. */
+  /* Avviso come in Dispensa: in alto (non tocca la barra di stato), largo
+     quasi tutto lo schermo, pillola nera alta ~60px, "Annulla" in giallo. */
   .brindisi {
-    position: fixed; left: 50%; translate: -50% 0; z-index: 50; max-width: calc(100vw - 32px);
-    display: flex; align-items: center; gap: 14px; padding: 0.7rem 1.1rem; border-radius: 999px;
-    background: #0a0a0a; color: #fff; font-weight: 650; font-size: 0.92rem; animation: sale 0.2s ease-out;
+    position: fixed; left: 16px; right: 16px; top: calc(env(safe-area-inset-top) + 56px); z-index: 60;
+    max-width: 448px; margin: 0 auto; min-height: 60px;
+    display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-radius: 30px;
+    background: #0a0a0a; color: #fff; font-weight: 650; font-size: 1.1rem; line-height: 1.3;
+    box-shadow: 0 8px 30px rgb(0 0 0 / 0.25); animation: scendeAvviso 0.25s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .brindisi span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .brindisi button { flex: none; background: none; border: none; padding: 0; color: var(--giallo); font-weight: 800; font-size: 0.95rem; }
+  .brindisi span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+  .brindisi button { flex: none; margin: -12px 0; padding: 12px 0 12px 8px; background: none; border: none; color: var(--giallo); font-weight: 800; font-size: 1.1rem; }
 
   /* Scheda che sale dal basso: messaggi e domande dell'app. */
   .velo { position: fixed; inset: 0; z-index: 30; background: rgb(0 0 0 / 0.45); animation: appare 0.15s ease-out; }
@@ -346,6 +350,7 @@ html.senza-rimbalzo, html.senza-rimbalzo body { overscroll-behavior-y: none; }
 @keyframes gira { to { transform: rotate(360deg); } }
 @keyframes entraDestra { from { transform: translateX(28px); opacity: 0; } }
 @keyframes entraSinistra { from { transform: translateX(-28px); opacity: 0; } }
+@keyframes scendeAvviso { from { opacity: 0; transform: translateY(-10px) scale(0.98); } }
 @keyframes pulsaTesto { 50% { opacity: 0.45; } }
 
 /* Schermata di avvio */

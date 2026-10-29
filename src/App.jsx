@@ -111,10 +111,6 @@ function Shell({ auth }) {
   // "/" e il vecchio "/chiedi?q=…" portano alla chat.
   else view = <Chat key="chat" {...common} syncMode={isSyncMode} />;
 
-  // Barra in basso su tutte le pagine.
-  const chat = path === "/" || path === "/chiedi";
-  // L'avviso sta appena sopra la barra (e sopra il campo della chat).
-  const toastBottom = chat ? "calc(150px + env(safe-area-inset-bottom))" : "calc(84px + env(safe-area-inset-bottom))";
   return (
     <FileStoreContext.Provider value={store}>
       <PreferitiContext.Provider value={togglePreferito}>
@@ -123,7 +119,7 @@ function Shell({ auth }) {
       <BottomNav path={path} navigate={navigate} archive={archive} toast={toast} />
       <div role="status" aria-live="polite">
         {toastMsg && (
-          <div key={toastMsg.key} className="brindisi" style={{ bottom: toastBottom }}>
+          <div key={toastMsg.key} className="brindisi">
             <span>{toastMsg.text}</span>
             {toastMsg.action && (
               <button
