@@ -17,7 +17,10 @@ const apriCard = (items, onOpen) => (e) => {
   if (items[0]) onOpen(items[0]);
 };
 
-function SourceLinks({ items, onOpen }) {
+function SourceLinks({ items }) {
+  // La scheda si apre toccando la riga: qui solo i link all'originale.
+  items = items.filter((it) => /^https?:\/\//.test(it.url || ""));
+  if (!items.length) return null;
   return (
     <ul className="mt-1.5 space-y-0.5 text-[0.88rem] font-bold">
       {items.map((it) => (
@@ -27,17 +30,6 @@ function SourceLinks({ items, onOpen }) {
               Apri su {it.site_name || displayHost(it.url)} ↗
             </a>
           )}
-          <a
-            href={`/elemento/${it.id}`}
-            onClick={(e) => {
-              if (e.metaKey || e.ctrlKey) return;
-              e.preventDefault();
-              onOpen(it);
-            }}
-            className="text-tenue underline underline-offset-[3px]"
-          >
-            Scheda
-          </a>
         </li>
       ))}
     </ul>
