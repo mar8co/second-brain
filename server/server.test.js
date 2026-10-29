@@ -3,7 +3,8 @@ import http from "node:http";
 import { isPrivateIp, safeFetch } from "./net.js";
 import { looksLikeLoginWall, parseHtml } from "./html.js";
 import { extractUrlInfo, handleExtract } from "./extract.js";
-import { azioniOf, buildAskPrompt, buildClassifyPrompt, callGemini, handleAi, prepareAsk, quoteIn, sanitizeAsk, sanitizeClassify, todayInItaly } from "./ai.js";
+import { azioniOf, buildAskPrompt, buildClassifyPrompt, callGemini, handleAi, partialAnswer, prepareAsk, quoteIn, sanitizeAsk, sanitizeClassify, thinkingSteps, todayInItaly } from "./ai.js";
+import { nodeHandler } from "./node-adapter.js";
 import { handleShare, itemFromShared } from "./share.js";
 
 const LONG = "Questa è una frase di prova sull'olio extravergine e la pasta al limone. ".repeat(20);
@@ -413,6 +414,156 @@ describe("AI", () => {
     expect(quoteIn("si condisce con panna", text)).toBe(false);
     expect(quoteIn("pasta", text)).toBe(false);
     expect(quoteIn("", text)).toBe(false);
+  });
+});
+
+// Risposta di Gemini in streaming (SSE), divisa in pezzi di `size` byte: le
+// righe e i caratteri accentati si spezzano a metà come in rete.
+function sseResponse(texts, { finish = "STOP", size = 7, cut = false } = {}) {
+  const raw = texts.map((t, i) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }], role: "model" }, ...(i === texts.length - 1 && finish ? { finishReason: finish } : {}) }] })}\r\n\r\n`).join("");
+  const bytes = new TextEncoder().encode(raw);
+  let at = 0;
+  return new Response(
+    // Un pezzo per lettura; `cut`: la connessione cade dopo l'ultimo pezzo.
+    new ReadableStream({
+      pull(c) {
+        if (at < bytes.length) {
+          c.enqueue(bytes.slice(at, (at += size)));
+          return;
+        }
+        if (cut) c.error(new Error("connessione interrotta"));
+        else c.close();
+      },
+    }),
+    { status: 200, headers: { "content-type": "text/event-stream" } },
+  );
+}
+const pieces = (text, n) => text.match(new RegExp(`[\\s\\S]{1,${n}}`, "g"));
+
+describe("domande in streaming", () => {
+  const env = { ALLOW_NO_AUTH: "1", GEMINI_API_KEY: "test-key" };
+  const items = [{ id: "a", title: "Altro" }, { id: "b", title: "Trattoria", note: "Trattoria tipica a Roma, Trastevere" }];
+  const run = async (body, fetchImpl) => {
+    const r = await handleAi({ body: { action: "ask", question: "dove mangio?", items, stream: true, ...body }, env, fetchImpl });
+    const events = [];
+    await r.stream((ev) => events.push(ev));
+    return { r, events };
+  };
+
+  it("la risposta arriva a pezzi con le citazioni già numerate; alla fine fonti ed estratti", async () => {
+    const payload = { answer: "Alla **Trattoria** [2] e poi è più su [1].\n- Prenota [2]", sufficient: true, aiuto: "", azioni: [], sources: [{ n: 2, quote: "tipica a Roma, Trastevere" }, { n: 1, quote: "" }] };
+    const seen = {};
+    const { r, events } = await run({}, async (url, init) => {
+      seen.url = url;
+      seen.body = JSON.parse(init.body);
+      return sseResponse(pieces(JSON.stringify(payload), 5));
+    });
+    expect(r.status).toBe(200);
+    expect(seen.url).toContain(":streamGenerateContent?alt=sse");
+    // Domande in chat: ragionamento al minimo, per rispondere prima.
+    expect(seen.body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: "minimal" });
+    const done = events.at(-1);
+    expect(done).toMatchObject({ type: "done", answer: "Alla **Trattoria** [1] e poi è più su [2].\n- Prenota [1]", sufficient: true, sources: [{ id: "b", quote: "tipica a Roma, Trastevere" }, { id: "a", quote: "" }], consulted: 2 });
+    const deltas = events.filter((e) => e.type === "delta");
+    expect(deltas.length).toBeGreaterThan(3);
+    for (const d of deltas) {
+      // Mai una citazione, un grassetto o un elenco a metà; numeri come nella risposta finale.
+      expect(d.answer).not.toMatch(/\[[\d, ]*$|(^|\n)- ?$/);
+      expect((d.answer.match(/\*\*/g) || []).length % 2).toBe(0);
+      expect(d.sources).toEqual(["b", "a"].slice(0, d.sources.length));
+      // È l'inizio della risposta finale (tranne il grassetto chiuso per ora).
+      const base = done.answer.startsWith(d.answer) ? d.answer : d.answer.replace(/\*\*$/, "");
+      expect(done.answer.startsWith(base)).toBe(true);
+    }
+    expect(deltas.at(-1).answer).toBe(done.answer);
+    expect(new Set(deltas.map((d) => d.answer)).size).toBe(deltas.length);
+  });
+
+  it("risposta interrotta a metà: resta la parte scritta, con […] e le sue fonti", async () => {
+    const raw = '{"answer": "Alla Trattoria [2], in via ';
+    const { events } = await run({}, async () => sseResponse(pieces(raw, 6), { finish: null, cut: true }));
+    expect(events.at(-1)).toMatchObject({ type: "done", answer: "Alla Trattoria [1], in via […]", sufficient: true, partial: true, sources: [{ id: "b", quote: "" }], consulted: 2 });
+  });
+
+  it("risposta completa ma interrotta prima delle fonti: niente […]", async () => {
+    const raw = '{"answer": "Alla Trattoria [2].", "sufficient": true, "aiuto": "", "azioni": [], "sources": [{"n": 2, "quo';
+    const { events } = await run({}, async () => sseResponse(pieces(raw, 6), { finish: "MAX_TOKENS" }));
+    expect(events.at(-1)).toMatchObject({ type: "done", answer: "Alla Trattoria [1].", partial: true, sources: [{ id: "b", quote: "" }] });
+  });
+
+  it("nessun testo dal modello: prova il successivo; se nessuno risponde, evento di errore", async () => {
+    const urls = [];
+    const ok = { answer: "Sì [2].", sufficient: true, aiuto: "", azioni: [], sources: [] };
+    const { events } = await run({}, async (url) => (urls.push(url), urls.length === 1 ? sseResponse([""]) : sseResponse([JSON.stringify(ok)])));
+    expect(urls[1]).toContain("gemini-3.8-flash");
+    // Gemini 3.8 Flash non accetta "minimal": si parte da "low".
+    expect(events.at(-1)).toMatchObject({ type: "done", answer: "Sì [1].", model: "gemini-3.8-flash" });
+    const { events: failed } = await run({}, async () => new Response(JSON.stringify({ error: { message: "quota" } }), { status: 429 }));
+    expect(failed).toEqual([{ type: "error", status: 429, error: "Limite gratuito del servizio AI raggiunto: riprova più tardi." }]);
+  });
+
+  it("senza stream la stessa domanda risponde in JSON, come prima", async () => {
+    const payload = { answer: "Alla Trattoria [2].", sufficient: true, aiuto: "", azioni: [], sources: [{ n: 2, quote: "" }] };
+    const r = await handleAi({
+      body: { action: "ask", question: "dove?", items },
+      env,
+      fetchImpl: async (url) => (expect(url).toContain(":generateContent"), new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(payload) }] } }] }))),
+    });
+    expect(r.json).toMatchObject({ answer: "Alla Trattoria [1].", sufficient: true, sources: [{ id: "b" }] });
+    expect(r.stream).toBeUndefined();
+  });
+
+  it("livelli di ragionamento: da minimal a low, poi senza; Gemini 3.8 Flash parte da low", async () => {
+    expect(thinkingSteps("minimal", "gemini-3.5-flash-lite")).toEqual(["minimal", "low", null]);
+    expect(thinkingSteps("minimal", "gemini-3.8-flash")).toEqual(["low", null]);
+    expect(thinkingSteps("low", "gemini-3.6-flash")).toEqual(["low", null]);
+    const levels = [];
+    const ok = { answer: "x", sufficient: false, aiuto: "", azioni: [], sources: [] };
+    await run({}, async (_u, init) => {
+      levels.push(JSON.parse(init.body).generationConfig.thinkingConfig?.thinkingLevel ?? null);
+      return levels.length < 3 ? new Response(JSON.stringify({ error: { message: "Thinking level is not supported for this model." } }), { status: 400 }) : sseResponse([JSON.stringify(ok)]);
+    });
+    expect(levels).toEqual(["minimal", "low", null]);
+  });
+
+  it("risposta parziale: citazione o grassetto a metà non si vedono", () => {
+    const refs = new Map([[1, { id: "x", text: "" }], [2, { id: "y", text: "" }]]);
+    expect(partialAnswer('{"answer": "Da **Enzo', refs)).toEqual({ answer: "Da **Enzo**", sources: [] });
+    expect(partialAnswer('{"answer": "Da Enzo [2, 1', refs)).toEqual({ answer: "Da Enzo", sources: [] });
+    expect(partialAnswer('{"answer": "Da Enzo [2]. Poi \\"Bar', refs)).toEqual({ answer: 'Da Enzo [1]. Poi "Bar', sources: ["y"] });
+    expect(partialAnswer('{"answer": "Uno [1]\\n- ', refs)).toEqual({ answer: "Uno [1]", sources: ["x"] });
+    expect(partialAnswer('{"ans', refs)).toEqual({ answer: "", sources: [] });
+  });
+
+  it("node-adapter: eventi SSE scritti appena pronti", async () => {
+    const handler = nodeHandler(async () => ({
+      status: 200,
+      stream: async (send) => {
+        send({ type: "delta", answer: "Uno" });
+        await new Promise((r) => setTimeout(r, 30));
+        send({ type: "done", answer: "Uno e due" });
+      },
+    }));
+    const srv = http.createServer(handler);
+    await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+    try {
+      const res = await fetch(`http://127.0.0.1:${srv.address().port}/`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+      expect(res.headers.get("cache-control")).toMatch(/no-store/);
+      const reader = res.body.getReader();
+      const first = new TextDecoder().decode((await reader.read()).value);
+      // Il primo evento arriva prima del secondo, non tutto alla fine.
+      expect(first).toBe('data: {"type":"delta","answer":"Uno"}\n\n');
+      let rest = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        rest += new TextDecoder().decode(value);
+      }
+      expect(rest).toBe('data: {"type":"done","answer":"Uno e due"}\n\n');
+    } finally {
+      srv.close();
+    }
   });
 });
 

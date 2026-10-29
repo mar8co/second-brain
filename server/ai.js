@@ -32,30 +32,43 @@ export function modelChain(env) {
   return [first, ...FALLBACK_MODELS.filter((m) => m !== first)];
 }
 
-// Il "thinking" consumerebbe il budget di token del JSON: lo riduciamo al minimo.
-export function thinkingConfig(model) {
+// Il "thinking" consumerebbe il budget di token del JSON e allunga l'attesa:
+// lo riduciamo al minimo. `level`: livello chiesto per i modelli Gemini 3
+// ("minimal" per le domande in chat, le più sensibili all'attesa).
+export function thinkingConfig(model, level = "low") {
   if (model.includes("2.5")) return { thinkingBudget: 0 };
-  if (/^gemini-3/.test(model)) return { thinkingLevel: "low" };
+  if (/^gemini-3/.test(model)) return { thinkingLevel: level };
   return null;
+}
+
+// Livelli da provare se il modello rifiuta quello chiesto: mai senza
+// indicazione (per i Gemini 3 vorrebbe dire il livello predefinito, spesso
+// "medium", più lento), tranne come ultima possibilità. Gemini 3.8 Flash non
+// accetta "minimal" (guida di Google): si parte da "low".
+export function thinkingSteps(level, model = "") {
+  if (level !== "minimal") return [level, null];
+  return /^gemini-3\.8-flash/.test(model) ? ["low", null] : ["minimal", "low", null];
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, withThinking, timeoutMs }) {
+async function geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, thinkingLevel, timeoutMs, stream = false }) {
   // GEMINI_API_BASE serve solo ai test (finto Gemini locale).
   const apiBase = env.GEMINI_API_BASE || "https://generativelanguage.googleapis.com";
-  const url = `${apiBase}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  // In streaming il testo arriva a pezzi (eventi SSE) mentre il modello scrive.
+  const url = `${apiBase}/v1beta/models/${encodeURIComponent(model)}:${stream ? "streamGenerateContent?alt=sse" : "generateContent"}`;
   const generationConfig = {
     maxOutputTokens: maxTokens,
     temperature,
     responseMimeType: "application/json",
     responseSchema: schema,
   };
-  const thinking = withThinking ? thinkingConfig(model) : null;
+  const thinking = thinkingLevel ? thinkingConfig(model, thinkingLevel) : null;
   if (thinking) generationConfig.thinkingConfig = thinking;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let streaming = false;
   try {
     const res = await fetchImpl(url, {
       method: "POST",
@@ -63,14 +76,62 @@ async function geminiRequest({ env, model, prompt, parts, schema, maxTokens, tem
       headers: { "content-type": "application/json", "x-goog-api-key": env.GEMINI_API_KEY },
       body: JSON.stringify({ contents: [{ role: "user", parts: [...(parts || []), { text: prompt }] }], generationConfig }),
     });
+    // Streaming riuscito: il corpo lo legge chi chiama, entro lo stesso tempo massimo.
+    if (stream && res.ok && res.body) {
+      streaming = true;
+      return { res, data: null, done: () => clearTimeout(timer) };
+    }
     const data = await res.json().catch(() => null);
     return { res, data };
   } catch {
     // Rete o tempo scaduto: chi chiama prova il modello successivo.
     return { res: null, data: null };
   } finally {
-    clearTimeout(timer);
+    if (!streaming) clearTimeout(timer);
   }
+}
+
+// Legge gli eventi SSE di streamGenerateContent: ogni evento porta un pezzo
+// del testo. `onText(testo finora)` a ogni pezzo. Le parti di "thinking" no.
+async function readStream(res, onText) {
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  let text = "";
+  let finishReason = null;
+  const line = (raw) => {
+    const l = raw.trim();
+    if (!l.startsWith("data:")) return;
+    let chunk;
+    try {
+      chunk = JSON.parse(l.slice(5));
+    } catch {
+      return;
+    }
+    const c = chunk?.candidates?.[0];
+    if (c?.finishReason) finishReason = c.finishReason;
+    const piece = (c?.content?.parts || []).filter((p) => !p.thought).map((p) => p.text || "").join("");
+    if (piece) {
+      text += piece;
+      onText?.(text);
+    }
+  };
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        line(buf.slice(0, i));
+        buf = buf.slice(i + 1);
+      }
+    }
+    line(buf + dec.decode());
+  } catch {
+    return { text, finishReason, broken: true };
+  }
+  return { text, finishReason, broken: false };
 }
 
 // Messaggio di Google (non contiene la chiave), accorciato.
@@ -93,18 +154,41 @@ export async function callGemini(opts) {
   }
 }
 
-async function callModels({ env, prompt, parts, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch, retryDelayMs = 1500, timeoutMs = 25_000, deadline = Infinity }, looped) {
+// `thinking`: livello di ragionamento per i modelli Gemini 3 ("low" se non detto).
+// `onText` (facoltativa): risposta in streaming, chiamata con il testo scritto
+// finora a ogni pezzo. Una volta arrivato del testo non si cambia più modello
+// (chi legge lo vedrebbe ricominciare): un errore porta con sé la parte ricevuta.
+async function callModels({ env, prompt, parts, schema, maxTokens = 1024, temperature = 0.2, fetchImpl = fetch, retryDelayMs = 1500, timeoutMs = 25_000, deadline = Infinity, thinking = "low", onText = null }, looped) {
   const models = modelChain(env);
   let lastError = null;
   const timeLeft = () => deadline - Date.now() - 2_000;
+  const stream = typeof onText === "function";
   for (const model of models) {
-    let withThinking = true;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    const steps = thinkingSteps(thinking, model);
+    for (let attempt = 0; attempt < 3 + steps.length; attempt++) {
       if (timeLeft() < 8_000) throw lastError || new AiError(502, "Tempo esaurito per il servizio AI.");
-      const { res, data } = await geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, withThinking, timeoutMs: Math.min(timeoutMs, timeLeft()) });
+      const { res, data, done } = await geminiRequest({ env, model, prompt, parts, schema, maxTokens, temperature, fetchImpl, thinkingLevel: steps[0], timeoutMs: Math.min(timeoutMs, timeLeft()), stream });
       if (!res) {
         lastError = new AiError(502, "Impossibile contattare il servizio AI: riprova tra poco.");
         break;
+      }
+      if (res.ok && done) {
+        // Streaming: il testo arriva a pezzi fino alla fine o al tempo massimo.
+        let got = false;
+        const r = await readStream(res, (t) => {
+          got = true;
+          onText(t);
+        }).finally(done);
+        try {
+          return { out: JSON.parse(r.text), model };
+        } catch {
+          if (!got) {
+            lastError = new AiError(502, r.broken ? "Risposta dell'AI interrotta." : "Risposta AI non valida (incompleta o non in JSON).");
+            break;
+          }
+          const at = r.finishReason === "MAX_TOKENS" ? loopStart(r.text) : -1;
+          throw Object.assign(new AiError(502, r.broken ? "Risposta dell'AI interrotta." : "Risposta troppo lunga per il limite dell'AI."), { partial: at >= 0 ? r.text.slice(0, at) : r.text, model, ...(at >= 0 ? { looped: true } : {}) });
+        }
       }
       if (res.ok) {
         const candidate = data?.candidates?.[0];
@@ -130,9 +214,10 @@ async function callModels({ env, prompt, parts, schema, maxTokens = 1024, temper
         }
       }
       const msg = googleMessage(data);
-      // Parametro "thinking" non supportato da questo modello: riprova senza.
-      if (res.status === 400 && withThinking && /thinking/i.test(msg)) {
-        withThinking = false;
+      // Livello di "thinking" non supportato da questo modello: riprova con il
+      // successivo (da "minimal" a "low", poi senza).
+      if (res.status === 400 && steps[0] && /thinking/i.test(msg)) {
+        steps.shift();
         continue;
       }
       if (res.status === 401 || res.status === 403 || (res.status === 400 && /api key/i.test(msg))) {
@@ -704,9 +789,10 @@ export function quoteIn(quote, text) {
   return pieces.every((p) => text.includes(p));
 }
 
-// Risposta di Gemini → { answer, sufficient, sources: [{ id, quote }] }, con
-// le citazioni rinumerate da 1 nell'ordine delle fonti.
-export function sanitizeAsk(out, refs) {
+// Numeri delle fonti nell'ordine in cui le citazioni compaiono nel testo
+// (da 1, al massimo MAX_SOURCES). `renumber(testo)`: testo con le citazioni
+// rinumerate e senza quelle che non corrispondono a un elemento.
+function citations(refs) {
   const order = [];
   const num = new Map();
   const use = (n) => {
@@ -719,14 +805,23 @@ export function sanitizeAsk(out, refs) {
     }
     return num.get(r.id);
   };
-  const answer = tidy(
-    str(out?.answer, 4000)
-      .replace(CITE, (_, list) => {
-        const ns = [...new Set(citeNumbers(list).map(use).filter(Boolean))].sort((a, b) => a - b);
-        return ns.length ? `[${ns.join(", ")}]` : "";
-      })
-      .replace(LEFTOVER, (m) => (/^\[\d+(?:, \d+)*\]$/.test(m) ? m : "")),
-  );
+  const renumber = (text) =>
+    tidy(
+      text
+        .replace(CITE, (_, list) => {
+          const ns = [...new Set(citeNumbers(list).map(use).filter(Boolean))].sort((a, b) => a - b);
+          return ns.length ? `[${ns.join(", ")}]` : "";
+        })
+        .replace(LEFTOVER, (m) => (/^\[\d+(?:, \d+)*\]$/.test(m) ? m : "")),
+    );
+  return { order, use, renumber };
+}
+
+// Risposta di Gemini → { answer, sufficient, sources: [{ id, quote }] }, con
+// le citazioni rinumerate da 1 nell'ordine delle fonti.
+export function sanitizeAsk(out, refs) {
+  const { order, use, renumber } = citations(refs);
+  const answer = renumber(str(out?.answer, 4000));
   const quotes = new Map();
   for (const s of Array.isArray(out?.sources) ? out.sources.slice(0, MAX_SOURCES * 2) : []) {
     const n = Number(s?.n);
@@ -738,6 +833,49 @@ export function sanitizeAsk(out, refs) {
   const sources = order.map((r) => ({ id: r.id, quote: quotes.get(r.id) || "" }));
   const aiuto = tidy(str(out?.aiuto, 1500).replace(CITE, "").replace(LEFTOVER, ""));
   return { answer, sufficient: Boolean(out?.sufficient) && sources.length > 0, sources, ...(aiuto ? { aiuto } : {}), azioni: azioniOf(out?.azioni) };
+}
+
+// Fine di un testo ancora a metà: via la citazione non chiusa ("[3", "[2, "),
+// un asterisco da solo, una riga con il solo segno dell'elenco; un grassetto
+// aperto si chiude (o si toglie, se non ha ancora testo).
+function cleanTail(text) {
+  let a = String(text || "")
+    .replace(/\[[\d\s,;\-–—]*$/, "")
+    .replace(/(?<!\*)\*$/, "")
+    .replace(/(^|\n)[ \t]*(?:[-*•]|\d+[.)])[ \t]*$/, "$1");
+  if ((a.split("**").length - 1) % 2) {
+    const i = a.lastIndexOf("**");
+    const rest = a.slice(i + 2);
+    a = rest.trim() && !rest.includes("\n") ? `${a}**` : a.slice(0, i) + rest;
+  }
+  return a;
+}
+
+// Risposta mentre arriva (streaming): la parte di "answer" scritta finora,
+// con le citazioni numerate come saranno nella risposta completa (stesso
+// ordine di comparsa) e gli id delle fonti citate finora.
+export function partialAnswer(raw, refs) {
+  const { order, renumber } = citations(refs);
+  const answer = renumber(cleanTail(partialJsonString(raw, "answer").slice(0, 4000)));
+  return { answer, sources: order.map((r) => r.id) };
+}
+
+// La stringa `key` del JSON è chiusa, anche se dopo la risposta si interrompe?
+export function jsonStringClosed(raw, key) {
+  return new RegExp(`"${key}"\\s*:\\s*"(?:[^"\\\\]|\\\\.)*"`).test(String(raw || ""));
+}
+
+// Risposta interrotta (limite di lunghezza o di tempo, rete): resta la parte
+// di risposta scritta (viene prima delle fonti), con le citazioni che
+// contiene; "[…]" se la risposta stessa è tagliata. null se non c'è testo.
+export function salvageAsk(e, refs) {
+  const raw = typeof e?.partial === "string" ? e.partial : "";
+  if (!raw) return null;
+  const whole = jsonStringClosed(raw, "answer");
+  const text = partialJsonString(raw, "answer");
+  const r = sanitizeAsk({ answer: whole ? text : cleanTail(text), sufficient: !/"sufficient"\s*:\s*false/.test(raw), sources: [] }, refs);
+  if (!r.answer) return null;
+  return { ...r, answer: whole ? r.answer : `${r.answer} […]`, partial: true, model: e.model };
 }
 
 // Link delle azioni proposte dall'AI, costruiti qui (mai URL scritti
@@ -860,16 +998,40 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
       }
       const total = Number.isInteger(body?.total) && body.total > 0 ? body.total : items.length + memory.length;
       const { prompt, refs, consulted } = prepareAsk(question, items, memory, { total, history: body?.history });
+      // Ragionamento al minimo: per le domande conta la rapidità (le risposte
+      // vengono solo dai contenuti dati, senza calcoli complessi).
+      const run = (onText) => callGemini({ env, prompt, schema: ASK_SCHEMA, maxTokens: 8192, fetchImpl, deadline: Date.now() + ASK_MS, thinking: "minimal", onText });
+      if (body?.stream === true) {
+        // Risposta in streaming (eventi SSE): "delta" con la risposta scritta
+        // finora mentre l'AI la scrive, poi "done" con fonti ed estratti, oppure
+        // "error".
+        return {
+          status: 200,
+          stream: async (send) => {
+            let last = "";
+            try {
+              const { out, model } = await run((raw) => {
+                const p = partialAnswer(raw, refs);
+                if (!p.answer || p.answer === last) return;
+                last = p.answer;
+                send({ type: "delta", ...p });
+              });
+              send({ type: "done", ...sanitizeAsk(out, refs), consulted, model });
+            } catch (e) {
+              const saved = salvageAsk(e, refs);
+              if (saved) send({ type: "done", ...saved, consulted });
+              else send({ type: "error", status: e instanceof AiError ? e.status : 500, error: e instanceof AiError ? e.message : "Errore interno." });
+            }
+          },
+        };
+      }
       try {
-        const { out, model } = await callGemini({ env, prompt, schema: ASK_SCHEMA, maxTokens: 8192, fetchImpl, deadline: Date.now() + ASK_MS });
+        const { out, model } = await run(null);
         return { status: 200, json: { ...sanitizeAsk(out, refs), consulted, model } };
       } catch (e) {
-        // Risposta tagliata al limite: si tiene la parte scritta (la risposta
-        // viene prima delle fonti), con le citazioni che contiene.
-        const answer = e?.partial ? partialJsonString(e.partial, "answer").trim() : "";
-        if (!answer) throw e;
-        const r = sanitizeAsk({ answer, sufficient: true, sources: [] }, refs);
-        return { status: 200, json: { ...r, answer: r.answer ? `${r.answer} […]` : "", partial: true, consulted, model: e.model } };
+        const saved = salvageAsk(e, refs);
+        if (!saved) throw e;
+        return { status: 200, json: { ...saved, consulted } };
       }
     }
     if (action === "select") {
