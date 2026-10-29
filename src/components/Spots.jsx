@@ -224,7 +224,7 @@ export function OrdinaLocali({ value, onChange }) {
 
 // Scheda del locale (sale dal basso): tutti gli indirizzi con Maps, modifica
 // degli indirizzi, il contenuto da cui viene ed Elimina.
-function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
+function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onRegeo, onDelete }) {
   const [modifica, setModifica] = useState(false);
   const t = (TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante).label;
   const indirizzi = r.tutte?.length ? r.tutte : r.streets;
@@ -266,6 +266,18 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
             {indirizzi.length ? "Modifica indirizzi" : "Aggiungi indirizzo"}
           </button>
         )}
+        {onRegeo && !modifica && (
+          <button
+            type="button"
+            className={azione}
+            onClick={() => {
+              onClose();
+              onRegeo(r.name);
+            }}
+          >
+            Ricerca di nuovo via e quartiere
+          </button>
+        )}
         {r.items.slice(0, 3).map((it, i, all) => (
           <button
             key={it.id}
@@ -301,7 +313,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
 // (un locale con sedi in quartieri diversi compare in ognuno). Per tipo e per
 // nome: una riga per locale con tutti i suoi indirizzi. Tocco sulla riga: la
 // scheda del locale; swipe a sinistra: Elimina.
-export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete, gruppo = "zona", filtri = {} }) {
+export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onRegeo, onDelete, gruppo = "zona", filtri = {} }) {
   const [aperto, setAperto] = useState(null);
 
   if (!restaurants.length) {
@@ -360,7 +372,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
 
   return (
     <>
-      {scheda && <SchedaLocale key={scheda.key} r={scheda} onClose={() => setAperto(null)} onOpen={onOpen} onStreet={onStreet} onLink={onLink} onDelete={onDelete} />}
+      {scheda && <SchedaLocale key={scheda.key} r={scheda} onClose={() => setAperto(null)} onOpen={onOpen} onStreet={onStreet} onLink={onLink} onRegeo={onRegeo} onDelete={onDelete} />}
       {!gruppi.length && <p className="micro mt-5">Nessun locale con questi filtri.</p>}
       {gruppi.map((g) => (
         <section key={g.key} aria-label={g.label} data-gruppo-locali>

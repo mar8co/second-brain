@@ -424,3 +424,12 @@ describe("locali con più sedi", () => {
     expect(una.map((r) => [r.key, r.sede, r.tutte])).toEqual([["enzo", undefined, ["Via dei Vascellari 29, Roma"]]]);
   });
 });
+
+import { resetGeoPatches as _rg } from "./spots.js";
+it("resetGeoPatches toglie quartiere e via trovata, tiene quella manuale", () => {
+  const items = [{ id: 1, ai: { places: [{ kind: "ristorante", name: "Tullia", street: "X", geo_at: "t", zona: "Roma", zona_v: 3, paese: "Italia" }, { kind: "ristorante", name: "Altro", zona: "Prati" }] } }, { id: 2, ai: { places: [{ kind: "ristorante", name: "tullia", manual: true, street: "Via Cicerone 55A, Roma", geo_at: "t", zona_v: 3 }] } }];
+  const out = _rg(items, "Tullia");
+  expect(out[0].patch.ai.places[0]).toEqual({ kind: "ristorante", name: "Tullia" });
+  expect(out[0].patch.ai.places[1].zona).toBe("Prati");
+  expect(out[1].patch.ai.places[0]).toEqual({ kind: "ristorante", name: "tullia", manual: true, street: "Via Cicerone 55A, Roma", geo_at: "t" });
+});

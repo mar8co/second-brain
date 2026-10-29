@@ -292,6 +292,27 @@ export function manualStreetPatches(items, name, streets, now = new Date()) {
   return out;
 }
 
+// Rifà la ricerca di via e quartiere di un locale (pulsante nella scheda):
+// toglie quartiere e paese trovati; la via scritta a mano resta, quella
+// trovata da OpenStreetMap si cerca di nuovo.
+export function resetGeoPatches(items, name) {
+  const key = normalize(name);
+  const out = [];
+  for (const item of items) {
+    const places = Array.isArray(item.ai?.places) ? item.ai.places : [];
+    if (!places.some((p) => p && p.kind === "ristorante" && normalize(text(p.name)) === key)) continue;
+    const next = places.map((p) => {
+      if (!p || p.kind !== "ristorante" || normalize(text(p.name)) !== key) return p;
+      const rest = { ...p };
+      for (const f of ["zona", "zona_at", "zona_v", "zone_sedi", "paese"]) delete rest[f];
+      if (!p.manual) for (const f of ["street", "geo_at"]) delete rest[f];
+      return rest;
+    });
+    out.push({ id: item.id, patch: { ai: { ...item.ai, places: next } } });
+  }
+  return out;
+}
+
 // Toglie un locale dalla lista Ristoranti (hidden) o lo rimette (hidden = false):
 // [{ id, patch }] per ogni contenuto che lo cita. I contenuti restano salvati.
 export function hideRestaurantPatches(items, name, hidden = true) {
