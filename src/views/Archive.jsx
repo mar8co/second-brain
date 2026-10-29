@@ -268,22 +268,6 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
           </div>
         </div>
 
-        {cats.length > 0 && vista === "lista" && (
-          <ul className="fila-chip mt-3.5" aria-label="Categorie">
-            <li className="shrink-0">
-              <button type="button" className={`pillola${filters.category ? "" : " attiva"}`} aria-pressed={!filters.category} onClick={() => setParam({ category: "" })}>
-                Tutte
-              </button>
-            </li>
-            {cats.map(([c, n]) => (
-              <li key={c} className="shrink-0">
-                <button type="button" className={`pillola${filters.category === c ? " attiva" : ""}`} aria-pressed={filters.category === c} onClick={() => setParam({ category: filters.category === c ? "" : c })}>
-                  {c} <span className="num opacity-60">{n}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
 
         {!loading && (
           <h2 className="sezione !mt-3.5 !border-b-0 !pb-0">
@@ -294,20 +278,9 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
                   Categorie
                 </button>
               )}
-              {dentro && filtriBtn}
-              {/* Pagina principale: a sinistra vista Box/Lista e Riordina; a destra i Filtri. */}
+              {/* Pagina principale: Riordina a sinistra; a destra Box/Lista e i Filtri. */}
               {principale && !ordina && (
                 <>
-                  <span className="flex gap-1" role="group" aria-label="Vista">
-                    <button type="button" className={`pillola${vista === "box" ? " attiva" : ""}`} aria-pressed={vista === "box"} onClick={() => setVista("box")}>
-                      <LayoutGrid className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
-                      Box
-                    </button>
-                    <button type="button" className={`pillola${vista === "lista" ? " attiva" : ""}`} aria-pressed={vista === "lista"} onClick={() => setVista("lista")}>
-                      <List className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
-                      Lista
-                    </button>
-                  </span>
                   {vista === "box" && (
                     <button type="button" className="pillola" onClick={() => setOrdina(true)}>
                       <ArrowUpDown className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
@@ -330,9 +303,18 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
                 {filtriBtn}
               </span>
             ) : (
-              sezione && filtriBtn
+              (sezione || dentro) && filtriBtn
             )}
-            {principale && !ordina && filtriBtn}
+            {principale && !ordina && (
+              <span className="flex shrink-0 items-center gap-1.5">
+                {/* Una sola pill: mostra la vista a cui si passa. */}
+                <button type="button" className="pillola" onClick={() => setVista(vista === "box" ? "lista" : "box")}>
+                  {vista === "box" ? <List className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" /> : <LayoutGrid className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />}
+                  {vista === "box" ? "Lista" : "Box"}
+                </button>
+                {filtriBtn}
+              </span>
+            )}
           </h2>
         )}
 
