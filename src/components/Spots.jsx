@@ -263,7 +263,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
             {indirizzi.length ? "Modifica indirizzi" : "Aggiungi indirizzo"}
           </button>
         )}
-        {r.items.slice(0, 3).map((it) => (
+        {r.items.slice(0, 3).map((it, i, all) => (
           <button
             key={it.id}
             type="button"
@@ -273,7 +273,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
               onOpen(it);
             }}
           >
-            <span className="min-w-0 truncate">Apri «{it.title || displayHost(it.url || "") || "contenuto salvato"}»</span>
+            {all.length > 1 ? `Apri scheda ${i + 1}` : "Apri scheda"}
           </button>
         ))}
         {onDelete && (
@@ -344,8 +344,10 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
           <IconaTipo tipo={r.tipo} />
           <div className="min-w-0 flex-1">
             <p className={NAME}>{r.name}</p>
-            <p className="micro mt-0.5 font-semibold" data-tipo-locale>{sottotitolo(r)}</p>
-            {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
+            <p className="micro mt-1 font-semibold" data-tipo-locale>{sottotitolo(r)}</p>
+            <div className="mt-1.5">
+              {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
+            </div>
           </div>
         </div>
       </Riga>
