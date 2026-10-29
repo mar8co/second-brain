@@ -3,7 +3,7 @@
 // salvati, con le fonti citate [1] [2] e il passaggio da cui viene. I
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
-import { Fragment, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpRight, Copy, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { SwipeElimina, Thumb } from "../components/ItemCard.jsx";
@@ -21,6 +21,7 @@ import { copyText } from "../lib/clipboard.js";
 import { api } from "../lib/api.js";
 import { FileStoreContext } from "../lib/fileurl.js";
 import { LINK_SOURCE, isLink, linkParts } from "../lib/linkify.js";
+import { conTelefoni } from "../lib/telefoni.js";
 import { formatDate, typeLabel } from "../lib/format.js";
 import { eventsOf, restaurantsOf } from "../lib/spots.js";
 
@@ -46,8 +47,25 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   const boxRef = useRef(null);
   const autoAsked = useRef(false);
   const formRef = useRef(null);
+  const paginaRef = useRef(null);
+  const testataRef = useRef(null);
   usePageColor(PAGE.chat);
   useSopraTastiera(formRef);
+  useMisure(paginaRef, testataRef, formRef);
+  const aggancia = useAggancioIniziale(paginaRef);
+
+  // La posizione all'apertura la decide la chat (a filo sull'ultima risposta):
+  // ricaricando l'app (per esempio quando si aggiorna) il browser non rimette
+  // quella di prima.
+  // Uscendo si torna al comportamento normale (le pagine aperte da qui lo ereditano).
+  useEffect(() => {
+    const h = window.history;
+    if (!("scrollRestoration" in h)) return undefined;
+    h.scrollRestoration = "manual";
+    return () => {
+      h.scrollRestoration = "auto";
+    };
+  }, []);
 
   // Niente rimbalzo in cima: altrimenti con la pagina tirata giù il titolo
   // scende con lei e il campo di testo si ridisegna senza il segnaposto.
@@ -71,9 +89,10 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 
   const conversation = useMemo(() => log.map((m, i) => ({ msg: m, newDay: i === 0 || dayKey(m.at) !== dayKey(log[i - 1].at) })), [log]);
 
-  // Si va in fondo, come in una chat, a ogni nuovo messaggio: se l'ultima
-  // risposta c'è già, si parte dal suo inizio (così una risposta lunga non
-  // resta tagliata in alto); finché si aspetta, in fondo.
+  // Si va in fondo, come in una chat, all'apertura e a ogni nuovo messaggio:
+  // se l'ultima risposta c'è già, si parte dal suo inizio, a filo sotto la
+  // testata (così una risposta lunga non resta tagliata in alto; una corta
+  // finisce a filo sopra il campo); finché si aspetta, in fondo.
   const listRef = useRef(null);
   useEffect(() => {
     if (!log.length) return;
@@ -89,12 +108,14 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
       else endRef.current?.scrollIntoView({ block: "end" });
     };
     go();
+    // Mentre si aspetta una risposta la pagina la segue: niente ritorno alla precedente.
+    aggancia(answer ? go : null);
     // Subito dopo l'invio il campo si accorcia e la tastiera si assesta: si ripete
     // quando il layout è fermo, così il "Cerco nella tua memoria…" resta in vista.
     if (!waiting) return undefined;
     const t = [120, 450].map((ms) => setTimeout(go, ms));
     return () => t.forEach(clearTimeout);
-  }, [log, loading]);
+  }, [log, loading, aggancia]);
 
   // Mentre la risposta arriva parola per parola, la pagina la segue.
   const last = log.at(-1);
@@ -191,9 +212,9 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
 
   return (
     <>
-      <main className="pagina !pb-[calc(160px+env(safe-area-inset-bottom))]" aria-label="Chat">
+      <main ref={paginaRef} className="pagina chat-pagina" aria-label="Chat">
         {/* Intestazione sempre visibile, a tinta unita: la conversazione le scorre sotto. */}
-        <header className="testata sticky top-0 z-20 -mx-4 bg-sfondo px-4 !pb-2.5">
+        <header ref={testataRef} className="testata sticky top-0 z-20 -mx-4 bg-sfondo px-4 !pb-2.5">
           <h1 className="marchio">second-brain</h1>
           <div className="flex items-center gap-2">
             {log.length > 0 && (
@@ -331,10 +352,75 @@ function useSopraTastiera(ref) {
   }, [ref]);
 }
 
+// Altezze vere della testata e del campo in fondo, per il CSS della pagina
+// (.chat-pagina): le risposte si fermano a filo sotto la testata e in fondo
+// resta solo lo spazio del campo, che con la tastiera aperta è molto più basso
+// (senza la barra Chat / Archivio). Se si era in fondo alla chat e il campo si
+// alza (la tastiera che si chiude, il testo che va a capo), si resta in fondo:
+// l'ultima risposta non finisce dietro al campo.
+function useMisure(paginaRef, testataRef, campoRef) {
+  useLayoutEffect(() => {
+    const pagina = paginaRef.current;
+    const testata = testataRef.current;
+    const campo = campoRef.current;
+    if (!pagina || !testata || !campo) return undefined;
+    const misura = () => {
+      const doc = document.documentElement;
+      const inFondo = doc.scrollHeight - window.innerHeight - window.scrollY < 4;
+      pagina.style.setProperty("--alto-testata", `${testata.offsetHeight}px`);
+      pagina.style.setProperty("--alto-campo", `${campo.offsetHeight}px`);
+      if (inFondo && doc.scrollHeight - window.innerHeight - window.scrollY > 1) window.scrollTo(0, doc.scrollHeight);
+    };
+    misura();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    // Bordo compreso: con la tastiera cambia solo lo spazio sotto il campo.
+    const ro = new ResizeObserver(misura);
+    ro.observe(testata, { box: "border-box" });
+    ro.observe(campo, { box: "border-box" });
+    return () => ro.disconnect();
+  }, [paginaRef, testataRef, campoRef]);
+}
+
+// All'apertura (app avviata o pagina Chat) l'ultima risposta resta a filo anche
+// mentre la pagina si assesta: il carattere che arriva, la chat che si
+// sincronizza, le misure di testata e campo. Si smette al primo tocco, alla
+// rotella o a un tasto, e comunque dopo qualche secondo dal primo aggancio.
+// Restituisce la funzione con cui la chat dice come tornare all'ultima risposta.
+function useAggancioIniziale(paginaRef) {
+  const stato = useRef({ attivo: true, vai: null, scade: 0 });
+  useEffect(() => {
+    const s = stato.current;
+    s.attivo = true;
+    const pagina = paginaRef.current;
+    const riprova = () => {
+      if (s.attivo && s.vai && performance.now() < s.scade) s.vai();
+    };
+    const ferma = () => {
+      s.attivo = false;
+    };
+    const ro = pagina && typeof ResizeObserver !== "undefined" ? new ResizeObserver(riprova) : null;
+    ro?.observe(pagina, { box: "border-box" });
+    document.fonts?.ready?.then(riprova);
+    const tocchi = ["pointerdown", "touchstart", "wheel", "keydown"];
+    tocchi.forEach((t) => window.addEventListener(t, ferma, { capture: true, passive: true }));
+    return () => {
+      ferma();
+      ro?.disconnect();
+      tocchi.forEach((t) => window.removeEventListener(t, ferma, { capture: true }));
+    };
+  }, [paginaRef]);
+  return useCallback((vai) => {
+    const s = stato.current;
+    if (!s.attivo) return;
+    if (vai && !s.scade) s.scade = performance.now() + 4000;
+    s.vai = vai;
+  }, []);
+}
+
 // Risposta che cresce mentre arriva: la pagina scorre con lei finché il suo
 // inizio arriva sotto la testata, poi si ferma (si legge dall'inizio). Se si è
 // saliti a leggere altro, resta dov'è. I margini sono quelli di scrollIntoView
-// (scroll-mt / scroll-mb della risposta).
+// (scroll-margin della risposta, dalle misure di testata e campo).
 function segui(el) {
   if (!el) return;
   const r = el.getBoundingClientRect();
@@ -392,7 +478,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
           </p>
         </div>
       </div>
-      <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
+      <div className="flex justify-start" data-risposta>
         <div className={`card-bianca vignetta relative w-full max-w-[94%] py-3.5 pl-4 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none] ${r?.kind === "answer" || writing ? "pr-4" : "pr-11"}`}>
           {writing ? (
             <>
@@ -518,8 +604,21 @@ function Inline({ text, count, onCite }) {
       );
     }
     // Niente spazio tra la parola e la citazione che la segue.
-    return <Fragment key={i}>{/^\[\d/.test(parts[i + 1] || "") ? part.trimEnd() : part}</Fragment>;
+    return <ConTelefoni key={i} text={/^\[\d/.test(parts[i + 1] || "") ? part.trimEnd() : part} />;
   });
+}
+
+// Numeri di telefono sottolineati: un tocco e il telefono propone di chiamare.
+function ConTelefoni({ text }) {
+  return conTelefoni(text).map((p, i) =>
+    typeof p === "string" ? (
+      <Fragment key={i}>{p}</Fragment>
+    ) : (
+      <a key={i} href={`tel:${p.tel}`} className="whitespace-nowrap underline underline-offset-2">
+        {p.testo}
+      </a>
+    ),
+  );
 }
 
 // Fonti numerate come nella risposta, in un riquadro chiuso: si vede quante

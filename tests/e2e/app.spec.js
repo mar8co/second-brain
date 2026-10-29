@@ -1543,3 +1543,127 @@ test("chat: domande d'esempio fatte con l'archivio; aiuto pratico oltre i conten
   // Solo link costruiti dall'app: niente altri indirizzi proposti dall'AI.
   await expect(aiuto.getByRole("link")).toHaveCount(1);
 });
+
+// Distanza tra la fine dell'ultima risposta e il bordo alto del campo in fondo.
+async function spazioSopraCampo(page) {
+  return page.evaluate(() => {
+    const risposte = document.querySelectorAll("[data-risposta]");
+    const r = risposte[risposte.length - 1].getBoundingClientRect();
+    return Math.round(document.querySelector("form.chat-composer").getBoundingClientRect().top - r.bottom);
+  });
+}
+
+// Distanza tra la testata e l'inizio dell'ultima risposta (negativa se è tagliata sotto la testata).
+async function sottoTestata(page) {
+  return page.evaluate(() => {
+    const risposte = document.querySelectorAll("[data-risposta]");
+    return Math.round(risposte[risposte.length - 1].getBoundingClientRect().top - document.querySelector("header.testata").getBoundingClientRect().bottom);
+  });
+}
+
+test("chat: all'apertura l'ultima risposta è a filo sotto la testata alta dell'app installata, e ci resta finché la pagina si assesta", async ({ page }) => {
+  // Testata alta come nell'app installata su iPhone (fascia dell'orologio + 20 px).
+  await page.addInitScript(() => {
+    const metti = () => {
+      const stile = document.createElement("style");
+      stile.textContent = ".testata { padding-top: 79px !important; }";
+      document.head.append(stile);
+    };
+    if (document.head) metti();
+    else document.addEventListener("DOMContentLoaded", metti);
+  });
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("Cosa ho salvato sul limone?");
+  await box.press("Enter");
+  await expect(page.getByText("Risposta dai tuoi contenuti").first()).toBeVisible();
+  await box.fill("Raccontami la ricetta lunga con il limone");
+  await box.press("Enter");
+  await expect(page.getByText("Passaggio 30 della ricetta")).toHaveCount(1);
+  expect(await page.locator("header.testata").evaluate((h) => h.offsetHeight)).toBeGreaterThan(120);
+
+  const nav = page.getByRole("navigation", { name: "Navigazione principale" });
+  // Riaprendo l'app e tornando alla pagina Chat dall'Archivio.
+  for (const apri of [
+    () => page.reload(),
+    async () => {
+      await nav.getByRole("link", { name: "Archivio" }).click();
+      await nav.getByRole("link", { name: "Chat" }).click();
+    },
+  ]) {
+    await apri();
+    await expect(page.getByText("Passaggio 1 della ricetta")).toBeVisible();
+    await expect.poll(() => sottoTestata(page)).toBe(8);
+  }
+  // Qualcosa più in alto cambia altezza dopo l'apertura (il carattere che arriva, la
+  // chat che si sincronizza): l'ultima risposta resta dov'era.
+  await page.addStyleTag({ content: "ol > li:first-child { padding-top: 150px !important; }" });
+  await expect.poll(() => sottoTestata(page)).toBe(8);
+  // Dopo il primo tocco la pagina è libera: niente più spostamenti automatici.
+  await page.touchscreen.tap(200, 60);
+  await page.addStyleTag({ content: "ol > li:first-child { padding-top: 400px !important; }" });
+  await expect.poll(() => sottoTestata(page)).toBeGreaterThan(200);
+});
+
+test("chat: con la tastiera aperta niente spazio vuoto sotto l'ultima risposta; richiusa, l'ultima risposta resta sopra il campo", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  for (const [i, q] of ["Cosa ho salvato sul limone?", "Raccontami la ricetta lunga con il limone", "Cosa ho salvato sul limone?"].entries()) {
+    await box.fill(q);
+    await box.press("Enter");
+    await expect(page.getByText("Risposta dai tuoi contenuti")).toHaveCount(i + 1);
+  }
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => spazioSopraCampo(page)).toBe(28);
+
+  // Tastiera aperta: il campo si abbassa (sparisce la barra) e la pagina con lui.
+  const form = page.locator("form.chat-composer");
+  const alto = (await form.boundingBox()).height;
+  await box.click();
+  await expect(page.getByRole("navigation", { name: "Navigazione principale" })).toBeHidden();
+  await expect.poll(async () => (await form.boundingBox()).height).toBeLessThan(alto - 40);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => spazioSopraCampo(page)).toBe(28);
+
+  // Tastiera chiusa: il campo torna alto e l'ultima risposta non ci finisce dietro.
+  await box.blur();
+  await expect.poll(async () => (await form.boundingBox()).height).toBe(alto);
+  await expect.poll(() => spazioSopraCampo(page)).toBe(28);
+});
+
+test("chat: i numeri di telefono nella risposta sono sottolineati e si chiamano con un tocco; date e orari no", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  await page.route("**/api/ai", async (route) => {
+    if (route.request().postDataJSON()?.action !== "ask") return route.continue();
+    return route.fulfill({
+      json: {
+        answer:
+          "Il parcheggio ha due numeri: +39 333 430 7363 e +39 333 430 7358. Per informazioni c'è anche il **3929196854**, dalle 08.30 alle 19.30 dal 05/11/2026.",
+        sufficient: true,
+        sources: [],
+        quotes: {},
+        consulted: 1,
+      },
+    });
+  });
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("qual è il numero del parcheggio?");
+  await box.press("Enter");
+  const risposta = page.locator("[data-risposta]").last();
+  const primo = risposta.getByRole("link", { name: "+39 333 430 7363" });
+  await expect(primo).toHaveAttribute("href", "tel:+393334307363");
+  await expect(primo).toHaveCSS("text-decoration-line", "underline");
+  await expect(primo).toHaveCSS("white-space", "nowrap");
+  await expect(risposta.getByRole("link", { name: "+39 333 430 7358" })).toHaveAttribute("href", "tel:+393334307358");
+  await expect(risposta.getByRole("link", { name: "3929196854" })).toHaveAttribute("href", "tel:3929196854");
+  await expect(risposta.locator('a[href^="tel:"]')).toHaveCount(3);
+  // Il testo intorno resta com'era.
+  await expect(risposta).toContainText("dalle 08.30 alle 19.30 dal 05/11/2026.");
+});
