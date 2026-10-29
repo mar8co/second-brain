@@ -896,14 +896,11 @@ test("chat: tirando la pagina verso il basso in cima (rimbalzo di iPhone) il cam
   expect(await composer.evaluate((el) => el.style.transform)).toBe("");
 });
 
-test("chat: il tondo + accanto al campo apre Foto, video o file e Link; un file si salva subito", async ({ page }) => {
+test("chat: il + è nella barra in basso come nelle altre schermate (non accanto al campo); un file si salva subito", async ({ page }) => {
   await page.goto("/");
-  const piu = page.getByRole("button", { name: "Aggiungi foto, video o file" });
-  const campo = await page.getByRole("textbox", { name: "Chiedi alla tua memoria" }).boundingBox();
-  const pb = await piu.boundingBox();
-  expect(pb.x + pb.width).toBeLessThanOrEqual(campo.x + 1);
-  // Non c'è più nella barra in basso.
-  await expect(page.getByRole("navigation", { name: "Navigazione principale" }).getByRole("button")).toHaveCount(0);
+  const piu = page.locator(".barra-piu").getByRole("button", { name: "Aggiungi foto, video o file" });
+  await expect(piu).toBeVisible();
+  await expect(page.locator(".chat-composer").getByRole("button", { name: "Aggiungi foto, video o file" })).toHaveCount(0);
   await piu.click();
   await expect(page.getByRole("menuitem")).toHaveText(["Foto, video o file", "Link o note"]);
   // Un tocco fuori (anche sopra la barra) chiude il menu senza attivare quello che sta sotto.
@@ -1351,7 +1348,7 @@ test("campo di ricerca: la X di cancellazione è nera e spessa", async ({ page }
   expect(regola).toContain("0a0a0a");
 });
 
-test("preferiti: stellina su scheda e riga, niente box Preferiti nell'Archivio; + nella barra fuori dalla Chat, barra al centro", async ({ page }) => {
+test("preferiti: stellina su scheda e riga, niente box Preferiti nell'Archivio; + nella barra in ogni schermata, barra al centro", async ({ page }) => {
   await page.goto("/aggiungi");
   await page.getByRole("tab", { name: "Nota" }).click();
   await apriAltri(page);
@@ -1368,9 +1365,9 @@ test("preferiti: stellina su scheda e riga, niente box Preferiti nell'Archivio; 
   expect((await piu.boundingBox()).x).toBeGreaterThan(nav.x + nav.width);
   await page.getByRole("button", { name: "Aggiungi ai preferiti" }).click();
   await expect(page.getByRole("button", { name: "Togli dai preferiti" })).toBeVisible();
-  // Nella Chat il + resta accanto al campo, non nella barra.
+  // Anche nella Chat il + è nella barra, nello stesso punto.
   await page.goto("/");
-  await expect(page.locator(".barra-piu button")).toHaveCount(0);
+  await expect(page.locator(".barra-piu button")).toHaveCount(1);
   await page.goto("/archivio");
   await vista(page, "box");
   // Nessun box Preferiti nell'Archivio: si ritrovano con il filtro.

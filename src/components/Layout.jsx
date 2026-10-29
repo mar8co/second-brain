@@ -25,7 +25,7 @@ const TABS = [
 ];
 
 // Pillola nera flottante al centro con la scheda attiva accesa in chiaro (solo parole);
-// fuori dalla Chat, a destra, il tondo + per aggiungere foto, file, link o note.
+// a destra, in ogni schermata, il tondo + per aggiungere foto, file, link o note.
 export function BottomNav({ path, navigate, archive, toast }) {
   const chat = path === "/" || path === "/chiedi";
   return (
@@ -49,7 +49,7 @@ export function BottomNav({ path, navigate, archive, toast }) {
           );
         })}
       </nav>
-      <div className="barra-piu">{!chat && path !== "/aggiungi" && <AddMenu archive={archive} navigate={navigate} toast={toast} grande dalDestra />}</div>
+      <div className="barra-piu">{path !== "/aggiungi" && <AddMenu archive={archive} navigate={navigate} toast={toast} grande dalDestra />}</div>
     </div>
   );
 }

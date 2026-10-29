@@ -1,4 +1,4 @@
-// Tondo + accanto al campo della chat: un piccolo menu per aggiungere foto, video,
+// Tondo + nella barra in basso (uguale in ogni schermata): un piccolo menu per aggiungere foto, video,
 // file o scrivere a mano. Foto, video e file si salvano subito, senza cambiare schermata.
 import { useEffect, useRef, useState } from "react";
 import { FileText, Plus, SquarePen } from "lucide-react";
