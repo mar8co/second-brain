@@ -204,14 +204,18 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
   await expect(page).toHaveURL(/\/elemento\//);
   await expect(page.getByRole("heading", { name: "Idea regalo per Giulia" })).toBeVisible();
   await expect(page.getByText("Salvato", { exact: true })).toBeVisible();
-  // Elimina: solo il cestino rosso, in alto a destra accanto a Modifica.
+  // Modifica ed Elimina (rosso) affiancati sotto il riepilogo; Indietro a
+  // sinistra della stellina.
   const elimina = page.getByRole("button", { name: "Elimina" });
   await expect(elimina).toHaveCSS("background-color", "rgb(224, 42, 13)");
-  expect((await elimina.innerText()).trim()).toBe("");
   const modifica = await page.getByRole("button", { name: "Modifica" }).boundingBox();
   const cestino = await elimina.boundingBox();
   expect(cestino.x).toBeGreaterThan(modifica.x + modifica.width - 1);
-  expect(Math.abs(cestino.y - modifica.y)).toBeLessThan(12);
+  expect(Math.abs(cestino.y - modifica.y)).toBeLessThan(4);
+  const indietro = await page.getByRole("button", { name: "Indietro" }).boundingBox();
+  const stella = await page.getByRole("button", { name: /preferiti/i }).first().boundingBox();
+  expect(indietro.x + indietro.width).toBeLessThan(stella.x + 1);
+  expect(Math.abs(indietro.y - stella.y)).toBeLessThan(4);
   await expect(page.getByRole("button", { name: "Elimina" })).toHaveCount(1);
 
   await page.reload();

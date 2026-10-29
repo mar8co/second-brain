@@ -139,19 +139,9 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
 
   return (
     <Page>
-      <Testata
-        onBack={() => back("/")}
-        right={
-          <>
-            <button type="button" className="pillola" onClick={() => setEditing(true)}>
-              Modifica
-            </button>
-            <button type="button" className="tondo !border-[#e02a0d] !bg-[#e02a0d] text-white" aria-label="Elimina" onClick={remove} disabled={!!busy}>
-              <Trash2 className="h-[17px] w-[17px]" strokeWidth={2.4} aria-hidden="true" />
-            </button>
-          </>
-        }
-      />
+      {/* Niente barra in alto: "Indietro" sta sulla riga della stellina,
+          Modifica ed Elimina sotto il riepilogo. */}
+      <div className="testata !min-h-0 !pb-1" aria-hidden="true" />
       <article onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <header>
           <p className="micro flex items-center gap-1.5 font-semibold">
@@ -171,7 +161,13 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
         {/* Lo stato in piccolo; la spiegazione solo se la lettura non è riuscita. */}
         <section aria-live="polite" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.92rem] font-semibold">
           {/* Stellina tutta a sinistra, frecce a destra, sulla stessa riga. */}
-          <Stella item={item} className="h-7 w-7 rounded-full border-[1.5px] border-inchiostro" size={15} />
+          <span className="flex items-center gap-2">
+            <button type="button" onClick={() => back("/")} className="flex h-7 items-center gap-0.5 rounded-full border-[1.5px] border-inchiostro pl-1 pr-2.5 text-[0.85rem] font-bold">
+              <ChevronLeft className="h-4 w-4" strokeWidth={2.5} aria-hidden="true" />
+              Indietro
+            </button>
+            <Stella item={item} className="h-7 w-7 rounded-full border-[1.5px] border-inchiostro" size={15} />
+          </span>
           <StatusBadge status={item.status} />
           <span className="ml-auto flex items-center gap-1">
             {(prev || next) && [["Precedente", prev, ChevronLeft], ["Successivo", next, ChevronRight]].map(([l, to, Ico]) => (
@@ -247,6 +243,16 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
             {busy === "classify" ? "Analizzo…" : "Proponi categorie e tag con l'AI"}
           </button>
         ) : null}
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <button type="button" className="bottone chiaro" onClick={() => setEditing(true)}>
+            Modifica
+          </button>
+          <button type="button" className="bottone rosso gap-1.5" onClick={remove} disabled={!!busy}>
+            <Trash2 className="h-[17px] w-[17px]" strokeWidth={2.4} aria-hidden="true" />
+            Elimina
+          </button>
+        </div>
 
         {error && <div className="mt-4"><ErrorBox>{error}</ErrorBox></div>}
 
