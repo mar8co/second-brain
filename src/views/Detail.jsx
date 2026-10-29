@@ -365,7 +365,9 @@ function Riassunto({ children }) {
 }
 
 function EditForm({ item, archive, onDone }) {
-  const [title, setTitle] = useState(item.title || "");
+  // Si parte dal titolo che si vede (anche quello scritto dall'AI).
+  const shown = (!item.ai?.titolo_manuale && typeof item.ai?.titolo === "string" && item.ai.titolo.trim()) || item.title || "";
+  const [title, setTitle] = useState(shown);
   const [note, setNote] = useState(item.note || "");
   const [description, setDescription] = useState(item.description || "");
   const [type, setType] = useState(item.type);
@@ -378,7 +380,11 @@ function EditForm({ item, archive, onDone }) {
     e.preventDefault();
     setSaving(true);
     try {
-      await archive.update(item.id, { title: title.trim() || null, note: note.trim() || null, description: description.trim() || null, type, categories, tags });
+      // Titolo cambiato a mano: vale quello, non più il titolo dell'AI.
+      const manual = title.trim() !== shown.trim();
+      await archive.update(item.id, {
+        ...(manual ? { title: title.trim() || null, ...(item.ai ? { ai: { ...item.ai, titolo_manuale: true } } : {}) } : {}),
+        note: note.trim() || null, description: description.trim() || null, type, categories, tags });
       onDone();
     } catch (err) {
       setError(err.message);

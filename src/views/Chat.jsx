@@ -504,7 +504,7 @@ function Sources({ sources, archiveOk, onOpen }) {
             <li key={sid} className="flex gap-3 py-3">
               <span className="relative shrink-0 self-start">
                 {item ? <Thumb item={item} size="h-12 w-12" /> : <span className="block h-12 w-12 rounded-xl bg-[rgb(10_10_10/0.08)]" />}
-                <span className="num absolute -left-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#0a0a0a] px-1 text-[11px] font-extrabold text-white ring-2 ring-white">{i + 1}</span>
+                <span className="num absolute -left-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full border-[1.5px] border-[#0a0a0a] bg-white px-[3px] text-[10px] font-extrabold leading-none text-[#0a0a0a]">{i + 1}</span>
               </span>
               {item ? (
                 <div className="min-w-0 flex-1">

@@ -205,7 +205,7 @@ describe("AI", () => {
   it("sanitize: niente fonti → non sufficiente; tag minuscoli e unici", () => {
     expect(sanitizeAsk({ answer: "x", sufficient: true, sources: [] }, new Map()).sufficient).toBe(false);
     expect(sanitizeClassify({ summary: "s", categories: ["Ricette", "A", "B"], tags: ["Pasta", "pasta", "Roma"] })).toEqual({
-      summary: "s", points: [], entities: [], keywords: [], categories: ["Ricette", "A"], tags: ["pasta", "roma"], places: [], events: [],
+      titolo: "", summary: "s", points: [], entities: [], keywords: [], categories: ["Ricette", "A"], tags: ["pasta", "roma"], places: [], events: [],
     });
   });
 
@@ -609,5 +609,19 @@ describe("salvataggio da Comandi Rapidi (/api/share)", () => {
     await handleShare({ body: { token: TOKEN, text: `${base}/articolo` }, env: { ...env, GEMINI_API_KEY: "k" }, db: db2, fetchImpl: async () => new Response("{}", { status: 429 }) });
     expect(db2.calls.update[0].patch).toMatchObject({ status: "analyzed" });
     expect(db2.calls.update[0].patch.status_detail).toMatch(/AI non disponibile/);
+  });
+});
+
+import { cleanTitolo as _ct } from "./ai.js";
+import { displayTitle as _dt } from "../src/lib/item.js";
+describe("titolo dell'AI", () => {
+  it("pulisce virgolette, punto finale e spazi", () => {
+    expect(_ct('  «Carbonara   cremosa senza panna.»  ')).toBe("Carbonara cremosa senza panna");
+    expect(_ct(null)).toBe("");
+  });
+  it("si mostra al posto del titolo del post, salvo titolo cambiato a mano", () => {
+    expect(_dt({ title: "Post di @chef 🍝 #pasta", ai: { titolo: "Carbonara cremosa" } })).toBe("Carbonara cremosa");
+    expect(_dt({ title: "Mio titolo", ai: { titolo: "Carbonara cremosa", titolo_manuale: true } })).toBe("Mio titolo");
+    expect(_dt({ title: "Post", ai: { titolo: "" } })).toBe("Post");
   });
 });

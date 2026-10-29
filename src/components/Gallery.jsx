@@ -25,7 +25,7 @@ function Tile({ item, store, onOpen }) {
       alive = false;
     };
   }, [seen, visual, item.id, item.file_path, store]); // eslint-disable-line react-hooks/exhaustive-deps
-  const label = item.title || item.file_name || (video ? "Video" : "Foto");
+  const label = (!item.ai?.titolo_manuale && item.ai?.titolo) || item.title || item.file_name || (video ? "Video" : "Foto");
   return (
     <li ref={box} className="min-w-0">
       <a
