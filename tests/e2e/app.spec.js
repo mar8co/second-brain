@@ -826,8 +826,12 @@ test("Archivio a box: Ristoranti, la via si prende incollando il link di Google 
   // "Incolla link di Maps" mette quello che hai copiato nel campo vuoto e legge subito la via.
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.evaluate(() => navigator.clipboard.writeText("https://maps.app.goo.gl/sbagliato2"));
+  // Con testo c'è la X; con il campo vuoto al suo posto c'è l'icona Incolla.
+  await expect(bar.getByRole("button", { name: /Togli l'indirizzo 1/ })).toBeVisible();
+  await expect(bar.getByRole("button", { name: /Incolla link di Maps/ })).toHaveCount(0);
   await campo.fill("");
-  await bar.getByRole("button", { name: "Incolla link di Maps" }).click();
+  await expect(bar.getByRole("button", { name: /Togli l'indirizzo 1/ })).toHaveCount(0);
+  await bar.getByRole("button", { name: /Incolla link di Maps/ }).click();
   await expect(campo).toHaveValue("https://maps.app.goo.gl/sbagliato2");
   await expect(bar.getByText(/Non sono riuscito a leggere la via da questo link/)).toBeVisible();
   // Il testo copiato da "Condividi" di Google Maps (nome e link, attaccati come in un
