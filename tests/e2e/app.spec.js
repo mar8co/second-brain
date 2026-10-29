@@ -230,9 +230,10 @@ test("salva una nota, la ritrova dopo il ricaricamento e la elimina", async ({ p
   await page.getByRole("button", { name: "Elimina" }).click();
   await expect(page).toHaveURL(/\/archivio$/);
   await expect(page.getByText("Ancora niente qui")).toBeVisible();
+  // Annulla rimette l'elemento e riapre la sua scheda.
   await page.getByRole("button", { name: "Annulla" }).click();
-  await expect(page.getByText("Idea regalo per Giulia")).toBeVisible();
-  await page.getByText("Idea regalo per Giulia").click();
+  await expect(page).toHaveURL(/\/elemento\//);
+  await expect(page.getByRole("heading", { name: "Idea regalo per Giulia" })).toBeVisible();
   await page.getByRole("button", { name: "Elimina" }).click();
   await expect(page.getByText("Elemento eliminato")).toBeVisible();
   await expect(page.getByText("Elemento eliminato")).toBeHidden({ timeout: 8000 });
@@ -1210,7 +1211,7 @@ test("più foto insieme: anteprima, si toglie una, si salvano le altre e restano
   await expect(page.getByRole("link", { name: "due.png" })).toHaveCount(0);
 });
 
-test("foto: lo swipe passa alla foto successiva/precedente e, eliminandone una, si resta sulla successiva", async ({ page }) => {
+test("foto: lo swipe passa alla foto successiva/precedente; eliminandone una si passa alla successiva e Annulla la riapre", async ({ page }) => {
   await page.goto("/");
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
   await page.getByLabel("Scegli foto, video o file").setInputFiles(
@@ -1225,7 +1226,66 @@ test("foto: lo swipe passa alla foto successiva/precedente e, eliminandone una, 
   const nomi = await page.locator("ul.grid-cols-3 a").evaluateAll((as) => as.map((a) => a.getAttribute("aria-label")));
   expect(nomi).toHaveLength(3);
   await page.locator("ul.grid-cols-3 a").first().click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[0].replace(".png", ""), "i"));
+  const titolo = page.getByRole("heading", { level: 1 });
+  const nome = (i) => new RegExp(nomi[i].replace(".png", ""), "i");
+  await expect(titolo).toHaveText(nome(0));
+  // Tocchi uno dopo l'altro sulla scheda: [tipo, x], tipo start/move/end.
+  const tocchi = (...passi) =>
+    page.locator(".carosello").evaluate((el, passi) => {
+      const art = el.querySelector("article");
+      for (const [tipo, x] of passi) {
+        const t = new window.Touch({ identifier: 1, target: art, clientX: x, clientY: 300 });
+        art.dispatchEvent(new window.TouchEvent(`touch${tipo}`, { touches: tipo === "end" ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true }));
+      }
+    }, passi);
+  const spostamento = () =>
+    page.locator(".carosello").evaluate((el) => {
+      const t = window.getComputedStyle(el).transform;
+      return t && t !== "none" ? new window.DOMMatrixReadOnly(t).m41 : 0;
+    });
+
+  // Trascinando, la scheda segue il dito e la successiva entra di lato, già
+  // pronta e allineata (stessa altezza, 40 px più in là).
+  await tocchi(["start", 200], ["move", 190], ["move", 150], ["move", 100]);
+  expect(await spostamento()).toBe(-100);
+  const vicina = page.locator(".anteprima-scheda.dopo h1");
+  await expect(vicina).toHaveText(nome(1));
+  await expect(page.locator(".anteprima-scheda.dopo")).toHaveAttribute("aria-hidden", "true");
+  await expect(page.locator(".anteprima-scheda.prima")).toHaveCount(0);
+  const qui = await page.locator("article h1").boundingBox();
+  const la = await vicina.boundingBox();
+  expect(Math.abs(la.y - qui.y)).toBeLessThan(1);
+  expect(Math.abs(la.x - qui.x - (page.viewportSize().width - 32 + 40))).toBeLessThan(1);
+  // Ha gli stessi colori della pagina vera: sfondo blu, testo bianco, Elimina rosso.
+  const colori = (sel) =>
+    page.locator(sel).first().evaluate((el) => {
+      const c = window.getComputedStyle(el);
+      return [c.backgroundColor, c.color];
+    });
+  for (const sel of ["h1", ".bottone.rosso", ".bottone.chiaro"]) expect(await colori(`.anteprima-scheda.dopo ${sel}`)).toEqual(await colori(`article ${sel}`));
+  const sfondo = await page.evaluate(() => window.getComputedStyle(document.body).backgroundColor);
+  expect((await colori(".anteprima-scheda.dopo"))[0]).toBe(sfondo);
+  expect(await colori("article .bottone.rosso")).toEqual(["rgb(224, 42, 13)", "rgb(255, 255, 255)"]);
+  // Lasciando dopo pochi pixel torna al suo posto e la vicina sparisce.
+  await tocchi(["move", 195], ["end", 195]);
+  await expect(page.locator(".anteprima-scheda")).toHaveCount(0);
+  await expect.poll(spostamento).toBe(0);
+  await expect(titolo).toHaveText(nome(0));
+  // Prima foto: verso destra non c'è nulla, la scheda si allunga appena (elastico).
+  await tocchi(["start", 100], ["move", 110], ["move", 200], ["move", 300]);
+  const elastico = await spostamento();
+  expect(elastico).toBeGreaterThan(20);
+  expect(elastico).toBeLessThan(150);
+  await tocchi(["end", 300]);
+  await expect(page.locator(".anteprima-scheda")).toHaveCount(0);
+  await expect(titolo).toHaveText(nome(0));
+  // Un gesto lungo passa alla successiva.
+  await tocchi(["start", 250], ["move", 240], ["move", 150], ["move", 60], ["end", 60]);
+  await expect(titolo).toHaveText(nome(1));
+  await expect(page.locator(".anteprima-scheda")).toHaveCount(0);
+  await tocchi(["start", 60], ["move", 70], ["move", 160], ["move", 250], ["end", 250]);
+  await expect(titolo).toHaveText(nome(0));
+
   const swipe = (dx) =>
     page.locator("article").evaluate((el, d) => {
       const mk = (x, type) => {
@@ -1236,14 +1296,25 @@ test("foto: lo swipe passa alla foto successiva/precedente e, eliminandone una, 
       mk(200 + d, "touchend");
     }, dx);
   await swipe(-150);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[1].replace(".png", ""), "i"));
+  await expect(titolo).toHaveText(nome(1));
   await swipe(150);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[0].replace(".png", ""), "i"));
-  // Eliminando la prima si passa alla seconda, senza tornare all'archivio.
+  await expect(titolo).toHaveText(nome(0));
+  // Eliminando la seconda si passa alla terza, senza tornare all'archivio.
   await swipe(-150);
+  await expect(titolo).toHaveText(nome(1));
   await page.getByRole("button", { name: "Elimina" }).click();
   await expect(page).toHaveURL(/\/elemento\//);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(new RegExp(nomi[2].replace(".png", ""), "i"));
+  await expect(titolo).toHaveText(nome(2));
+  // Annulla riapre la foto eliminata (non la successiva), di nuovo al suo posto.
+  await page.getByRole("button", { name: "Annulla" }).click();
+  await expect(titolo).toHaveText(nome(1));
+  await expect(page.getByText("2 / 3")).toBeVisible();
+  await swipe(-150);
+  await expect(titolo).toHaveText(nome(2));
+  await swipe(150);
+  await expect(titolo).toHaveText(nome(1));
+  await swipe(150);
+  await expect(titolo).toHaveText(nome(0));
 });
 
 test("anteprima: un file non ammesso resta per riprovare, l'altro è salvato", async ({ page }) => {

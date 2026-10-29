@@ -59,3 +59,15 @@ export function vicini(id) {
 }
 
 export const togliDallaGalleria = (id) => write(read().filter((x) => x !== id));
+
+// Posizione di `id` nell'elenco (-1 se non c'è): serve per rimetterlo al suo
+// posto se l'eliminazione viene annullata.
+export const posizioneInGalleria = (id) => read().indexOf(id);
+
+// Elemento ripristinato ("Annulla" dopo Elimina): torna al suo posto, così lo
+// swipe lo ritrova tra i vicini.
+export function rimettiNellaGalleria(id, at) {
+  const list = read().filter((x) => x !== id);
+  if (at < 0) return;
+  write([...list.slice(0, at), id, ...list.slice(at)]);
+}
