@@ -2,7 +2,7 @@
 // Lo stato di ricerca e filtri sta nell'URL, così "Indietro" lo ripristina.
 import { setGalleria } from "../lib/galleria.js";
 import { api } from "../lib/api.js";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, Check, ChevronLeft, ArrowUpDown, FileText, Images, LayoutGrid, List, Settings, SlidersHorizontal, Utensils } from "lucide-react";
 import { Page } from "../components/Layout.jsx";
 import Calendario from "../components/Calendario.jsx";
@@ -15,6 +15,7 @@ import { EventList, OrdinaLocali, RestaurantList } from "../components/Spots.jsx
 import Gallery from "../components/Gallery.jsx";
 import { TIPI_LOCALE, docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, resetGeoPatches, notesOf, opzioniLocali, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
+import { normalize } from "../lib/search.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems, sortItems } from "../lib/search.js";
 import { TYPES } from "../lib/constants.js";
@@ -81,7 +82,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   const [open, setOpen] = useState(shown.length > 0);
   usePageColor(PAGE.archive);
   // Aperto il box Ristoranti, si cerca la via dei locali che hanno solo la città.
-  useStreets(archive, sezione === "ristoranti");
+  const geo = useStreets(archive, sezione === "ristoranti");
 
   // Via di un locale scritta a mano nel box Ristoranti: si salva in ogni
   // contenuto che lo cita (partendo dalla versione più recente di ognuno).
@@ -94,13 +95,19 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
   };
 
   // Rifà subito la ricerca di via e quartiere di un locale.
+  const attesaGeo = useRef(null);
   const regeo = async (name) => {
+    attesaGeo.current = { name, visto: false };
+    geo.riprova(name);
+    toast(`Cerco via e quartiere di ${name}…`);
     try {
       for (const { id } of resetGeoPatches(archive.items, name)) await archive.updateWith(id, (fresh) => resetGeoPatches([fresh], name)[0]?.patch || null);
     } catch {
-      // Non salvata: si può riprovare.
+      attesaGeo.current = null;
+      toast("Non riesco a salvare: riprova");
     }
   };
+
 
   // Via letta da un link di Google Maps incollato al posto della via ("" se non c'è).
   const streetFromLink = async (r, link) => (await api.geoLink({ name: r.name, address: r.citta || r.address }, link)).found?.street || "";
@@ -178,6 +185,22 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
     return tutti;
   }, [sezione, matches, tutti, items, q, fAuthor, fFrom, fTo]);
   const restaurants = useMemo(() => restaurantsOf(base, ordine), [base, ordine]);
+  // Esito di "Ricerca di nuovo via e quartiere": il locale entra nella coda di
+  // ricerca e, quando ne esce, si dice cosa si è trovato.
+  useEffect(() => {
+    const a = attesaGeo.current;
+    if (!a) return;
+    const k = normalize(a.name);
+    if (geo.fermo) {
+      attesaGeo.current = null;
+      toast("Ricerca non riuscita ora: riprova più tardi");
+    } else if (geo.cerca.has(k)) a.visto = true;
+    else if (a.visto) {
+      attesaGeo.current = null;
+      const r = restaurants.find((x) => normalize(x.name) === k);
+      toast(r?.zona ? `${a.name}: ${r.zona}` : `${a.name}: quartiere non trovato${r?.citta ? `, resta ${r.citta}` : ""}`);
+    }
+  }, [geo.cerca, geo.fermo, restaurants]); // eslint-disable-line react-hooks/exhaustive-deps
   const tuttiEventi = useMemo(() => eventsOf(base), [base]);
   const quando = fs("quando");
   const events = useMemo(
@@ -387,7 +410,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : sezione ? (
           <>
             {sezione === "ristoranti" ? (
-              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onLink={streetFromLink} onRegeo={regeo} onDelete={deleteRestaurant} gruppo={gruppo} filtri={{ tipo: fs("tipo"), zona: fs("zona"), citta: fs("citta") }} />
+              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onLink={streetFromLink} onRegeo={regeo} inCerca={geo.cerca} onDelete={deleteRestaurant} gruppo={gruppo} filtri={{ tipo: fs("tipo"), zona: fs("zona"), citta: fs("citta") }} />
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes], sezione === "foto" ? BOX_FIXED.foto : BOX_FIXED.file)} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (

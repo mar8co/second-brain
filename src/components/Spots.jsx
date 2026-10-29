@@ -1,5 +1,6 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
+import { normalize } from "../lib/search.js";
 import { useEffect, useState } from "react";
 import { ArrowUpDown, Check, CalendarPlus, ChefHat, ClipboardPaste, Coffee, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
@@ -267,7 +268,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onRegeo, onDelete 
               onRegeo(r.name);
             }}
           >
-            Ricerca di nuovo via e quartiere
+            Ricerca via e quartiere
           </button>
         )}
         {r.items.slice(0, 3).map((it, i, all) => (
@@ -305,7 +306,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onRegeo, onDelete 
 // (un locale con sedi in quartieri diversi compare in ognuno). Per tipo e per
 // nome: una riga per locale con tutti i suoi indirizzi. Tocco sulla riga: la
 // scheda del locale; swipe a sinistra: Elimina.
-export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onRegeo, onDelete, gruppo = "zona", filtri = {} }) {
+export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onRegeo, inCerca, onDelete, gruppo = "zona", filtri = {} }) {
   const [aperto, setAperto] = useState(null);
 
   if (!restaurants.length) {
@@ -352,7 +353,13 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onRegeo,
           <IconaTipo tipo={r.tipo} />
           <div className="min-w-0 flex-1">
             <p className={NAME}>{r.name}</p>
-            <p className="micro mt-1 font-semibold" data-tipo-locale>{sottotitolo(r)}</p>
+            {inCerca?.has(normalize(r.name)) ? (
+              <p className="micro mt-1 flex items-center gap-1.5 font-semibold" role="status">
+                <i aria-hidden="true" className="pulsa inline-block h-2 w-2 rounded-full bg-[#0a0a0a]" /> Cerco via e quartiere…
+              </p>
+            ) : (
+              <p className="micro mt-1 font-semibold" data-tipo-locale>{sottotitolo(r)}</p>
+            )}
             <div className="mt-1.5">
               {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
             </div>
