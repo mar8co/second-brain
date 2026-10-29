@@ -444,7 +444,7 @@ function Inline({ text, count, onCite }) {
             <button
               key={n}
               type="button"
-              className="num ml-[2px] inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[rgb(10_10_10/0.12)] px-[3px] align-[0.3em] text-[9.5px] font-bold leading-none text-[rgb(10_10_10/0.7)] [-webkit-user-select:none] [user-select:none]"
+              className="num ml-[2px] inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-white px-[3px] align-[0.3em] text-[10px] font-extrabold leading-none text-[#0a0a0a] [-webkit-user-select:none] [user-select:none]"
               aria-label={`Fonte ${n}`}
               onClick={() => onCite(n)}
             >
