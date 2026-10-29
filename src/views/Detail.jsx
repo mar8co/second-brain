@@ -38,6 +38,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   const prevItem = prev ? archive.items.find((x) => x.id === prev) || null : null;
   const nextItem = next ? archive.items.find((x) => x.id === next) || null : null;
   const pista = useRef(null);
+  const eliminando = useRef(false);
   const { vai, vicine } = useCarosello(pista, {
     prev: prevItem?.id || null,
     next: nextItem?.id || null,
@@ -75,6 +76,9 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
   // passa al successivo (o al precedente se era l'ultimo), scorrendo come con
   // lo swipe. "Annulla" rimette l'elemento al suo posto e lo riapre.
   const remove = () => {
+    // Un doppio tocco mentre la scheda scorre via non elimina due volte.
+    if (eliminando.current) return;
+    eliminando.current = true;
     const posto = posizioneInGalleria(item.id);
     const elimina = (to) => {
       const undo = archive.removeSoon(item);

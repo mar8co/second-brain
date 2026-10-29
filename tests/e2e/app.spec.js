@@ -1256,6 +1256,16 @@ test("foto: lo swipe passa alla foto successiva/precedente; eliminandone una si 
   const la = await vicina.boundingBox();
   expect(Math.abs(la.y - qui.y)).toBeLessThan(1);
   expect(Math.abs(la.x - qui.x - (page.viewportSize().width - 32 + 40))).toBeLessThan(1);
+  // Ha gli stessi colori della pagina vera: sfondo blu, testo bianco, Elimina rosso.
+  const colori = (sel) =>
+    page.locator(sel).first().evaluate((el) => {
+      const c = window.getComputedStyle(el);
+      return [c.backgroundColor, c.color];
+    });
+  for (const sel of ["h1", ".bottone.rosso", ".bottone.chiaro"]) expect(await colori(`.anteprima-scheda.dopo ${sel}`)).toEqual(await colori(`article ${sel}`));
+  const sfondo = await page.evaluate(() => window.getComputedStyle(document.body).backgroundColor);
+  expect((await colori(".anteprima-scheda.dopo"))[0]).toBe(sfondo);
+  expect(await colori("article .bottone.rosso")).toEqual(["rgb(224, 42, 13)", "rgb(255, 255, 255)"]);
   // Lasciando dopo pochi pixel torna al suo posto e la vicina sparisce.
   await tocchi(["move", 195], ["end", 195]);
   await expect(page.locator(".anteprima-scheda")).toHaveCount(0);

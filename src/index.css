@@ -68,11 +68,13 @@ body.pieno-scuro .bottone.chiaro { background: transparent; color: #ffffff; }
 }
 .anteprima-scheda.dopo { left: calc(100% + 24px); }
 .anteprima-scheda.prima { right: calc(100% + 24px); }
-/* La vicina ha i colori della sua pagina, anche se quella attuale è scura o chiara. */
+/* La vicina ha i colori della sua pagina, anche se quella attuale è scura o
+   chiara; Elimina resta rosso come sulla pagina vera. */
 .anteprima-scheda.pieno-scuro :is(.bottone, .pillola.attiva, .tondo.nero) { background: #ffffff; color: #0a0a0a; }
 .anteprima-scheda.pieno-scuro .bottone.chiaro { background: transparent; color: #ffffff; }
 body.pieno-scuro .anteprima-scheda:not(.pieno-scuro) :is(.bottone, .pillola.attiva, .tondo.nero) { background: #0a0a0a; color: #ffffff; }
 body.pieno-scuro .anteprima-scheda:not(.pieno-scuro) .bottone.chiaro { background: transparent; color: #0a0a0a; }
+.anteprima-scheda.pieno-scuro .bottone.rosso,
 body.pieno-scuro .anteprima-scheda:not(.pieno-scuro) .bottone.rosso { background: #e02a0d; color: #ffffff; }
 /* Scheda ripristinata con "Annulla": rientra dal lato da cui era uscita. */
 .carosello.entra-da-sinistra { animation: entraSinistra 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
