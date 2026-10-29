@@ -45,8 +45,11 @@ function Dot({ status, bordo = false }) {
   );
 }
 
+// Lo stato si vede solo quando c'è qualcosa da sapere (in lettura, letto in
+// parte, non accessibile): un contenuto letto bene non mostra nulla.
 export function StatusBadge({ status, compact = false }) {
   const label = STATUSES[status]?.label || "Salvato";
+  if (!status || status === "analyzed" || status === "saved") return <span className="sr-only">{label}</span>;
   if (compact) {
     return (
       <span className="inline-flex p-1" title={label}>

@@ -43,11 +43,14 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
 
       <Section title="Archivio">
         <div className="grid grid-flow-col auto-cols-fr gap-2">
-          <button type="button" className="pillola relative justify-center" disabled={!aiStatus.ai || Boolean(reanalysis) || reanalyzable.length === 0} onClick={reanalyze}>
-            <RotateCw className={`h-4 w-4${reanalysis ? " gira" : ""}`} strokeWidth={2.6} aria-hidden="true" />
-            {reanalysis ? <span className="num">{reanalysis.done}/{reanalysis.total}</span> : "Rianalizza"}
-            {!reanalysis && aiStatus.ai && reanalyzable.length > 0 && <span className="conta num">{reanalyzable.length}</span>}
-          </button>
+          {/* Rianalizza solo quando c'è qualcosa da rileggere: il resto l'app lo fa da sola. */}
+          {aiStatus.ai && (reanalysis || reanalyzable.length > 0) && (
+            <button type="button" className="pillola relative justify-center" disabled={Boolean(reanalysis)} onClick={reanalyze}>
+              <RotateCw className={`h-4 w-4${reanalysis ? " gira" : ""}`} strokeWidth={2.6} aria-hidden="true" />
+              {reanalysis ? <span className="num">{reanalysis.done}/{reanalysis.total}</span> : "Rianalizza"}
+              {!reanalysis && <span className="conta num">{reanalyzable.length}</span>}
+            </button>
+          )}
           <button type="button" className="pillola justify-center" onClick={exportJson} disabled={!archive.items.length}>
             <DatabaseBackup className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
             Fai il Backup

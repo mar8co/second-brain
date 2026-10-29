@@ -73,6 +73,20 @@ function fakeGemini(prompt) {
     if (/quanto ci vuole/i.test(q) && /limone/i.test(lastBlock(prompt, "conversazione").map((t) => t.domanda).join(" ")) && recipe) {
       return { answer: `Ci vogliono 10 minuti [${recipe.n}].`, sufficient: true, sources: [{ n: recipe.n, quote: "frase inventata che non c'è nel testo" }] };
     }
+    // Domanda pratica oltre i contenuti: aiuto e percorso verso il posto salvato.
+    if (/come arrivo/i.test(q)) {
+      const hit = docs.find((d) => (d.posti || []).some((p) => p.indirizzo));
+      if (hit) {
+        const posto = hit.posti.find((p) => p.indirizzo);
+        return {
+          answer: `Hai salvato ${posto.nome}, in ${posto.indirizzo} [${hit.n}].`,
+          sufficient: true,
+          aiuto: "- Da Termini prendi il tram 8 verso Trastevere [1].\n- Controlla gli orari prima di partire.",
+          azioni: [{ tipo: "percorso", da: "Termini", a: `${posto.nome}, ${posto.indirizzo}`, testo: "" }, { tipo: "link", da: "", a: "javascript:alert(1)", testo: "" }],
+          sources: [{ n: hit.n, quote: "" }],
+        };
+      }
+    }
     // Domanda senza parole in comune: la risposta arriva dalle parole chiave della scheda.
     if (/primo piatto/i.test(q)) {
       const hit = docs.find((d) => (d.parole_chiave || []).includes("primo piatto"));

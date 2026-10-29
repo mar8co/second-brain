@@ -27,6 +27,14 @@ const sizeOf = (list) => list.reduce((n, e) => n + JSON.stringify(e).length + 1,
 const strings = (v, n, each) => (Array.isArray(v) ? v.filter((x) => typeof x === "string").slice(0, n).map((x) => x.slice(0, each)) : []);
 const compact = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && !v.length)));
 
+// Posti del contenuto con il loro indirizzo migliore (per percorsi e link a Maps).
+function placesOf(ai, max) {
+  return (Array.isArray(ai.places) ? ai.places : [])
+    .filter((p) => p && p.hidden !== true && typeof p.name === "string" && p.name.trim())
+    .slice(0, max)
+    .map((p) => compact({ name: cut(p.name, 120), address: cut((Array.isArray(p.sedi) && p.sedi[0]) || p.street || p.address || "", 200) }));
+}
+
 // Scheda breve di un elemento: corta, così ci stanno centinaia di elementi.
 export function memoryEntry(item) {
   const ai = item.ai || {};
@@ -44,6 +52,7 @@ export function memoryEntry(item) {
       points: strings(ai.points, 3, 160),
       entities: strings((Array.isArray(ai.entities) ? ai.entities : []).map((e) => e?.name), 8, 50),
       keywords: strings(ai.keywords, 12, 30),
+      places: placesOf(ai, 3),
     }),
     place: item.place?.name ? { name: cut(item.place.name, 120) } : null,
     note: cut(item.note, 200),
@@ -75,6 +84,7 @@ export function detailEntry(item, textChars = PART_TEXT) {
       points: Array.isArray(ai.points) ? ai.points : null,
       entities: Array.isArray(ai.entities) ? ai.entities : null,
       keywords: Array.isArray(ai.keywords) ? ai.keywords : null,
+      places: placesOf(ai, 8),
     }),
     text_source: item.text_source,
     extracted_text: cut(item.extracted_text, textChars),
@@ -166,6 +176,8 @@ export async function askArchive(items, question, { ai, history = [], semantic =
     return {
       kind: r.sufficient ? "answer" : "insufficient",
       answer: r.answer,
+      ...(r.aiuto ? { aiuto: r.aiuto } : {}),
+      azioni: Array.isArray(r.azioni) ? r.azioni.filter((a) => a && typeof a.url === "string" && /^https:\/\/www\.google\.com\//.test(a.url)).slice(0, 3) : [],
       sources: sources.map((s) => s.id),
       quotes: Object.fromEntries(sources.filter((s) => s.quote).map((s) => [s.id, s.quote])),
       candidates: ids,

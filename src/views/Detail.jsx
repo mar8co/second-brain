@@ -180,7 +180,7 @@ export default function Detail({ id, archive, store, ai, back, navigate, toast }
               ))}
           </span>
           {problem && <p className="order-last basis-full font-medium leading-snug">{item.status_detail || status.hint}</p>}
-          {reprocessable && (
+          {reprocessable && (problem || stale) && (
             <button type="button" className="link" disabled={!!busy} onClick={() => run("reprocess", () => archive.reprocess(item))}>
               {busy === "reprocess" ? "Rianalizzo…" : "Rianalizza"}
             </button>

@@ -3,7 +3,7 @@ import http from "node:http";
 import { isPrivateIp, safeFetch } from "./net.js";
 import { looksLikeLoginWall, parseHtml } from "./html.js";
 import { extractUrlInfo, handleExtract } from "./extract.js";
-import { buildAskPrompt, buildClassifyPrompt, callGemini, handleAi, prepareAsk, quoteIn, sanitizeAsk, sanitizeClassify, todayInItaly } from "./ai.js";
+import { azioniOf, buildAskPrompt, buildClassifyPrompt, callGemini, handleAi, prepareAsk, quoteIn, sanitizeAsk, sanitizeClassify, todayInItaly } from "./ai.js";
 import { handleShare, itemFromShared } from "./share.js";
 
 const LONG = "Questa è una frase di prova sull'olio extravergine e la pasta al limone. ".repeat(20);
@@ -413,6 +413,36 @@ describe("AI", () => {
     expect(quoteIn("si condisce con panna", text)).toBe(false);
     expect(quoteIn("pasta", text)).toBe(false);
     expect(quoteIn("", text)).toBe(false);
+  });
+});
+
+describe("aiuto pratico e link oltre i contenuti", () => {
+  it("i link si costruiscono sul server, solo Google Maps e ricerca", () => {
+    const a = azioniOf([
+      { tipo: "percorso", da: "Funchal", a: "Restaurante Baia Do Bago, Caminho do Penedo 6, Porto da Cruz", testo: "" },
+      { tipo: "percorso", da: "", a: "Da Enzo, Via dei Vascellari 29, Roma", testo: "" },
+      { tipo: "mappa", da: "", a: "Da Enzo, Via dei Vascellari 29, Roma", testo: "" },
+      { tipo: "cerca", da: "", a: "", testo: "Baia Do Bago orari" },
+      { tipo: "link", da: "", a: "javascript:alert(1)", testo: "" },
+    ]);
+    expect(a).toHaveLength(3);
+    expect(a[0]).toEqual({ tipo: "percorso", label: "Percorso da Funchal", url: "https://www.google.com/maps/dir/?api=1&origin=Funchal&destination=Restaurante+Baia+Do+Bago%2C+Caminho+do+Penedo+6%2C+Porto+da+Cruz" });
+    expect(a[1].label).toBe("Percorso da dove sei");
+    expect(a[1].url).not.toContain("origin=");
+    expect(a[2]).toMatchObject({ tipo: "mappa", label: "Da Enzo su Maps" });
+    expect(azioniOf("x")).toEqual([]);
+    expect(azioniOf([{ tipo: "cerca", testo: "orari" }, { tipo: "cerca", testo: "orari" }])).toHaveLength(1);
+  });
+
+  it("l'aiuto è separato dalla risposta e senza citazioni; il prompt dà i posti con l'indirizzo", () => {
+    const items = [{ id: "a", type: "instagram", title: "Baia", created_at: "2026-10-28", ai: { places: [{ name: "Restaurante Baia Do Bago", address: "Porto da Cruz, Madeira", street: "Caminho do Penedo n° 6, 9225-050 Porto da Cruz, Portogallo", kind: "ristorante" }] } }];
+    const { prompt, refs } = prepareAsk("come arrivo da Funchal al ristorante?", items);
+    expect(prompt).toContain('"posti":[{"nome":"Restaurante Baia Do Bago","indirizzo":"Caminho do Penedo 6, Porto da Cruz"}]');
+    expect(prompt).toContain("aiuto:");
+    const out = sanitizeAsk({ answer: "Hai salvato il Baia Do Bago [1].", sufficient: false, aiuto: "- Da Funchal prendi la VR1 verso Machico [1].", azioni: [{ tipo: "percorso", da: "Funchal", a: "Restaurante Baia Do Bago, Caminho do Penedo 6, Porto da Cruz", testo: "" }], sources: [{ n: 1, quote: "" }] }, refs);
+    expect(out.aiuto).toBe("- Da Funchal prendi la VR1 verso Machico.");
+    expect(out.azioni[0].label).toBe("Percorso da Funchal");
+    expect(sanitizeAsk({ answer: "x", sufficient: true, sources: [] }, refs)).not.toHaveProperty("aiuto");
   });
 });
 
