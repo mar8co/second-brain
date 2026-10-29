@@ -152,6 +152,8 @@ export function carryEvents(events, previous) {
 export function aiFromDigest(r, { applied = false, now = new Date(), previous = null } = {}) {
   return {
     v: DIGEST_VERSION,
+    // Titolo rielaborato dall'AI (mostrato al posto di quello del post).
+    titolo: r.titolo || "",
     summary: r.summary || "",
     points: r.points || [],
     entities: r.entities || [],
@@ -165,6 +167,8 @@ export function aiFromDigest(r, { applied = false, now = new Date(), previous = 
     model: r.model || null,
     generated_at: now.toISOString(),
     ...(applied ? { applied: true } : {}),
+    // Titolo cambiato a mano: resta quello anche dopo una nuova rielaborazione.
+    ...(previous?.titolo_manuale ? { titolo_manuale: true } : {}),
   };
 }
 

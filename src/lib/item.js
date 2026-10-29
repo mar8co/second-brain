@@ -56,8 +56,11 @@ export function newId() {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
-// Titolo da mostrare quando manca: mai inventato, solo ricavato da ciò che c'è.
+// Titolo da mostrare: quello rielaborato dall'AI (se il titolo non è stato
+// cambiato a mano), altrimenti quello salvato; se manca, ricavato da ciò che c'è.
 export function displayTitle(item) {
+  const ai = item.ai?.titolo_manuale ? "" : typeof item.ai?.titolo === "string" ? item.ai.titolo.trim() : "";
+  if (ai) return ai;
   if (item.title) return item.title;
   if (item.place?.name) return item.place.name;
   if (item.file_name) return item.file_name;

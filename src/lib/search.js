@@ -3,6 +3,7 @@
 // Perché nel client: un archivio personale ha centinaia o poche migliaia di
 // elementi, già scaricati per la home. Cercare in memoria è istantaneo, funziona
 // offline e allo stesso modo in modalità locale e con Supabase.
+import { displayTitle } from "./item.js";
 
 // Parole troppo comuni per contare nella ricerca (soprattutto per le domande
 // in linguaggio naturale: "dove avevo salvato quel ristorante?").
@@ -67,6 +68,9 @@ function fieldText(item, field) {
     case "tags":
     case "categories":
       return (item[field] || []).join(" ");
+    // Il titolo del post e quello rielaborato dall'AI.
+    case "title":
+      return [item.title, typeof item.ai?.titolo === "string" ? item.ai.titolo : ""].filter(Boolean).join(" ");
     case "place":
       return item.place?.name || "";
     case "ai_summary":
@@ -157,7 +161,7 @@ export function matchesFilters(item, f = {}) {
 // Ordine delle liste (senza ricerca): "recenti" (default), "vecchi", "nome".
 export function sortItems(list, ordine = "recenti") {
   if (ordine === "vecchi") return [...list].sort((a, b) => byDateDesc(b, a));
-  if (ordine === "nome") return [...list].sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "it"));
+  if (ordine === "nome") return [...list].sort((a, b) => displayTitle(a).localeCompare(displayTitle(b), "it"));
   return list;
 }
 
