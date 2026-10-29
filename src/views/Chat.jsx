@@ -7,7 +7,6 @@ import { Fragment, useContext, useEffect, useId, useLayoutEffect, useMemo, useRe
 import { ArrowDown, ArrowUp, ArrowUpRight, Copy, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { SwipeElimina, Thumb } from "../components/ItemCard.jsx";
-import AddMenu from "../components/AddMenu.jsx";
 import { mergeFiles } from "../lib/upload.js";
 import FilePreview from "../components/FilePreview.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
@@ -261,7 +260,6 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
           </button>
         )}
         <div className="mx-auto flex max-w-[528px] items-end gap-2">
-          <AddMenu archive={archive} navigate={navigate} toast={toast} />
           <label htmlFor="chat-q" className="sr-only">Chiedi alla tua memoria</label>
           <textarea
             ref={boxRef}
