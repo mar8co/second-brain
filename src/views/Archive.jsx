@@ -13,7 +13,7 @@ import { ItemGrid, ItemList } from "../components/ItemCard.jsx";
 import CategoryBoxes from "../components/CategoryBoxes.jsx";
 import { EventList, OrdinaLocali, RestaurantList } from "../components/Spots.jsx";
 import Gallery from "../components/Gallery.jsx";
-import { TIPI_LOCALE, docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, notesOf, opzioniLocali, photosOf, restaurantsOf } from "../lib/spots.js";
+import { TIPI_LOCALE, docsOf, eventsOf, hideEventPatches, hideRestaurantPatches, manualStreetPatches, resetGeoPatches, notesOf, opzioniLocali, photosOf, restaurantsOf } from "../lib/spots.js";
 import { useStreets } from "../hooks/useStreets.js";
 import { EmptyState, ErrorBox, Spinner } from "../components/ui.jsx";
 import { countBy, countValues, groupByCategory, searchItems, sortItems } from "../lib/search.js";
@@ -90,6 +90,15 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
       for (const { id } of manualStreetPatches(archive.items, name, street)) await archive.updateWith(id, (fresh) => manualStreetPatches([fresh], name, street)[0]?.patch || null);
     } catch {
       // Non salvata (rete o accesso): la riga resta com'era e si può riprovare.
+    }
+  };
+
+  // Rifà subito la ricerca di via e quartiere di un locale.
+  const regeo = async (name) => {
+    try {
+      for (const { id } of resetGeoPatches(archive.items, name)) await archive.updateWith(id, (fresh) => resetGeoPatches([fresh], name)[0]?.patch || null);
+    } catch {
+      // Non salvata: si può riprovare.
     }
   };
 
@@ -378,7 +387,7 @@ export default function Archive({ archive, store, toast, query, navigate, openIt
         ) : sezione ? (
           <>
             {sezione === "ristoranti" ? (
-              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onLink={streetFromLink} onDelete={deleteRestaurant} gruppo={gruppo} filtri={{ tipo: fs("tipo"), zona: fs("zona"), citta: fs("citta") }} />
+              <RestaurantList restaurants={restaurants} onOpen={apri(restaurants.flatMap((r) => r.items), BOX_FIXED.ristoranti)} onStreet={saveStreet} onLink={streetFromLink} onRegeo={regeo} onDelete={deleteRestaurant} gruppo={gruppo} filtri={{ tipo: fs("tipo"), zona: fs("zona"), citta: fs("citta") }} />
             ) : sezione === "foto" || sezione === "file" ? (
               <FotoBox items={sezione === "foto" ? photos : docs} notes={sezione === "file" ? notes : null} store={store} onOpen={apri(sezione === "foto" ? photos : [...docs, ...notes], sezione === "foto" ? BOX_FIXED.foto : BOX_FIXED.file)} vuoto={sezione === "foto" ? "Ancora nessuna foto o video" : "Ancora nessun file o nota"} />
             ) : (
