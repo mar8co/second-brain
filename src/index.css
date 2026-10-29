@@ -56,6 +56,28 @@
 body.pieno-scuro .bottone, body.pieno-scuro .pillola.attiva, body.pieno-scuro .tondo.nero { background: #ffffff; color: #0a0a0a; }
 body.pieno-scuro .bottone.chiaro { background: transparent; color: #ffffff; }
 
+/* Swipe tra le schede: la scheda segue il dito e la vicina entra di lato, già
+   pronta, col suo colore. Le vicine esistono solo durante il gesto: sono
+   allineate alla parte di pagina che si vede (--alto: quanto si è scesi,
+   --sopra: dove inizia la scheda) e mostrano la scheda dall'inizio, come sarà
+   all'arrivo. 24px = spazio tra le schede (40) meno il margine della pagina (16). */
+.carosello { position: relative; touch-action: pan-y pinch-zoom; }
+.anteprima-scheda {
+  position: absolute; top: calc(var(--alto, 0px) - var(--sopra, 0px)); width: calc(100% + 32px); height: 100lvh;
+  overflow: hidden; padding: var(--sopra, 0px) 16px 0; background: var(--sfondo); pointer-events: none;
+}
+.anteprima-scheda.dopo { left: calc(100% + 24px); }
+.anteprima-scheda.prima { right: calc(100% + 24px); }
+/* La vicina ha i colori della sua pagina, anche se quella attuale è scura o chiara. */
+.anteprima-scheda.pieno-scuro :is(.bottone, .pillola.attiva, .tondo.nero) { background: #ffffff; color: #0a0a0a; }
+.anteprima-scheda.pieno-scuro .bottone.chiaro { background: transparent; color: #ffffff; }
+body.pieno-scuro .anteprima-scheda:not(.pieno-scuro) :is(.bottone, .pillola.attiva, .tondo.nero) { background: #0a0a0a; color: #ffffff; }
+body.pieno-scuro .anteprima-scheda:not(.pieno-scuro) .bottone.chiaro { background: transparent; color: #0a0a0a; }
+body.pieno-scuro .anteprima-scheda:not(.pieno-scuro) .bottone.rosso { background: #e02a0d; color: #ffffff; }
+/* Scheda ripristinata con "Annulla": rientra dal lato da cui era uscita. */
+.carosello.entra-da-sinistra { animation: entraSinistra 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+.carosello.entra-da-destra { animation: entraDestra 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+
 /* Nessuna barra di scorrimento visibile, mai: si scorre lo stesso. */
 * { scrollbar-width: none; }
 *::-webkit-scrollbar { display: none; width: 0; height: 0; }
