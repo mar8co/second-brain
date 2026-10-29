@@ -132,7 +132,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     updateChatLog((cur) => [...cur, { id, at: new Date().toISOString(), q: question, pending: true }]);
     // La risposta arriva anche se nel frattempo si è passati a un'altra schermata.
     const result = await askArchive(items, question, { ai, history, semantic });
-    updateChatLog((cur) => cur.map((m) => (m.id === id ? { ...m, pending: false, result } : m)));
+    updateChatLog((cur) => cur.map((m) => (m.id === id ? { ...m, pending: false, result, answeredAt: new Date().toISOString() } : m)));
   };
 
   // Domanda arrivata da un link (/?q=…): una sola volta, ad archivio caricato.
@@ -336,6 +336,12 @@ function CopyIcon({ label, onClick, className = "" }) {
 
 // Domanda (a destra, nera) e risposta di Second Brain (a sinistra, bianca),
 // con le fonti.
+// Orario del messaggio: solo da vedere. Il testo sta in un attributo mostrato
+// col CSS (::before), quindi non si seleziona e non finisce mai nel testo copiato.
+function Ora({ iso, className = "" }) {
+  return <time aria-label={timeOf(iso)} dateTime={iso} data-ora={timeOf(iso)} className={`num block text-right text-[11px] font-medium leading-none before:content-[attr(data-ora)] [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none] ${className}`} />;
+}
+
 function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
   const r = msg.result;
   const answered = r && (r.kind === "answer" || r.kind === "insufficient");
@@ -353,7 +359,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
         <div className="relative max-w-[85%]">
           <p className="whitespace-pre-wrap rounded-[18px] rounded-br-[4px] bg-[#0a0a0a] px-3.5 py-2.5 font-semibold leading-snug text-white [-webkit-user-select:text] [user-select:text]">
             {msg.q}
-            <time className="num -mb-0.5 mt-0.5 block text-right text-[11px] font-medium opacity-60 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none]" dateTime={msg.at}>{timeOf(msg.at)}</time>
+            <Ora iso={msg.at} className="-mb-0.5 mt-0.5 opacity-60" />
           </p>
         </div>
       </div>
@@ -384,6 +390,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
           {answerText && !msg.pending && <CopyIcon label="Copia risposta" onClick={() => onCopy(answerText)} className="!top-2.5" />}
           {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
           {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
+          {r && !msg.pending && <Ora iso={msg.answeredAt || msg.at} className="-mb-1 mt-1.5 text-tenue" />}
         </div>
       </div>
     </div>
