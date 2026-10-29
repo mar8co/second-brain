@@ -69,6 +69,7 @@ function AddressForm({ name, start, onSave, onCancel, onLink }) {
   const [rows, setRows] = useState(start.length ? start.map(formatVia) : [""]);
   const [busy, setBusy] = useState(false);
   const [errore, setErrore] = useState("");
+  const puoIncollare = Boolean(onLink && typeof navigator !== "undefined" && navigator.clipboard?.readText);
   const set = (i, v) => setRows((r) => r.map((x, j) => (j === i ? v : x)));
   // Un campo con un link (di Google Maps, anche copiato col testo della
   // condivisione) si trasforma nella via letta da quel link.
@@ -91,7 +92,7 @@ function AddressForm({ name, start, onSave, onCancel, onLink }) {
   };
   // Incolla dagli appunti nel primo campo vuoto (o in una sede nuova); con un
   // link di Maps la via si legge subito.
-  const incolla = async () => {
+  const incolla = async (i) => {
     let testo = "";
     try {
       testo = (await navigator.clipboard.readText()).trim();
@@ -102,8 +103,7 @@ function AddressForm({ name, start, onSave, onCancel, onLink }) {
       setErrore("Non riesco a leggere quello che hai copiato: tieni premuto nel campo e scegli Incolla.");
       return;
     }
-    const vuoto = rows.findIndex((x) => !x.trim());
-    const next = vuoto >= 0 ? rows.map((x, j) => (j === vuoto ? testo : x)) : [...rows, testo];
+    const next = rows.map((x, j) => (j === i ? testo : x));
     setRows(next);
     setErrore("");
     if (linkIn(testo)) salva(next);
@@ -129,18 +129,18 @@ function AddressForm({ name, start, onSave, onCancel, onLink }) {
             placeholder={onLink ? "Via e numero, città, o link di Maps" : "Via e numero, città"}
             onChange={(e) => set(i, e.target.value)}
           />
-          <button type="button" className="tondo shrink-0" aria-label={`Togli l'indirizzo ${i + 1} di ${name}`} onClick={() => setRows((r) => (r.length > 1 ? r.filter((_, j) => j !== i) : [""]))}>
-            <X className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
-          </button>
+          {!v.trim() && puoIncollare ? (
+            <button type="button" className="tondo shrink-0" disabled={busy} aria-label={`Incolla link di Maps nell'indirizzo ${i + 1} di ${name}`} onClick={() => incolla(i)}>
+              <ClipboardPaste className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          ) : (
+            <button type="button" className="tondo shrink-0" aria-label={`Togli l'indirizzo ${i + 1} di ${name}`} onClick={() => setRows((r) => (r.length > 1 ? r.filter((_, j) => j !== i) : [""]))}>
+              <X className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          )}
         </div>
       ))}
       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.88rem]">
-        {onLink && typeof navigator !== "undefined" && navigator.clipboard?.readText && (
-          <button type="button" className="link inline-flex items-center gap-1" disabled={busy} onClick={incolla}>
-            <ClipboardPaste className="h-4 w-4" strokeWidth={2.4} aria-hidden="true" />
-            Incolla link di Maps
-          </button>
-        )}
         <button type="button" className="link" onClick={() => setRows((r) => [...r, ""])}>
           + Aggiungi un'altra sede
         </button>
