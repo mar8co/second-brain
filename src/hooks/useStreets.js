@@ -1,12 +1,19 @@
 // Cerca la via dei locali che hanno solo la città (OpenStreetMap, tramite
 // /api/geo) mentre è aperto il box Ristoranti: uno alla volta, una richiesta al
 // secondo, e il risultato si salva nell'elemento (ogni locale si cerca una volta).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { queryOf, sedePatch, streetPatch, streetQueue } from "../lib/spots.js";
+import { normalize } from "../lib/search.js";
 
 export function useStreets(archive, active) {
-  const queue = useMemo(() => (active ? streetQueue(archive.items) : []), [archive.items, active]);
+  // Locali già provati in questa visita: se l'AI non risponde non si riprova
+  // a raffica (si riprova alla prossima apertura o con "Ricerca di nuovo").
+  const [provati, setProvati] = useState(() => new Set());
+  const queue = useMemo(
+    () => (active ? streetQueue(archive.items).filter((q) => !provati.has(`${normalize(q.name)}|${q.sede || ""}`)) : []),
+    [archive.items, active, provati],
+  );
   const [stopped, setStopped] = useState(false);
   const [tick, setTick] = useState(0);
   const busy = useRef(false);
@@ -43,8 +50,18 @@ export function useStreets(archive, active) {
         if (mounted.current) setStopped(true);
       } finally {
         busy.current = false;
+        if (mounted.current) setProvati((cur) => new Set(cur).add(`${normalize(next.name)}|${next.sede || ""}`));
         setTimeout(() => mounted.current && setTick((t) => t + 1), 1100);
       }
     })();
   }, [queue, stopped, archive.loading, tick]);
+  // Locali ancora da cercare (per mostrare "Cerco via e quartiere…").
+  const cerca = useMemo(() => new Set(stopped ? [] : queue.map((q) => normalize(q.name))), [queue, stopped]);
+  // "Ricerca di nuovo via e quartiere": il locale torna cercabile subito.
+  const riprova = useCallback((name) => {
+    const k = normalize(name);
+    setStopped(false);
+    setProvati((cur) => new Set([...cur].filter((x) => !x.startsWith(`${k}|`))));
+  }, []);
+  return { cerca, fermo: stopped, riprova };
 }
