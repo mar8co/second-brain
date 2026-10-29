@@ -2,7 +2,7 @@
 // fonte e data in piccolo, titolo grande, in basso stato e categorie. In vista
 // a box, ogni elemento è una copertina con il titolo sotto.
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Trash2 } from "lucide-react";
 import { isStoredThumb, rememberThumb } from "../lib/thumbs.js";
 import { hasFileCover, useCoverUrl, useFileUrl } from "../lib/fileurl.js";
 import { displayTitle } from "../lib/item.js";
@@ -149,14 +149,29 @@ export function ItemCard({ item, onOpen }) {
   );
 }
 
-// Riga con swipe verso sinistra: scopre "Elimina". Solo nella lista.
-const APERTA = 88;
+// Swipe verso sinistra (uguale in tutta l'app): la riga scorre e scopre un
+// cestino rosso che cresce col gesto; oltre il bordo fa resistenza. Tocco sul
+// cestino: la riga scivola via e si chiude, poi l'avviso con "Annulla".
+const APERTA = 76;
+const MOLLA = "cubic-bezier(0.22, 1, 0.36, 1)";
+const pocoMoto = () => typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 export function SwipeElimina({ onDelete, children }) {
   const [x, setX] = useState(0);
   const [trascina, setTrascina] = useState(false);
+  const [via, setVia] = useState(false);
+  const [alt, setAlt] = useState(null);
+  const box = useRef(null);
   const start = useRef(null);
   const mosso = useRef(false);
+  const io = useRef(Symbol("riga"));
+  // Si apre una riga: le altre aperte si chiudono.
+  useEffect(() => {
+    const chiudi = (e) => e.detail !== io.current && setX(0);
+    window.addEventListener("swipe-aperta", chiudi);
+    return () => window.removeEventListener("swipe-aperta", chiudi);
+  }, []);
   const onDown = (e) => {
+    if (via) return;
     start.current = { x: e.clientX, y: e.clientY, base: x };
     mosso.current = false;
   };
@@ -164,34 +179,67 @@ export function SwipeElimina({ onDelete, children }) {
     const s0 = start.current;
     if (!s0) return;
     const dx = e.clientX - s0.x;
-    if (!mosso.current && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(e.clientY - s0.y)) {
+    if (!mosso.current && Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(e.clientY - s0.y) * 1.2) {
       mosso.current = true;
       setTrascina(true);
       e.currentTarget.setPointerCapture?.(e.pointerId);
+      window.dispatchEvent(new CustomEvent("swipe-aperta", { detail: io.current }));
     }
-    if (mosso.current) setX(Math.max(-APERTA, Math.min(0, s0.base + dx)));
+    if (!mosso.current) return;
+    const raw = Math.min(0, s0.base + dx);
+    // Oltre l'apertura il movimento rallenta (effetto elastico).
+    setX(raw < -APERTA ? -APERTA - (-raw - APERTA) * 0.25 : raw);
   };
   const onUp = () => {
     if (!start.current) return;
     start.current = null;
     setTrascina(false);
-    if (mosso.current) setX((v) => (v < -APERTA / 2 ? -APERTA : 0));
+    if (mosso.current) setX((v) => (v < -APERTA * 0.45 ? -APERTA : 0));
   };
+  const elimina = (e) => {
+    e.stopPropagation();
+    if (via) return;
+    if (pocoMoto()) return onDelete();
+    setAlt(box.current?.offsetHeight || null);
+    setVia(true);
+    // Prima la riga scivola via, poi lo spazio si chiude.
+    requestAnimationFrame(() => requestAnimationFrame(() => setAlt(0)));
+    setTimeout(onDelete, 320);
+  };
+  const p = Math.min(1, -x / APERTA);
+  const aperta = x < 0 || trascina || via;
   return (
-    <div className={`relative ${x < 0 || trascina ? "overflow-hidden" : ""}`}>
-      <button
-        type="button"
-        className="absolute inset-y-0 right-0 flex items-center justify-center bg-[#e02a0d] text-[0.95rem] font-extrabold text-white"
-        style={{ width: APERTA }}
-        tabIndex={x < 0 ? 0 : -1}
-        aria-hidden={x === 0}
-        onClick={onDelete}
-      >
-        Elimina
-      </button>
+    <div
+      ref={box}
+      className={`relative ${aperta ? "overflow-hidden" : ""}`}
+      style={alt === null ? undefined : { height: alt, opacity: alt === 0 ? 0 : 1, transition: `height 0.3s ${MOLLA} 0.12s, opacity 0.25s ease 0.12s` }}
+    >
+      <div className="absolute inset-y-0 right-0 flex items-center justify-center" style={{ width: Math.max(APERTA, -x) }}>
+        <button
+          type="button"
+          aria-label="Elimina"
+          aria-hidden={x === 0 && !via}
+          tabIndex={x < 0 ? 0 : -1}
+          onClick={elimina}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-[#e5372a] text-white shadow-[0_6px_16px_-6px_rgba(229,55,42,0.7)] active:scale-90"
+          style={{
+            opacity: via ? 0 : p,
+            transform: `scale(${via ? 0.6 : 0.55 + 0.45 * p})`,
+            transition: trascina ? "none" : `opacity 0.25s ease, transform 0.35s ${MOLLA}`,
+          }}
+        >
+          <Trash2 size={19} strokeWidth={2.2} aria-hidden="true" style={{ transform: `rotate(${(1 - p) * -14}deg)`, transition: trascina ? "none" : `transform 0.35s ${MOLLA}` }} />
+        </button>
+      </div>
       <div
         className="relative bg-sfondo"
-        style={{ transform: `translateX(${x}px)`, transition: trascina ? "none" : "transform 0.18s", touchAction: "pan-y" }}
+        style={{
+          transform: `translateX(${via ? "-105%" : `${x}px`})`,
+          opacity: via ? 0 : 1,
+          transition: trascina ? "none" : via ? `transform 0.28s cubic-bezier(0.4, 0, 1, 1), opacity 0.22s ease` : `transform 0.42s ${MOLLA}`,
+          touchAction: "pan-y",
+          willChange: aperta ? "transform" : undefined,
+        }}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={onUp}
