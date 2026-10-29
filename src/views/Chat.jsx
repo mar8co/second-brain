@@ -6,7 +6,7 @@
 import { Fragment, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpRight, Copy, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
-import { Thumb } from "../components/ItemCard.jsx";
+import { SwipeElimina, Thumb } from "../components/ItemCard.jsx";
 import AddMenu from "../components/AddMenu.jsx";
 import { mergeFiles } from "../lib/upload.js";
 import FilePreview from "../components/FilePreview.jsx";
@@ -168,6 +168,11 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   };
 
   // Pulisci chat subito, con "Annulla" per ripensarci.
+  const deleteMsg = (msg) => {
+    const prev = getChatLog();
+    updateChatLog((cur) => cur.filter((m) => m.id !== msg.id));
+    toast("Messaggio eliminato", { action: { label: "Annulla", run: () => updateChatLog(() => prev) } });
+  };
   const clearLog = () => {
     const prev = getChatLog();
     updateChatLog(() => []);
@@ -229,7 +234,10 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
                     <span className="cartellino">{dayLabel(msg.at)}</span>
                   </p>
                 )}
-                <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} onCopy={async (text) => toast((await copyText(text)) ? "Messaggio copiato" : "Copia non riuscita")} />
+                {/* Swipe a sinistra: Elimina toglie domanda e risposta, con Annulla. */}
+                <SwipeElimina onDelete={() => deleteMsg(msg)}>
+                  <QaBubbles msg={msg} byId={byId} archiveOk={!error} onOpen={openItem} onCopy={async (text) => toast((await copyText(text)) ? "Messaggio copiato" : "Copia non riuscita")} />
+                </SwipeElimina>
               </li>
             ))}
           </ol>
