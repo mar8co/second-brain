@@ -22,8 +22,11 @@ async function opzione(page, voce) {
 }
 
 // Vista dell'Archivio (box o lista) dal menu "…"; se è già quella, si richiude.
+// La pill Box/Lista mostra solo la vista a cui si passa.
 async function vista(page, v) {
-  await page.getByRole("button", { name: v === "box" ? "Box" : "Lista", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^(Box|Lista)$/ })).toBeVisible();
+  const pill = page.getByRole("button", { name: v === "box" ? "Box" : "Lista", exact: true });
+  if (await pill.count()) await pill.click();
 }
 
 async function apriAltri(page) {
@@ -310,9 +313,9 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   const riga = page.locator("ul.righe li").first();
   await expect(riga.locator('[title="Analizzato"]')).toHaveCount(0);
 
-  // Filtri rapidi: categorie sempre visibili
+  // In vista Lista niente pill delle categorie (la categoria è nei Filtri).
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Tutte", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("list", { name: "Categorie" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Ultimi 7 giorni" })).toHaveCount(0);
 
   // Filtro per tipo
@@ -459,13 +462,14 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
 
   // Di partenza: box, uno per categoria, con il numero dei contenuti.
   await page.goto("/archivio");
-  // Box/Lista e Riordina a sinistra, Filtri a destra, sulla stessa riga.
-  await expect(page.getByRole("button", { name: "Box", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // Riordina a sinistra; a destra la pill Lista (la vista alternativa) e i Filtri, sulla stessa riga.
+  await expect(page.getByRole("button", { name: "Box", exact: true })).toHaveCount(0);
   const lst = await page.getByRole("button", { name: "Lista", exact: true }).boundingBox();
   const rio = await page.getByRole("button", { name: "Riordina", exact: true }).boundingBox();
   const fil0 = await page.getByRole("button", { name: /^Filtri/ }).boundingBox();
-  expect(lst.x).toBeLessThan(rio.x);
-  expect(rio.x + rio.width).toBeLessThan(fil0.x);
+  expect(rio.x + rio.width).toBeLessThan(lst.x);
+  expect(lst.x + lst.width).toBeLessThan(fil0.x);
+  expect(fil0.x - (lst.x + lst.width)).toBeLessThan(16);
   expect(fil0.x + fil0.width).toBeGreaterThan(page.viewportSize().width - 30);
   expect(Math.abs(lst.y - fil0.y)).toBeLessThan(4);
   await expect(page.getByRole("button", { name: "Ricette, 1 contenuto" })).toBeVisible();
@@ -501,7 +505,8 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
   await opzione(page, "Mostra come lista");
   await expect(page.locator("ul.righe li").first()).toBeVisible();
   await page.reload();
-  await expect(page.getByRole("button", { name: "Tutte", exact: true })).toBeVisible();
+  await expect(page.locator("ul.righe li").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Box", exact: true })).toBeVisible();
 
   // Di nuovo a box: tutte le scatole.
   await opzione(page, "Mostra come box");

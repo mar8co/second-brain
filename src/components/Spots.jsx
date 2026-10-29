@@ -228,9 +228,12 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
   const [modifica, setModifica] = useState(false);
   const t = (TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante).label;
   const indirizzi = r.tutte?.length ? r.tutte : r.streets;
-  const azione = "flex w-full items-center justify-between border-b border-riga py-3.5 text-left text-[1rem] font-extrabold tracking-[-0.02em]";
+  const tc = TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante;
+  const azione = "flex w-full items-center justify-between border-b border-riga py-3 text-left text-[1rem] font-extrabold tracking-[-0.02em]";
+  // Il colore della scheda è quello del tipo di locale (come l'icona).
   return (
-    <Foglio label={`Scheda di ${r.name}`} onClose={onClose}>
+    <Foglio label={`Scheda di ${r.name}`} color={tc.colore} onClose={onClose}>
+      <div className={tc.chiaro ? "text-white" : undefined}>
       <div className="flex items-center gap-3">
         <IconaTipo tipo={r.tipo} />
         <div className="min-w-0">
@@ -238,7 +241,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
           <p className="micro mt-0.5 font-semibold">{[t, r.zona || r.citta].filter(Boolean).join(" · ")}</p>
         </div>
       </div>
-      <h3 className="micro mt-5 font-bold">{indirizzi.length > 1 ? "Indirizzi" : "Indirizzo"}</h3>
+      <h3 className="micro mt-4 font-bold">{indirizzi.length > 1 ? "Indirizzi" : "Indirizzo"}</h3>
       {indirizzi.length ? indirizzi.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : (
         <>
           <p className="micro mt-0.5 text-[0.85rem]">Non ho trovato l'indirizzo. Scrivilo o incolla il link del locale su Google Maps.</p>
@@ -257,7 +260,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
           }}
         />
       )}
-      <div className="mt-4 border-t border-riga">
+      <div className="mt-3 border-t border-riga">
         {onStreet && !modifica && (
           <button type="button" className={azione} onClick={() => setModifica(true)}>
             {indirizzi.length ? "Modifica indirizzi" : "Aggiungi indirizzo"}
@@ -288,6 +291,7 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
             {r.sede ? "Elimina questa sede" : "Elimina"}
           </button>
         )}
+      </div>
       </div>
     </Foglio>
   );
@@ -360,7 +364,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
       {!gruppi.length && <p className="micro mt-5">Nessun locale con questi filtri.</p>}
       {gruppi.map((g) => (
         <section key={g.key} aria-label={g.label} data-gruppo-locali>
-          {g.label && <h3 className="mt-5 flex items-baseline justify-between gap-3 border-b-[1.5px] border-inchiostro pb-1.5">
+          {g.label && <h3 className={`${perSede ? "mt-3" : "mt-5"} flex items-baseline justify-between gap-3 border-b-[1.5px] border-inchiostro pb-1.5`}>
             <span className="min-w-0 text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">{g.label}</span>
             <span className="micro num shrink-0 font-bold">{g.list.length === 1 ? "1 locale" : `${g.list.length} locali`}</span>
           </h3>}
