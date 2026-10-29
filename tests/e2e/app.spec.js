@@ -582,8 +582,11 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await tipi.getByRole("option", { name: /^Tutti/ }).click();
   await expect(righe).toHaveCount(2);
   await page.getByRole("button", { name: /^Filtri/ }).click();
-  // Un tocco sulla card apre la scheda, che ha il rosso del box Ristoranti.
+  // Un tocco sulla riga apre la scheda del locale; da lì il contenuto salvato, con il rosso del box Ristoranti.
   await righe.first().getByText("Bar San Calisto").first().click();
+  const foglio = page.getByRole("dialog", { name: "Scheda di Bar San Calisto" });
+  await expect(foglio).toBeVisible();
+  await foglio.getByRole("button", { name: /^Apri «/ }).first().click();
   await expect(page).toHaveURL(/\/elemento\//);
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(255, 59, 28)");
   await page.goBack();
@@ -601,34 +604,28 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
   await page.reload();
   await expect(page.locator("li[data-scheda-locale]").first().getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
-  // Le sedi si scrivono a mano dall'icona tonda accanto al nome (anche più di una);
-  // valgono più di quella trovata (qui il Bar) e restano dopo il ricaricamento.
-  await expect(bar.getByRole("button", { name: /Scrivi la via|Modifica la via/ })).toHaveCount(0);
-  // I tre puntini accanto a Scheda aprono un menu con le opzioni, non il modulo.
-  const icona = bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" });
+  // Nella riga niente puntini né campi: gli indirizzi si modificano dalla scheda del locale.
+  await expect(bar.getByRole("button", { name: /Indirizzi di/ })).toHaveCount(0);
   await expect(bar.getByRole("textbox")).toHaveCount(0);
-  await icona.click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via", "Elimina"]);
-  await expect(bar.getByRole("textbox")).toHaveCount(0);
-  // Un tocco fuori chiude il menu senza far scattare i link sotto.
-  const url0 = page.url();
-  const link = await bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ }).boundingBox();
-  // (al bordo sinistro, dove il menu aperto non arriva)
-  await page.mouse.click(4, link.y + link.height / 2);
-  await expect(bar.getByRole("menu")).toHaveCount(0);
-  expect(page.url()).toBe(url0);
-  await icona.click();
+  const apriScheda = async (riga) => {
+    await riga.getByText("Bar San Calisto", { exact: true }).click();
+    const f = page.getByRole("dialog", { name: "Scheda di Bar San Calisto" });
+    await expect(f).toBeVisible();
+    return f;
+  };
+  let f = await apriScheda(bar);
+  await expect(f.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(bar.getByRole("menu")).toHaveCount(0);
-  await icona.click();
-  await bar.getByRole("menuitem", { name: "Modifica via" }).click();
-  await expect(bar.getByRole("menu")).toHaveCount(0);
-  await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Piazza di San Calisto 3, Roma");
-  await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Prova 5, Roma");
-  await bar.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
-  await bar.getByRole("textbox", { name: "Indirizzo 2 di Bar San Calisto" }).fill("Via Seconda 7, Milano");
-  await bar.getByRole("button", { name: "Salva" }).click();
-  // Una riga per sede, ognuna con una sola via sotto il nome, nel suo gruppo (qui la città).
+  await expect(f).toHaveCount(0);
+  f = await apriScheda(bar);
+  await f.getByRole("button", { name: "Modifica indirizzi" }).click();
+  await expect(f.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Piazza di San Calisto 3, Roma");
+  await f.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Prova 5, Roma");
+  await f.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
+  await f.getByRole("textbox", { name: "Indirizzo 2 di Bar San Calisto" }).fill("Via Seconda 7, Milano");
+  await f.getByRole("button", { name: "Salva" }).click();
+  await expect(f).toHaveCount(0);
+  // Per quartiere/città: una riga per sede, ognuna con una sola via, nel suo gruppo (qui la città).
   const sedeRoma = righe.filter({ has: page.getByRole("link", { name: /Via Prova 5, Roma/ }) });
   const sedeMilano = righe.filter({ has: page.getByRole("link", { name: /Via Seconda 7, Milano/ }) });
   await expect(sedeRoma.getByRole("link", { name: /Via Prova 5, Roma/ })).toHaveAttribute("href", /query=Bar%20San%20Calisto%2C%20Via%20Prova%205%2C%20Roma$/);
@@ -640,25 +637,32 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   await expect(sedeRoma).toBeVisible();
   await expect(sedeMilano).toBeVisible();
   await expect(page.getByRole("link", { name: /Piazza di San Calisto/ })).toHaveCount(0);
-  // Togliendo una sede resta l'altra.
-  await sedeRoma.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await page.getByRole("menuitem", { name: "Modifica via" }).click();
-  await page.getByRole("button", { name: "Togli l'indirizzo 2 di Bar San Calisto" }).click();
-  await page.getByRole("button", { name: "Salva" }).click();
+  // Per tipo: una sola riga per il locale, con tutti e due gli indirizzi.
+  await scegli("Tipo");
+  await expect(righe.filter({ hasText: "Bar San Calisto" })).toHaveCount(1);
+  await expect(righe.filter({ hasText: "Bar San Calisto" }).getByRole("link")).toHaveCount(2);
+  await scegli("Quartiere");
+  // La scheda di una sede mostra tutti gli indirizzi; togliendone uno resta l'altro.
+  f = await apriScheda(sedeRoma);
+  await expect(f.getByRole("link", { name: /Via Seconda 7, Milano/ })).toBeVisible();
+  await f.getByRole("button", { name: "Modifica indirizzi" }).click();
+  await f.getByRole("button", { name: "Togli l'indirizzo 2 di Bar San Calisto" }).click();
+  await f.getByRole("button", { name: "Salva" }).click();
   await expect(page.getByRole("link", { name: /Via Seconda 7, Milano/ })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /Via Prova 5, Roma/ })).toBeVisible();
   // Niente link al post nella riga: si apre dalla scheda. Sotto il tipo, la via con il link a Maps.
   await expect(enzo.getByRole("link", { name: /Apri su/ })).toHaveCount(0);
   // La via scritta a mano fa ricercare il quartiere (qui l'AI finta non lo sa):
-  // il Bar passa sotto "Roma". Si misura a gruppi fermi.
+  // il Bar passa sotto "Roma".
   await expect(page.locator("section[data-gruppo-locali]", { hasText: "Bar San Calisto" }).locator("h3")).toContainText("Roma");
   await expect(page.locator("section[data-gruppo-locali]")).toHaveCount(2);
   const tipo = await enzo.locator("[data-tipo-locale]").boundingBox();
   expect((await mappa.boundingBox()).y).toBeGreaterThan(tipo.y + tipo.height - 1);
   await expect(page.getByText("Museo di Trastevere")).toHaveCount(0);
 
-  // La scheda ha il link a Maps dei locali con la via (non quello generico di una località).
+  // Il contenuto salvato ha il link a Maps dei locali con la via (non quello generico di una località).
   await enzo.getByText("Da Enzo al 29", { exact: true }).click();
+  await page.getByRole("dialog", { name: "Scheda di Da Enzo al 29" }).getByRole("button", { name: /^Apri «/ }).first().click();
   await expect(page.getByRole("link", { name: /Da Enzo al 29 · Via dei Vascellari 29, Roma/ })).toHaveAttribute("href", /query=Da%20Enzo%20al%2029%2C%20Via%20dei%20Vascellari%2029%2C%20Roma$/);
   await expect(page.getByRole("link", { name: /Bar San Calisto · Via Prova 5, Roma/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Apri in Mappe/ })).toHaveCount(0);
@@ -756,7 +760,7 @@ test("filtro Autore: i nomi lunghi restano nella larghezza e la pagina non scorr
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiungi via, poi anche Modifica via", async ({ page }) => {
+test("Archivio a box: Ristoranti senza via, la scheda del locale offre Aggiungi indirizzo, poi Modifica indirizzi", async ({ page }) => {
   // OpenStreetMap non trova nulla: il Bar resta con la sola città.
   await page.route("**/api/geo", (route) => route.fulfill({ json: { found: null } }));
   await addLink(page, `${FIX}/trastevere`);
@@ -764,35 +768,35 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   await page.goto("/archivio?sezione=ristoranti");
   const bar = page.locator("li[data-scheda-locale]").filter({ has: page.getByText("Bar San Calisto", { exact: true }) });
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toBeVisible();
-  // Il gruppo dei locali di cui va controllata la via.
+  // Il gruppo dei locali senza indirizzo, in fondo alla lista dopo i quartieri.
   const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Senza indirizzo" });
   await expect(daControllare).toContainText("Bar San Calisto");
-  // In fondo alla lista, dopo i quartieri.
   await expect(page.locator("section[data-gruppo-locali] h3").last()).toContainText("Senza indirizzo");
-  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via", "Elimina"]);
-  await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
-  await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("");
-  await bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Nuova 1, Roma");
-  await bar.getByRole("button", { name: "Salva" }).click();
+  const f = page.getByRole("dialog", { name: "Scheda di Bar San Calisto" });
+  await bar.getByText("Bar San Calisto", { exact: true }).click();
+  await expect(f.getByRole("button", { name: "Modifica indirizzi" })).toHaveCount(0);
+  await expect(f.getByRole("button", { name: "Elimina", exact: true })).toBeVisible();
+  await f.getByRole("button", { name: "Aggiungi indirizzo" }).click();
+  await expect(f.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("");
+  await f.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Nuova 1, Roma");
+  await f.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toHaveCount(0);
   await expect(daControllare).toHaveCount(0);
-  // Ora c'è una via: il menu ha Modifica e Aggiungi; "Modifica via" apre la via nota.
-  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await expect(bar.getByRole("menuitem")).toHaveText(["Modifica via", "Aggiungi via", "Elimina"]);
-  await bar.getByRole("menuitem", { name: "Modifica via" }).click();
-  await expect(bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Via Nuova 1, Roma");
-  await bar.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
-  await bar.getByRole("textbox", { name: "Indirizzo 2 di Bar San Calisto" }).fill("Via Seconda 2, Milano");
-  await bar.getByRole("button", { name: "Salva" }).click();
+  // Ora c'è una via: la scheda ha Modifica indirizzi, con la via nota.
+  await bar.getByText("Bar San Calisto", { exact: true }).click();
+  await f.getByRole("button", { name: "Modifica indirizzi" }).click();
+  await expect(f.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("Via Nuova 1, Roma");
+  await f.getByRole("button", { name: "+ Aggiungi un'altra sede" }).click();
+  await f.getByRole("textbox", { name: "Indirizzo 2 di Bar San Calisto" }).fill("Via Seconda 2, Milano");
+  await f.getByRole("button", { name: "Salva" }).click();
   await expect(bar.getByRole("link", { name: /Via Seconda 2, Milano/ })).toBeVisible();
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
-  // Due sedi, due righe: Elimina su una riga toglie solo quella sede (con Annulla).
+  // Due sedi, due righe: Elimina dalla scheda di una sede toglie solo quella (con Annulla).
   await expect(bar).toHaveCount(2);
   const milano = bar.filter({ has: page.getByRole("link", { name: /Via Seconda 2, Milano/ }) });
-  await milano.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await milano.getByRole("menuitem", { name: "Elimina" }).click();
+  await milano.getByText("Bar San Calisto", { exact: true }).click();
+  await f.getByRole("button", { name: "Elimina questa sede" }).click();
   await expect(page.getByText("Sede eliminata")).toBeVisible();
   await expect(bar).toHaveCount(1);
   await expect(bar.getByRole("link", { name: /Via Nuova 1, Roma/ })).toBeVisible();
@@ -813,9 +817,10 @@ test("Archivio a box: Ristoranti, la via si prende incollando il link di Google 
   await page.goto("/archivio?sezione=ristoranti");
   const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Senza indirizzo" });
   await expect(daControllare).toContainText("incolla il link del locale su Google Maps");
-  const bar = page.locator("li[data-scheda-locale]").filter({ has: page.getByText("Bar San Calisto", { exact: true }) });
-  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
+  const riga = page.locator("li[data-scheda-locale]").filter({ has: page.getByText("Bar San Calisto", { exact: true }) });
+  await riga.getByText("Bar San Calisto", { exact: true }).click();
+  const bar = page.getByRole("dialog", { name: "Scheda di Bar San Calisto" });
+  await bar.getByRole("button", { name: "Aggiungi indirizzo" }).click();
   const campo = bar.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" });
   await expect(campo).toHaveAttribute("placeholder", /link di Maps/);
   // Un link da cui non si legge la via: resta nel campo, con un avviso.
@@ -838,12 +843,12 @@ test("Archivio a box: Ristoranti, la via si prende incollando il link di Google 
   // campo di una riga): la via viene dal link.
   await campo.fill("Bar San Calistohttps://www.google.com/maps/place/Bar+San+Calisto,+Piazza+di+San+Calisto,+3,+00153+Roma+RM/@41.8889,12.4699,17z/data=!3d41.8889!4d12.4699");
   await bar.getByRole("button", { name: "Salva" }).click();
-  await expect(bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
-  await expect(bar.getByRole("textbox")).toHaveCount(0);
+  await expect(bar).toHaveCount(0);
+  await expect(riga.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
   await expect(daControllare).toHaveCount(0);
 });
 
-test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, con Annulla", async ({ page }) => {
+test("Archivio a box: Ristoranti, Elimina dalla scheda del locale e con lo swipe, con Annulla", async ({ page }) => {
   await page.route("**/api/geo", (route) => route.fulfill({ json: { found: null } }));
   await addLink(page, `${FIX}/trastevere`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
@@ -853,14 +858,9 @@ test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, c
   // Aspetta la ricerca su OpenStreetMap (non trova nulla): il Bar passa in "Senza indirizzo".
   await expect(page.locator("section[data-gruppo-locali]", { hasText: "Senza indirizzo" })).toContainText("Bar San Calisto");
   const bar = righe.filter({ has: page.getByText("Bar San Calisto", { exact: true }) });
-  // I puntini stanno a destra del nome, sulla stessa riga.
-  const pt = await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).boundingBox();
-  const nome = await bar.getByText("Bar San Calisto", { exact: true }).boundingBox();
-  expect(pt.x).toBeGreaterThanOrEqual(nome.x + nome.width - 1);
-  expect(Math.abs(pt.y + pt.height / 2 - (nome.y + nome.height / 2))).toBeLessThan(12);
-  // Menu > Elimina: il locale sparisce, Annulla lo rimette.
-  await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
-  await bar.getByRole("menuitem", { name: "Elimina" }).click();
+  // Scheda > Elimina: il locale sparisce, Annulla lo rimette.
+  await bar.getByText("Bar San Calisto", { exact: true }).click();
+  await page.getByRole("dialog", { name: "Scheda di Bar San Calisto" }).getByRole("button", { name: "Elimina", exact: true }).click();
   await expect(righe).toHaveCount(1);
   await expect(page.getByText("Ristorante eliminato")).toBeVisible();
   await page.getByRole("button", { name: "Annulla" }).click();

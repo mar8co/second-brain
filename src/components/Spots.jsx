@@ -1,13 +1,14 @@
 // Elenchi dei box Ristoranti ed Eventi: nome e dati importanti, e sotto il link
 // al Reel, al post o alla pagina da cui vengono.
 import { useEffect, useState } from "react";
-import { ArrowUpDown, Check, CalendarPlus, ChefHat, ClipboardPaste, Coffee, Ellipsis, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
+import { ArrowUpDown, Check, CalendarPlus, ChefHat, ClipboardPaste, Coffee, IceCreamCone, MapPin, Pizza, Sandwich, Soup, Utensils, Wine, X } from "lucide-react";
 import { EmptyState } from "./ui.jsx";
 import { displayHost } from "../lib/detect.js";
 import { formatVia } from "../lib/indirizzi.js";
-import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, filtraRighe, formatEventDate, gruppiFermi, gruppiLocali, hasStreet, isEstero, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
+import { ORDINI_LOCALI, SENZA_ZONA, TIPI_LOCALE, filtraRighe, formatEventDate, gruppiLocali, hasStreet, isEstero, linkIn, mapsUrl, righeLocali } from "../lib/spots.js";
 import { buildIcs } from "../lib/ics.js";
 import { SwipeElimina, Thumb } from "./ItemCard.jsx";
+import { Foglio } from "./Foglio.jsx";
 
 // Link all'originale (si apre fuori dall'app) e alla scheda nell'app.
 // Tocco sulla card (non su link, pulsanti o campi): apre direttamente la scheda.
@@ -221,20 +222,83 @@ export function OrdinaLocali({ value, onChange }) {
   );
 }
 
-export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete, gruppo = "zona", filtri = {} }) {
-  // menu: locale con il menu dei puntini aperto; editing: locale in modifica e come
-  // ({ key, mode: "modifica" | "aggiungi" }).
-  const [menu, setMenu] = useState(null);
-  const [editing, setEditing] = useState(null);
+// Scheda del locale (sale dal basso): tutti gli indirizzi con Maps, modifica
+// degli indirizzi, il contenuto da cui viene ed Elimina.
+function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onDelete }) {
+  const [modifica, setModifica] = useState(false);
+  const t = (TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante).label;
+  const indirizzi = r.tutte?.length ? r.tutte : r.streets;
+  const azione = "flex w-full items-center justify-between border-b border-riga py-3.5 text-left text-[1rem] font-extrabold tracking-[-0.02em]";
+  return (
+    <Foglio label={`Scheda di ${r.name}`} onClose={onClose}>
+      <div className="flex items-center gap-3">
+        <IconaTipo tipo={r.tipo} />
+        <div className="min-w-0">
+          <h2 className="text-[1.5rem] font-extrabold leading-[1.05] tracking-[-0.04em]">{r.name}</h2>
+          <p className="micro mt-0.5 font-semibold">{[t, r.zona || r.citta].filter(Boolean).join(" · ")}</p>
+        </div>
+      </div>
+      <h3 className="micro mt-5 font-bold">{indirizzi.length > 1 ? "Indirizzi" : "Indirizzo"}</h3>
+      {indirizzi.length ? indirizzi.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : (
+        <>
+          <p className="micro mt-0.5 text-[0.85rem]">Non ho trovato l'indirizzo. Scrivilo o incolla il link del locale su Google Maps.</p>
+          <MapsLink name={r.name} where={r.address} pin />
+        </>
+      )}
+      {onStreet && modifica && (
+        <AddressForm
+          name={r.name}
+          start={indirizzi.length ? indirizzi : [""]}
+          onCancel={() => setModifica(false)}
+          onLink={onLink ? (url) => onLink(r, url) : undefined}
+          onSave={(v) => {
+            onClose();
+            onStreet(r.name, v);
+          }}
+        />
+      )}
+      <div className="mt-4 border-t border-riga">
+        {onStreet && !modifica && (
+          <button type="button" className={azione} onClick={() => setModifica(true)}>
+            {indirizzi.length ? "Modifica indirizzi" : "Aggiungi indirizzo"}
+          </button>
+        )}
+        {r.items.slice(0, 3).map((it) => (
+          <button
+            key={it.id}
+            type="button"
+            className={azione}
+            onClick={() => {
+              onClose();
+              onOpen(it);
+            }}
+          >
+            <span className="min-w-0 truncate">Apri «{it.title || displayHost(it.url || "") || "contenuto salvato"}»</span>
+          </button>
+        ))}
+        {onDelete && (
+          <button
+            type="button"
+            className={`${azione} text-[#e02a0d]`}
+            onClick={() => {
+              onClose();
+              onDelete(r);
+            }}
+          >
+            {r.sede ? "Elimina questa sede" : "Elimina"}
+          </button>
+        )}
+      </div>
+    </Foglio>
+  );
+}
 
-  // Il menu si chiude con Esc; toccando fuori lo chiude lo strato trasparente
-  // qui sotto, che assorbe il tocco (i link sotto non si attivano).
-  useEffect(() => {
-    if (!menu) return undefined;
-    const close = (e) => e.key === "Escape" && setMenu(null);
-    document.addEventListener("keydown", close);
-    return () => document.removeEventListener("keydown", close);
-  }, [menu]);
+// Box Ristoranti. Per quartiere e per città: una riga per sede, nel suo gruppo
+// (un locale con sedi in quartieri diversi compare in ognuno). Per tipo e per
+// nome: una riga per locale con tutti i suoi indirizzi. Tocco sulla riga: la
+// scheda del locale; swipe a sinistra: Elimina.
+export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete, gruppo = "zona", filtri = {} }) {
+  const [aperto, setAperto] = useState(null);
 
   if (!restaurants.length) {
     return (
@@ -243,15 +307,14 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
       </EmptyState>
     );
   }
-  const choose = (r, mode) => {
-    setMenu(null);
-    // Mentre si scrive, i gruppi restano fermi: se la ricerca del quartiere
-    // finisce in quel momento, la riga non cambia gruppo e il modulo non si perde.
-    setEditing({ key: r.key, mode, fermi: gruppi.map((g) => ({ ...g, list: g.list.map((x) => x.key) })) });
-  };
-  // Un locale con più sedi: una riga per sede, nel quartiere di ognuna; poi i Filtri.
-  const nuovi = gruppiLocali(filtraRighe(righeLocali(restaurants), filtri), gruppo);
-  const gruppi = editing?.fermi ? gruppiFermi(editing.fermi, nuovi) : nuovi;
+  const perSede = gruppo === "zona" || gruppo === "citta";
+  const righe = filtraRighe(righeLocali(restaurants), filtri);
+  const visibili = perSede
+    ? righe
+    : restaurants.filter((r) => righe.some((x) => x.name === r.name)).map((r) => ({ ...r, tutte: r.streets }));
+  const gruppi = gruppiLocali(visibili, gruppo);
+  // La scheda aperta segue i dati aggiornati del locale.
+  const scheda = aperto && (visibili.find((x) => x.key === aperto) || null);
 
   // Sotto il nome quello che il gruppo non dice già: il tipo e/o la zona.
   const sottotitolo = (r) => {
@@ -265,68 +328,24 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
   };
 
   const riga = (r) => (
-    <li key={r.key} data-scheda-locale className={`relative ${menu === r.key ? "z-[60]" : ""}`}>
+    <li key={r.key} data-scheda-locale>
       <Riga onDelete={onDelete ? () => onDelete(r) : null}>
-        <div className="flex cursor-pointer gap-3 bg-[var(--sfondo)] py-3" onClick={apriCard(r.items, onOpen)}>
+        <div
+          className="flex cursor-pointer gap-3 bg-[var(--sfondo)] py-3"
+          role="button"
+          tabIndex={0}
+          aria-label={`Apri la scheda di ${r.name}`}
+          onClick={(e) => {
+            if (e.target.closest("a")) return;
+            setAperto(r.key);
+          }}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setAperto(r.key))}
+        >
           <IconaTipo tipo={r.tipo} />
           <div className="min-w-0 flex-1">
-            <div className="flex items-start justify-between gap-2">
-              <p className={NAME}>{r.name}</p>
-              {onStreet && editing?.key !== r.key && (
-                <span className="relative shrink-0">
-                  <button
-                    type="button"
-                    className="-my-1 -mr-1 grid h-7 w-8 place-items-center"
-                    aria-label={`Indirizzi di ${r.name}`}
-                    aria-haspopup="menu"
-                    aria-expanded={menu === r.key}
-                    onClick={() => setMenu(menu === r.key ? null : r.key)}
-                  >
-                    <Ellipsis className="h-5 w-5" strokeWidth={3} aria-hidden="true" />
-                  </button>
-                  {menu === r.key && (
-                    <div role="menu" aria-label={`Indirizzi di ${r.name}`} className="absolute right-0 top-full z-[60] mt-1.5 min-w-[10.5rem] overflow-hidden rounded-2xl border-[1.5px] border-inchiostro bg-[var(--sfondo)]">
-                      {r.streets.length > 0 && (
-                        <button type="button" role="menuitem" className="block w-full border-b border-riga px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em]" onClick={() => choose(r, "modifica")}>
-                          Modifica via
-                        </button>
-                      )}
-                      <button type="button" role="menuitem" className={`block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em] ${onDelete ? "border-b border-riga" : ""}`} onClick={() => choose(r, "aggiungi")}>
-                        Aggiungi via
-                      </button>
-                      {onDelete && (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          className="block w-full px-4 py-3 text-left text-[0.95rem] font-extrabold tracking-[-0.02em] text-[#e02a0d]"
-                          onClick={() => {
-                            setMenu(null);
-                            onDelete(r);
-                          }}
-                        >
-                          Elimina
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </span>
-              )}
-            </div>
+            <p className={NAME}>{r.name}</p>
             <p className="micro mt-0.5 font-semibold" data-tipo-locale>{sottotitolo(r)}</p>
             {r.streets.length ? r.streets.map((a) => <MapsLink key={a} name={r.name} where={a} isStreet pin />) : <MapsLink name={r.name} where={r.address} pin />}
-            {onStreet && editing?.key === r.key && (
-              <AddressForm
-                name={r.name}
-                key={editing.mode}
-                start={editing.mode === "aggiungi" ? [...r.tutte, ""] : r.tutte.length ? r.tutte : [""]}
-                onCancel={() => setEditing(null)}
-                onLink={onLink ? (url) => onLink(r, url) : undefined}
-                onSave={(v) => {
-                  setEditing(null);
-                  onStreet(r.name, v);
-                }}
-              />
-            )}
           </div>
         </div>
       </Riga>
@@ -335,7 +354,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
 
   return (
     <>
-      {menu && <div className="fixed inset-0 z-50" aria-hidden="true" data-chiudi-menu onClick={() => setMenu(null)} />}
+      {scheda && <SchedaLocale key={scheda.key} r={scheda} onClose={() => setAperto(null)} onOpen={onOpen} onStreet={onStreet} onLink={onLink} onDelete={onDelete} />}
       {!gruppi.length && <p className="micro mt-5">Nessun locale con questi filtri.</p>}
       {gruppi.map((g) => (
         <section key={g.key} aria-label={g.label} data-gruppo-locali>
@@ -343,7 +362,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
             <span className="min-w-0 text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">{g.label}</span>
             <span className="micro num shrink-0 font-bold">{g.list.length === 1 ? "1 locale" : `${g.list.length} locali`}</span>
           </h3>}
-          {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato l'indirizzo di questi locali. Tocca i tre puntini, poi Aggiungi via: scrivila o incolla il link del locale su Google Maps.</p>}
+          {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato l'indirizzo di questi locali. Tocca il locale, poi Aggiungi indirizzo: scrivilo o incolla il link del locale su Google Maps.</p>}
           <ul className={`righe${g.label ? "" : " mt-2"}`}>{g.list.map(riga)}</ul>
         </section>
       ))}
