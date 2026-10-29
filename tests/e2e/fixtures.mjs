@@ -140,6 +140,26 @@ http
         const out = fakeGemini(prompt);
         // Risposta lenta, per provare che non va persa cambiando schermata.
         const slow = /<domanda>[^<]*palestra/i.test(prompt) ? 1500 : 0;
+        if (req.url.includes(":streamGenerateContent")) {
+          // Streaming come Gemini (SSE): il JSON a pezzi. "piano piano" nella
+          // domanda: pezzi piccoli e lenti, per vedere la risposta crescere.
+          const piano = /<domanda>[^<]*piano piano/i.test(prompt);
+          const text = JSON.stringify(out);
+          const size = piano ? 24 : 60;
+          const chunks = [];
+          for (let i = 0; i < text.length; i += size) chunks.push(text.slice(i, i + size));
+          setTimeout(() => {
+            res.writeHead(200, { "content-type": "text/event-stream" });
+            const next = (i) => {
+              const finish = i === chunks.length - 1 ? { finishReason: "STOP" } : {};
+              res.write(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: chunks[i] }], role: "model" }, ...finish }] })}\r\n\r\n`);
+              if (i < chunks.length - 1) setTimeout(() => next(i + 1), piano ? 300 : 10);
+              else res.end();
+            };
+            next(0);
+          }, slow);
+          return;
+        }
         setTimeout(() => send(res, 200, "application/json", JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(out) }] } }] })), slow);
       });
       return;

@@ -13,6 +13,7 @@ import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
 import { askArchive, recentTurns } from "../lib/ask.js";
 import { getChatLog, updateChatLog, useChatLog } from "../lib/chatlog.js";
+import { getPartial, setPartial, usePartial } from "../lib/partial.js";
 import { countBy } from "../lib/search.js";
 import { displayHost, detectType, extractUrl } from "../lib/detect.js";
 import { displayTitle } from "../lib/item.js";
@@ -83,7 +84,8 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     const waiting = last.pending ? listRef.current?.lastElementChild?.querySelector("[data-risposta]") : null;
     const go = () => {
       if (answer) answer.scrollIntoView({ block: "start" });
-      else if (waiting) waiting.scrollIntoView({ block: "end" });
+      // Se la risposta sta già arrivando, la segue segui() (sotto).
+      else if (waiting) getPartial(last.id) || waiting.scrollIntoView({ block: "end" });
       else endRef.current?.scrollIntoView({ block: "end" });
     };
     go();
@@ -93,6 +95,13 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     const t = [120, 450].map((ms) => setTimeout(go, ms));
     return () => t.forEach(clearTimeout);
   }, [log, loading]);
+
+  // Mentre la risposta arriva parola per parola, la pagina la segue.
+  const last = log.at(-1);
+  const streaming = usePartial(last?.pending ? last.id : null);
+  useLayoutEffect(() => {
+    if (streaming?.answer) segui(listRef.current?.lastElementChild?.querySelector("[data-risposta]"));
+  }, [streaming]);
 
   // Freccetta per tornare in fondo, come su WhatsApp: compare quando si è saliti.
   const [lontano, setLontano] = useState(false);
@@ -130,9 +139,11 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     const history = recentTurns(getChatLog());
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     updateChatLog((cur) => [...cur, { id, at: new Date().toISOString(), q: question, pending: true }]);
-    // La risposta arriva anche se nel frattempo si è passati a un'altra schermata.
-    const result = await askArchive(items, question, { ai, history, semantic });
+    // La risposta arriva anche se nel frattempo si è passati a un'altra
+    // schermata; intanto si vede comparire parola per parola.
+    const result = await askArchive(items, question, { ai, history, semantic, onPartial: (p) => setPartial(id, p) });
     updateChatLog((cur) => cur.map((m) => (m.id === id ? { ...m, pending: false, result, answeredAt: new Date().toISOString() } : m)));
+    setPartial(id, null);
   };
 
   // Domanda arrivata da un link (/?q=…): una sola volta, ad archivio caricato.
@@ -320,6 +331,21 @@ function useSopraTastiera(ref) {
   }, [ref]);
 }
 
+// Risposta che cresce mentre arriva: la pagina scorre con lei finché il suo
+// inizio arriva sotto la testata, poi si ferma (si legge dall'inizio). Se si è
+// saliti a leggere altro, resta dov'è. I margini sono quelli di scrollIntoView
+// (scroll-mt / scroll-mb della risposta).
+function segui(el) {
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  if (r.top >= window.innerHeight) return;
+  const css = getComputedStyle(el);
+  const top = parseFloat(css.scrollMarginTop) || 0;
+  const bottom = window.innerHeight - (parseFloat(css.scrollMarginBottom) || 0);
+  const shift = Math.min(r.bottom - bottom, r.top - top);
+  if (shift > 1) window.scrollBy(0, shift);
+}
+
 // Testo di una risposta senza i segni del grassetto e le citazioni [1].
 function plainAnswer(text) {
   return String(text || "").replace(/\*\*/g, "").replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, "").trim();
@@ -344,6 +370,9 @@ function Ora({ iso, className = "" }) {
 
 function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
   const r = msg.result;
+  // Risposta che sta arrivando: testo scritto finora, con le sue citazioni.
+  const partial = usePartial(msg.pending ? msg.id : null);
+  const writing = Boolean(msg.pending && partial?.answer);
   const answered = r && (r.kind === "answer" || r.kind === "insufficient");
   const sources = answered ? (r.sources || []).map((id) => ({ id, item: byId.get(id), quote: r.quotes?.[id] || "" })) : [];
   const maybe = (r?.candidates || []).map((id) => byId.get(id)).filter(Boolean).slice(0, 5);
@@ -364,8 +393,24 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
         </div>
       </div>
       <div className="flex scroll-mb-44 scroll-mt-24 justify-start" data-risposta>
-        <div className={`card-bianca vignetta relative w-full max-w-[94%] py-3.5 pl-4 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none] ${r?.kind === "answer" ? "pr-4" : "pr-11"}`}>
-          {msg.pending || !r ? (
+        <div className={`card-bianca vignetta relative w-full max-w-[94%] py-3.5 pl-4 [-webkit-user-select:none] [user-select:none] [-webkit-touch-callout:none] ${r?.kind === "answer" || writing ? "pr-4" : "pr-11"}`}>
+          {writing ? (
+            <>
+              <AiBadge>Risposta dai tuoi contenuti</AiBadge>
+              <AnswerText
+                text={partial.answer}
+                count={partial.sources.length}
+                onCite={(n) => {
+                  const it = byId.get(partial.sources[n - 1]);
+                  if (it) onOpen(it);
+                }}
+              />
+              <p role="status" className="mt-2 flex h-4 items-center">
+                <i aria-hidden="true" className="pulsa inline-block h-2 w-2 rounded-full bg-[#0a0a0a]" />
+                <span className="sr-only">Sto scrivendo la risposta…</span>
+              </p>
+            </>
+          ) : msg.pending || !r ? (
             <p role="status" className="flex items-center gap-2 font-semibold">
               <i aria-hidden="true" className="pulsa inline-block h-2.5 w-2.5 rounded-full bg-[#0a0a0a]" /> Cerco nella tua memoria…
             </p>

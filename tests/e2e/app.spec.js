@@ -1056,6 +1056,26 @@ test("chat: appena invii, si vede la risposta in preparazione sopra il campo, no
   await expect(vign).toHaveCSS("border-top-left-radius", "18px");
 });
 
+test("chat: la risposta compare mentre l'AI la scrive, poi arrivano le fonti", async ({ page }) => {
+  await addLink(page, `${FIX}/ricetta`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const box = page.getByLabel("Chiedi alla tua memoria");
+  await box.fill("Scrivi piano piano: cosa ho salvato sul limone?");
+  await box.press("Enter");
+  const risposta = page.locator("[data-risposta]").last();
+  // Prima l'inizio della risposta, mentre l'AI scrive: ancora senza fonti.
+  await expect(risposta.getByText(/Hai salvato/)).toBeVisible();
+  await expect(risposta.getByText("Cerco nella tua memoria…")).toHaveCount(0);
+  await expect(risposta.getByRole("status")).toHaveText("Sto scrivendo la risposta…");
+  await expect(risposta.getByRole("button", { name: /^Fonti/ })).toHaveCount(0);
+  // Poi la risposta completa, con la citazione e le fonti.
+  await expect(risposta.getByRole("button", { name: /^Fonti/ })).toBeVisible();
+  await expect(risposta.getByText(/scorza di limone, burro e parmigiano/)).toBeVisible();
+  await expect(risposta.getByRole("button", { name: "Fonte 1" }).first()).toBeVisible();
+  await expect(risposta.getByText("Sto scrivendo la risposta…")).toHaveCount(0);
+});
+
 test("Aggiungi: i pulsanti non sono attaccati al titolo", async ({ page }) => {
   await page.goto("/aggiungi");
   const h = await page.getByRole("heading", { name: "Aggiungi", level: 1 }).boundingBox();

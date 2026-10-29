@@ -1,8 +1,10 @@
 // Domanda alla memoria, come NotebookLM. Senza AI: elementi pertinenti
 // trovati nel browser. Con l'AI: Gemini legge il contenuto completo di tutto
-// l'archivio, se ci sta; altrimenti prima sceglie dalle schede brevi (la
-// "memoria": sintesi, punti chiave, autore, parole chiave) quali leggere per
-// intero. Risponde SOLO con i contenuti salvati e cita le fonti con [n].
+// l'archivio, se ci sta; altrimenti quello degli elementi più vicini alla
+// domanda (per significato e per parole, scelti qui senza un'altra chiamata
+// all'AI) e le schede brevi di tutti gli altri (la "memoria": sintesi, punti
+// chiave, autore, parole chiave). Risponde SOLO con i contenuti salvati e cita
+// le fonti con [n]; la risposta arriva parola per parola.
 // Le domande di seguito ("e quanto costa?") portano con sé i turni precedenti.
 import { retrieveForQuestion } from "./search.js";
 import { api } from "./api.js";
@@ -19,6 +21,9 @@ const MEMORY_CHARS = 200_000;
 // Domande di seguito: gli ultimi turni dell'ultima ora.
 const HISTORY_TURNS = 4;
 const HISTORY_MS = 60 * 60_000;
+// Ricerca per significato: oltre questo tempo la domanda parte con le sole
+// parole in comune, senza aspettarla.
+const SEMANTIC_MS = 3000;
 
 const cut = (s, n) => (typeof s === "string" ? s.slice(0, n) : null);
 const byDateDesc = (a, b) => new Date(b.created_at) - new Date(a.created_at);
@@ -108,6 +113,28 @@ export function memoryFor(items, ranked, budget = MEMORY_CHARS) {
   return out;
 }
 
+// Elementi da leggere per intero (id): i più vicini alla domanda per
+// significato (`near`) e quelli con le sue parole (`words`), alternati; chi è
+// in tutte e due le liste sale, a parità prima il significato. Le fonti più
+// recenti della conversazione (`prev`) ci sono sempre.
+export function pickDetails(near, words, prev = [], max = DETAILS) {
+  const score = new Map();
+  const add = (list, weight) => list.forEach((id, i) => score.set(id, (score.get(id) || 0) + weight / (i + 2)));
+  add(near, 1.01);
+  add(words, 1);
+  const mixed = [...score.keys()].sort((a, b) => score.get(b) - score.get(a));
+  const keep = new Set(prev);
+  return [...new Set([...mixed.filter((id) => !keep.has(id)).slice(0, Math.max(0, max - prev.length)), ...prev, ...mixed])].slice(0, max);
+}
+
+function withTimeout(promise, ms) {
+  let timer;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error("tempo scaduto")), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+}
+
 // Turni precedenti della chat (dal più vecchio), per le domande di seguito:
 // solo risposte arrivate, al massimo un'ora prima della domanda nuova.
 // log: [{ at, q, result: { kind, answer, sources } }]
@@ -129,7 +156,9 @@ export function recentTurns(log, now = Date.now()) {
 // Risultato: { kind, answer?, sources: [id], quotes: { id: estratto }, candidates: [id], consulted?, total?, error? }
 //   kind: "answer" | "insufficient" | "none" | "noai" | "error"
 //   Nella risposta [n] è la fonte sources[n - 1].
-export async function askArchive(items, question, { ai, history = [], semantic = null }) {
+// onPartial (facoltativa): la risposta mentre arriva, { answer, sources },
+// con le citazioni già numerate come nella risposta finale.
+export async function askArchive(items, question, { ai, history = [], semantic = null, onPartial = null }) {
   const ranked = retrieveForQuestion(items, question, items.length);
   const ids = ranked.slice(0, 12).map((c) => c.id);
   if (!ai) return ranked.length ? { kind: "noai", sources: [], candidates: ids } : { kind: "none", sources: [], candidates: [] };
@@ -140,38 +169,29 @@ export async function askArchive(items, question, { ai, history = [], semantic =
     let details = items.map((it) => detailEntry(it, FULL_TEXT));
     let memory = [];
     if (items.length > FULL_ITEMS || sizeOf(details) > FULL_CHARS) {
-      // Archivio grande: l'AI sceglie dalle schede cosa leggere per intero,
-      // insieme alle fonti della risposta precedente e agli elementi con le
-      // parole della domanda (anche di quella precedente).
-      let context = history.length ? retrieveForQuestion(items, [question, history.at(-1).q].join(" "), items.length) : ranked;
-      // Ricerca per significato (se disponibile): gli elementi più vicini
-      // alla domanda vengono prima di quelli con le sole parole in comune.
+      // Archivio grande: per intero gli elementi più vicini alla domanda (anche
+      // a quella precedente), più le fonti della risposta precedente; degli
+      // altri le schede brevi, prima i più vicini.
+      const words = (history.length ? retrieveForQuestion(items, [question, history.at(-1).q].join(" "), items.length) : ranked).map((i) => i.id);
       let near = [];
-      try {
-        near = ((await semantic?.(question)) || []).map((id) => byId.get(id)).filter(Boolean);
-      } catch {
-        /* ricerca per significato non disponibile: restano le parole della domanda */
-      }
-      if (near.length) {
-        const seen = new Set(near.map((i) => i.id));
-        context = [...near, ...context.filter((i) => !seen.has(i.id))];
-      }
-      memory = memoryFor(items, context);
-      let picked = [];
-      try {
-        const r = await api.select(question, memory, turns);
-        picked = (Array.isArray(r?.ids) ? r.ids : []).filter((id) => byId.has(id));
-      } catch {
-        /* scelta non riuscita: restano le parole della domanda */
+      if (semantic) {
+        try {
+          near = ((await withTimeout(Promise.resolve(semantic(question)), SEMANTIC_MS)) || []).filter((id) => byId.has(id));
+        } catch {
+          /* ricerca per significato non disponibile o lenta: restano le parole della domanda */
+        }
       }
       // Le fonti più recenti della conversazione restano sempre tra quelle lette.
       const prev = [...new Set([...history].reverse().flatMap((t) => t.sources))].filter((id) => byId.has(id)).slice(0, 4);
-      const chosen = [...new Set([...picked.slice(0, DETAILS - prev.length), ...prev, ...picked, ...context.map((i) => i.id)])].filter((id) => byId.has(id)).slice(0, DETAILS);
+      const chosen = pickDetails(near, words, prev);
       details = chosen.map((id) => detailEntry(byId.get(id), PART_TEXT));
       const inDetails = new Set(chosen);
-      memory = memory.filter((m) => !inDetails.has(m.id));
+      const others = items.filter((i) => !inDetails.has(i.id));
+      const first = [...new Set([...near, ...words])].filter((id) => !inDetails.has(id)).map((id) => byId.get(id));
+      memory = memoryFor(others, first);
     }
-    const r = await api.ask(question, details, memory, items.length, turns);
+    const onDelta = onPartial ? (d) => onPartial({ answer: String(d?.answer || ""), sources: Array.isArray(d?.sources) ? d.sources.filter((id) => typeof id === "string") : [] }) : null;
+    const r = await api.ask(question, details, memory, items.length, turns, onDelta);
     const sources = (r.sources || []).filter((s) => typeof s?.id === "string");
     return {
       kind: r.sufficient ? "answer" : "insufficient",

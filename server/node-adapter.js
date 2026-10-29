@@ -80,6 +80,24 @@ export function nodeHandler(core, env = process.env, { maxBody, ...extra } = {})
         out = extra.allowFiles ? { status: e.status || 500, text: error } : { status: e.status || 500, json: { error } };
       }
     }
+    // Risposta in streaming (eventi SSE): ogni evento parte appena è pronto.
+    if (typeof out.stream === "function") {
+      res.statusCode = out.status;
+      res.setHeader("cache-control", "no-store, no-transform");
+      res.setHeader("content-type", "text/event-stream; charset=utf-8");
+      res.setHeader("x-accel-buffering", "no");
+      res.flushHeaders?.();
+      const send = (ev) => {
+        if (!res.writableEnded) res.write(`data: ${JSON.stringify(ev)}\n\n`);
+      };
+      try {
+        await out.stream(send);
+      } catch {
+        send({ type: "error", status: 500, error: "Errore interno." });
+      }
+      res.end();
+      return;
+    }
     res.statusCode = out.status;
     res.setHeader("cache-control", "no-store");
     // Risposta in testo semplice per chi la mostra così com'è (Comandi Rapidi).
