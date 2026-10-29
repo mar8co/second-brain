@@ -67,7 +67,7 @@ export function cittaDi(address) {
 // "Via da controllare": i locali di cui né l'AI né OpenStreetMap hanno trovato la via.
 export const SENZA_ZONA = "Zona non indicata";
 export const SENZA_CITTA = "Città non indicata";
-export const DA_CONTROLLARE = "Via da controllare";
+export const DA_CONTROLLARE = "Senza indirizzo";
 export const ORDINI_LOCALI = [
   ["nome", "Nome"],
   ["tipo", "Tipo"],

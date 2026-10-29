@@ -343,7 +343,7 @@ export function RestaurantList({ restaurants, onOpen, onStreet, onLink, onDelete
             <span className="min-w-0 text-[1.65rem] font-extrabold leading-none tracking-[-0.05em]">{g.label}</span>
             <span className="micro num shrink-0 font-bold">{g.list.length === 1 ? "1 locale" : `${g.list.length} locali`}</span>
           </h3>}
-          {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato la via di questi locali. Tocca i tre puntini, poi Aggiungi via: scrivila o incolla il link del locale su Google Maps.</p>}
+          {g.controllare && <p className="micro mt-1.5 text-[0.85rem]">Non ho trovato l'indirizzo di questi locali. Tocca i tre puntini, poi Aggiungi via: scrivila o incolla il link del locale su Google Maps.</p>}
           <ul className={`righe${g.label ? "" : " mt-2"}`}>{g.list.map(riga)}</ul>
         </section>
       ))}

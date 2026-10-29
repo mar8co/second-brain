@@ -13,6 +13,20 @@ test.beforeEach(async ({ page }, info) => {
 });
 
 // "Altri campi (facoltativi)" è chiuso: lo apre se serve (titolo, nota del link, categorie, tag).
+// Menu "…" della pagina principale dell'Archivio: filtri, vista e ordine dei box.
+async function opzione(page, voce) {
+  await page.getByRole("button", { name: /^Opzioni/ }).click();
+  await page.getByRole("menuitem", { name: voce }).click();
+}
+
+// Vista dell'Archivio (box o lista) dal menu "…"; se è già quella, si richiude.
+async function vista(page, v) {
+  await page.getByRole("button", { name: /^Opzioni/ }).click();
+  const voce = page.getByRole("menuitem", { name: `Mostra come ${v}` });
+  if (await voce.count()) await voce.click();
+  else await page.keyboard.press("Escape");
+}
+
 async function apriAltri(page) {
   const d = page.locator("details", { hasText: "Altri campi (facoltativi)" });
   if ((await d.getAttribute("open")) === null) await d.locator("summary").click();
@@ -37,12 +51,11 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   await expect(nav.getByRole("link")).toHaveText(["Chat", "Archivio"]);
   await page.getByRole("button", { name: "Impostazioni" }).click();
   await expect(page).toHaveURL(/\/impostazioni$/);
-  // Rianalizza e Fai il Backup stanno in cima alle Impostazioni.
-  const rian = await page.getByRole("button", { name: /^Rianalizza/ }).boundingBox();
+  // Fai il Backup sta in cima alle Impostazioni; Rianalizza compare solo se c'è qualcosa da rileggere.
+  await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
   const agg = await page.getByRole("button", { name: "Fai il Backup" }).boundingBox();
   const titolo = await page.getByRole("heading", { name: "Impostazioni" }).boundingBox();
-  expect(rian.x).toBeLessThan(agg.x);
-  expect(rian.y).toBeLessThan(titolo.y + 300);
+  expect(agg.y).toBeLessThan(titolo.y + 300);
   // Ordine chiaro: Archivio, AI, Dati e account; il resto è in "Informazioni e privacy", chiuso.
   const ys = [];
   for (const n of ["Archivio", "AI", "Dati e account", "Informazioni e privacy"]) ys.push((await page.locator("main").getByText(n, { exact: true }).last().boundingBox()).y);
@@ -63,13 +76,8 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   expect(ing.y).toBeLessThan(tit.y + tit.height);
   expect(ing.y + ing.height).toBeGreaterThan(tit.y);
   expect(ing.x).toBeGreaterThan(tit.x + 100);
-  const campo = await page.getByLabel("Cerca nell'archivio").boundingBox();
-  const filtri = page.getByRole("button", { name: /^Filtri/ });
-  const fb = await filtri.boundingBox();
-  expect(fb.y).toBeGreaterThan(campo.y + campo.height - 1);
-  // Sotto la riga Filtri / Box-Lista non c'è nessuna linea.
-  await expect(page.locator("h2.sezione").filter({ has: filtri })).toHaveCSS("border-bottom-width", "0px");
-  expect((await filtri.innerText()).trim()).toBe("");
+  // Archivio vuoto: niente menu delle opzioni, solo la ricerca.
+  await expect(page.getByRole("button", { name: /^Opzioni/ })).toHaveCount(0);
   await expect(page.getByText("Filtri", { exact: true })).toHaveCount(0);
   // Aggiungi non sta più nelle Impostazioni.
   await page.goto("/impostazioni");
@@ -298,14 +306,9 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await page.getByLabel("Cerca nell'archivio").fill("parmigiano");
   await expect(page.getByText("1 elemento")).toBeVisible();
   await expect(page.getByText("Pasta al limone in 10 minuti")).toBeVisible();
-  // Stato in basso, prima delle categorie: pieno verde se analizzato.
+  // Un contenuto letto bene non mostra lo stato: il pallino c'è solo se qualcosa non va.
   const riga = page.locator("ul.righe li").first();
-  const tag = await riga.locator(".cartellino").first().boundingBox();
-  const stato = riga.locator('[title="Analizzato"]');
-  const pallino = await stato.boundingBox();
-  expect(pallino.x + pallino.width).toBeLessThanOrEqual(tag.x + 1);
-  expect(Math.abs(pallino.y + pallino.height / 2 - (tag.y + tag.height / 2))).toBeLessThan(6);
-  await expect(stato.locator("i")).toHaveCSS("background-color", "rgb(34, 179, 94)");
+  await expect(riga.locator('[title="Analizzato"]')).toHaveCount(0);
 
   // Filtri rapidi: categorie sempre visibili
   await expect(page.getByRole("button", { name: /^Rianalizza/ })).toHaveCount(0);
@@ -314,7 +317,7 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
 
   // Filtro per tipo
   await page.getByLabel("Cerca nell'archivio").fill("");
-  await page.getByRole("button", { name: /^Filtri/ }).click();
+  await opzione(page, /^Filtri/);
   // Scelte disegnate dall'app, niente menu a tendina del sistema; niente Tag e Stato.
   await expect(page.locator("#filters select")).toHaveCount(0);
   await expect(page.locator("#filters input")).toHaveCount(0);
@@ -355,7 +358,7 @@ test("ricerca, filtri e domanda sull'archivio con fonti", async ({ page }) => {
   await page.locator(".giorno.oggi").click();
   await expect(page.getByText("2 elementi")).toBeVisible();
   // Chiuso il riquadro, il periodo resta come pillola da togliere
-  await page.getByRole("button", { name: /^Filtri/ }).click();
+  await opzione(page, /^Filtri/);
   await page.getByRole("button", { name: /^Rimuovi filtro/ }).click();
   await expect(page).not.toHaveURL(/from=/);
 
@@ -456,8 +459,9 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
 
   // Di partenza: box, uno per categoria, con il numero dei contenuti.
   await page.goto("/archivio");
-  const vista = page.getByRole("group", { name: "Vista" });
-  await expect(vista.getByRole("button", { name: "Box" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: /^Opzioni/ }).click();
+  await expect(page.getByRole("menuitem", { name: "Mostra come lista" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Ricette, 1 contenuto" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
   await expect(page.locator("ul.righe")).toHaveCount(0);
@@ -486,16 +490,15 @@ test("Archivio a box: una scatola per categoria, dentro le copertine; Vista pass
   await page.getByRole("button", { name: "Ricette, 1 contenuto" }).click();
   await expect(page).toHaveURL(/category=Ricette/);
 
-  // Vista Lista: la lista di sempre, e la scelta resta dopo il ricaricamento.
-  await vista.getByRole("button", { name: "Lista" }).click();
-  await expect(page.locator("ul.righe li")).toHaveCount(1);
+  // Vista Lista dal menu "…": la lista di sempre, e la scelta resta dopo il ricaricamento.
+  await page.getByRole("button", { name: "Categorie", exact: true }).click();
+  await opzione(page, "Mostra come lista");
+  await expect(page.locator("ul.righe li").first()).toBeVisible();
   await page.reload();
-  await expect(vista.getByRole("button", { name: "Lista" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("button", { name: "Tutte", exact: true })).toBeVisible();
 
-  // Di nuovo a box: "Categorie" riporta a tutte le scatole.
-  await vista.getByRole("button", { name: "Box" }).click();
-  await page.getByRole("button", { name: "Categorie", exact: true }).click();
+  // Di nuovo a box: tutte le scatole.
+  await opzione(page, "Mostra come box");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Archivio");
   await expect(page.getByRole("button", { name: "Acquisti, 1 contenuto" })).toBeVisible();
 
@@ -715,7 +718,7 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
 
   // Passando a lista le due sezioni non ci sono: resta la lista di sempre.
   await page.getByRole("button", { name: "Categorie", exact: true }).click();
-  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Lista" }).click();
+  await vista(page, "lista");
   await expect(page.getByRole("button", { name: /^Ristoranti,/ })).toHaveCount(0);
   await expect(page.locator("ul.righe li")).toHaveCount(1);
 });
@@ -742,7 +745,7 @@ test("filtro Autore: i nomi lunghi restano nella larghezza e la pagina non scorr
       }),
   );
   await page.goto("/archivio");
-  await page.getByRole("button", { name: "Filtri" }).click();
+  await opzione(page, /^Filtri/);
   await page.getByRole("button", { name: /^Autore/ }).click();
   const scelta = page.getByRole("option", { name: /Investitore Efficace/ });
   await expect(scelta).toBeVisible();
@@ -762,10 +765,10 @@ test("Archivio a box: Ristoranti senza via, il menu dei puntini offre solo Aggiu
   const bar = page.locator("li[data-scheda-locale]").filter({ has: page.getByText("Bar San Calisto", { exact: true }) });
   await expect(bar.getByRole("link", { name: /Cerca su Maps/ })).toBeVisible();
   // Il gruppo dei locali di cui va controllata la via.
-  const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Via da controllare" });
+  const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Senza indirizzo" });
   await expect(daControllare).toContainText("Bar San Calisto");
   // In fondo alla lista, dopo i quartieri.
-  await expect(page.locator("section[data-gruppo-locali] h3").last()).toContainText("Via da controllare");
+  await expect(page.locator("section[data-gruppo-locali] h3").last()).toContainText("Senza indirizzo");
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
   await expect(bar.getByRole("menuitem")).toHaveText(["Aggiungi via", "Elimina"]);
   await bar.getByRole("menuitem", { name: "Aggiungi via" }).click();
@@ -808,7 +811,7 @@ test("Archivio a box: Ristoranti, la via si prende incollando il link di Google 
   await addLink(page, `${FIX}/trastevere`);
   await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
   await page.goto("/archivio?sezione=ristoranti");
-  const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Via da controllare" });
+  const daControllare = page.locator("section[data-gruppo-locali]", { hasText: "Senza indirizzo" });
   await expect(daControllare).toContainText("incolla il link del locale su Google Maps");
   const bar = page.locator("li[data-scheda-locale]").filter({ has: page.getByText("Bar San Calisto", { exact: true }) });
   await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).click();
@@ -843,8 +846,8 @@ test("Archivio a box: Ristoranti, Elimina dal menu dei puntini e con lo swipe, c
   await page.goto("/archivio?sezione=ristoranti");
   const righe = page.locator("li[data-scheda-locale]");
   await expect(righe).toHaveCount(2);
-  // Aspetta la ricerca su OpenStreetMap (non trova nulla): il Bar passa in "Via da controllare".
-  await expect(page.locator("section[data-gruppo-locali]", { hasText: "Via da controllare" })).toContainText("Bar San Calisto");
+  // Aspetta la ricerca su OpenStreetMap (non trova nulla): il Bar passa in "Senza indirizzo".
+  await expect(page.locator("section[data-gruppo-locali]", { hasText: "Senza indirizzo" })).toContainText("Bar San Calisto");
   const bar = righe.filter({ has: page.getByText("Bar San Calisto", { exact: true }) });
   // I puntini stanno a destra del nome, sulla stessa riga.
   const pt = await bar.getByRole("button", { name: "Indirizzi di Bar San Calisto" }).boundingBox();
@@ -964,7 +967,7 @@ test("Archivio a box: i box fissi Foto e video e File hanno le stesse dimensioni
   }
   // Riordino: File passa prima di Foto e video.
   const x0 = (await size("File e note")).y * 1000 + (await size("File e note")).x;
-  await page.getByRole("button", { name: "Ordina" }).click();
+  await opzione(page, "Riordina i box");
   await page.getByRole("button", { name: "Sposta File e note prima" }).click();
   await page.getByRole("button", { name: "Sposta File e note prima" }).click();
   await page.getByRole("button", { name: "Fine" }).click();
@@ -1176,7 +1179,7 @@ test("foto: lo swipe passa alla foto successiva/precedente e, eliminandone una, 
   await page.getByRole("dialog", { name: "Anteprima prima di salvare" }).getByRole("button", { name: "Salva 3 foto" }).click();
   await expect(page.getByText("3 salvati nell'archivio")).toBeVisible();
   await page.getByRole("link", { name: "Archivio", exact: true }).click();
-  await page.getByRole("button", { name: "Box", exact: true }).click();
+  await vista(page, "box");
   await page.getByRole("button", { name: /^Foto e video, 3 file/ }).click();
   await expect(page.locator("ul.grid-cols-3 a")).toHaveCount(3);
   const nomi = await page.locator("ul.grid-cols-3 a").evaluateAll((as) => as.map((a) => a.getAttribute("aria-label")));
@@ -1233,7 +1236,7 @@ test("note: il pulsante copia mette negli appunti solo il testo della propria no
     await expect(page).toHaveURL(/\/elemento\//);
   }
   await page.goto("/archivio");
-  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Lista" }).click();
+  await vista(page, "lista");
   const copie = page.getByRole("button", { name: "Copia nota" });
   await expect(copie).toHaveCount(2);
   const url0 = page.url();
@@ -1290,7 +1293,7 @@ test("box File e note: le note stanno con i file, niente pulsante Nuova nota; da
   await page.getByRole("button", { name: "Salva", exact: true }).click();
   await expect(page).toHaveURL(/\/elemento\//);
   await page.goto("/archivio");
-  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Box" }).click();
+  await vista(page, "box");
   await page.getByRole("button", { name: /^File e note,/ }).click();
   await expect(page.getByRole("heading", { name: "File e note", level: 1 })).toBeVisible();
   const riga = page.locator("ul.righe > li").filter({ hasText: "Idea per il weekend" });
@@ -1369,13 +1372,13 @@ test("preferiti: stellina su scheda e riga, niente box Preferiti nell'Archivio; 
   await page.goto("/");
   await expect(page.locator(".barra-piu button")).toHaveCount(0);
   await page.goto("/archivio");
-  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Box" }).click();
+  await vista(page, "box");
   // Nessun box Preferiti nell'Archivio: si ritrovano con il filtro.
   await expect(page.getByRole("button", { name: /^Preferiti,/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Filtri" }).click();
+  await opzione(page, /^Filtri/);
   await page.locator("#f-preferiti").click();
   await page.getByRole("option", { name: "Solo preferiti" }).click();
-  await page.getByRole("group", { name: "Vista" }).getByRole("button", { name: "Lista" }).click();
+  await vista(page, "lista");
   await expect(page.getByText("Idea preferita")).toBeVisible();
 });
 
@@ -1404,9 +1407,28 @@ test("Archivio: Preferiti non è tra le categorie ma nei Filtri, con 'Ordina per
   await expect(page.getByText("Aggiunto ai preferiti")).toBeVisible();
   await page.goto("/archivio");
   await expect(page.getByRole("list", { name: "Categorie" }).getByRole("button", { name: /^Preferiti/ })).toHaveCount(0);
-  await page.getByRole("button", { name: "Filtri" }).click();
+  await opzione(page, /^Filtri/);
   await expect(page.locator("#f-ordina-per")).toContainText("Più recenti");
   await page.locator("#f-preferiti").click();
   await page.getByRole("option", { name: "Solo preferiti" }).click();
   await expect(page.getByText("Nota con stella").first()).toBeVisible();
+});
+
+test("chat: domande d'esempio fatte con l'archivio; aiuto pratico oltre i contenuti con il percorso su Maps", async ({ page }) => {
+  await page.route("**/api/geo", (route) => route.fulfill({ json: { found: null } }));
+  await addLink(page, `${FIX}/trastevere`);
+  await expect(page.getByText("Analizzato", { exact: true })).toBeVisible();
+  await page.goto("/");
+  const esempi = page.getByRole("list", { name: "Domande d'esempio" });
+  await expect(esempi.getByRole("button", { name: /^Come arrivo a / })).toBeVisible();
+  await page.getByLabel("Chiedi alla tua memoria").fill("Come arrivo da Termini al ristorante?");
+  await page.getByRole("button", { name: "Invia" }).click();
+  const aiuto = page.locator("[data-aiuto]");
+  await expect(aiuto).toContainText("Oltre ai tuoi contenuti");
+  await expect(aiuto).toContainText("prendi il tram 8 verso Trastevere.");
+  const percorso = aiuto.getByRole("link", { name: /Percorso da Termini/ });
+  await expect(percorso).toHaveAttribute("href", /^https:\/\/www\.google\.com\/maps\/dir\/\?api=1&origin=Termini&destination=Da\+Enzo/);
+  await expect(percorso).toHaveAttribute("target", "_blank");
+  // Solo link costruiti dall'app: niente altri indirizzi proposti dall'AI.
+  await expect(aiuto.getByRole("link")).toHaveCount(1);
 });

@@ -4,7 +4,7 @@
 // contenuti salvati non compaiono qui: stanno in Archivio. Se nel campo si
 // incolla un link, viene salvato nell'archivio.
 import { Fragment, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Copy, Settings } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpRight, Copy, Settings } from "lucide-react";
 import { AiBadge, ErrorBox, Spinner, TypeIcon } from "../components/ui.jsx";
 import { Thumb } from "../components/ItemCard.jsx";
 import AddMenu from "../components/AddMenu.jsx";
@@ -22,7 +22,7 @@ import { api } from "../lib/api.js";
 import { FileStoreContext } from "../lib/fileurl.js";
 import { LINK_SOURCE, isLink, linkParts } from "../lib/linkify.js";
 import { formatDate, typeLabel } from "../lib/format.js";
-import { needsDigest } from "../lib/memory.js";
+import { eventsOf, restaurantsOf } from "../lib/spots.js";
 
 const dayKey = (iso) => new Date(iso).toDateString();
 
@@ -65,14 +65,9 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   }, [text]);
 
   const byId = useMemo(() => new Map(items.map((it) => [it.id, it])), [items]);
-  // Domande suggerite per cominciare: dalle categorie più usate (le date le
-  // capisce solo l'AI).
-  const suggestions = useMemo(() => {
-    const top = countBy(items, "categories").slice(0, 3).map(([c]) => `Cosa ho salvato su ${c.toLowerCase()}?`);
-    return items.length ? [...(ai ? ["Cosa ho salvato questa settimana?"] : []), ...top] : [];
-  }, [items, ai]);
-  // Contenuti che l'AI sta ancora leggendo o rielaborando: le risposte non li comprendono del tutto.
-  const pending = useMemo(() => (ai ? items.filter((it) => it.status === "processing" || needsDigest(it)).length : 0), [items, ai]);
+  // Domande d'esempio quando la chat è vuota: fatte con i contenuti salvati,
+  // così si capisce subito cosa si può chiedere.
+  const suggestions = useMemo(() => domandeEsempio(items, ai), [items, ai]);
 
   const conversation = useMemo(() => log.map((m, i) => ({ msg: m, newDay: i === 0 || dayKey(m.at) !== dayKey(log[i - 1].at) })), [log]);
 
@@ -196,11 +191,6 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
             </button>
           </div>
         </header>
-        {pending > 0 && (
-          <p className="micro mb-3 font-semibold" role="status">
-            <span className="num">{pending}</span> {pending === 1 ? "contenuto ancora da elaborare" : "contenuti ancora da elaborare"}
-          </p>
-        )}
         {!syncMode && (
           <p className="riquadro mb-4 text-[0.92rem] font-semibold">
             <strong className="font-extrabold">Modalità locale:</strong> i dati restano solo in questo browser, senza sincronizzazione né backup.
@@ -214,17 +204,20 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
             <p className="grande">Chiedimi qualsiasi cosa</p>
             <p className="mt-2.5 max-w-sm font-medium text-tenue">
               {items.length
-                ? "Rispondo solo con i contenuti che hai salvato: Reel, TikTok, video, caroselli, immagini, siti e note. Ti indico sempre le fonti."
+                ? "Rispondo con quello che hai salvato e ti indico le fonti. Posso anche aiutarti a usarlo: come arrivare in un posto, cosa fare, da dove cominciare."
                 : 'Salva qualcosa con il Comando Rapido "Second Brain" o incolla qui un link: lo leggo, lo trascrivo e lo aggiungo alla tua memoria.'}
             </p>
             {suggestions.length > 0 && (
-              <ul className="mt-5 flex flex-wrap gap-1.5">
-                {suggestions.map((s) => (
-                  <li key={s}>
-                    <button type="button" className="pillola" onClick={() => ask(s)}>{s}</button>
-                  </li>
-                ))}
-              </ul>
+              <>
+                <p className="micro mt-5 font-bold">Per esempio</p>
+                <ul className="mt-2 flex flex-col items-start gap-1.5" aria-label="Domande d'esempio">
+                  {suggestions.map((s) => (
+                    <li key={s}>
+                      <button type="button" className="pillola !h-auto min-h-[38px] py-1.5 text-left" onClick={() => ask(s)}>{s}</button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         ) : (
@@ -346,7 +339,8 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
     const s = sources[n - 1];
     if (s?.item) onOpen(s.item);
   };
-  const answerText = plainAnswer(r?.answer);
+  // Si copia anche l'aiuto pratico, dopo la risposta.
+  const answerText = [plainAnswer(r?.answer), plainAnswer(r?.aiuto)].filter(Boolean).join("\n\n");
   return (
     <div className="space-y-2">
       <div className="flex justify-end">
@@ -370,7 +364,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
             </>
           ) : r.kind === "insufficient" ? (
             <>
-              <p className="font-extrabold tracking-[-0.02em]">I tuoi contenuti non bastano per rispondere.</p>
+              {!r.aiuto && <p className="font-extrabold tracking-[-0.02em]">I tuoi contenuti non bastano per rispondere.</p>}
               {r.answer && <AnswerText text={r.answer} count={sources.length} onCite={openSource} />}
             </>
           ) : r.kind === "none" ? (
@@ -380,9 +374,7 @@ function QaBubbles({ msg, byId, archiveOk, onOpen, onCopy }) {
           ) : (
             <p className="font-semibold">Ecco i contenuti più vicini alla tua domanda:</p>
           )}
-          {answered && r.total > r.consulted && (
-            <p className="micro mt-2">Ho consultato <span className="num">{r.consulted}</span> contenuti su <span className="num">{r.total}</span>: quelli più vicini alla domanda e i più recenti.</p>
-          )}
+          {answered && <AiutoPratico aiuto={r.aiuto} azioni={r.azioni} />}
           {answerText && !msg.pending && <CopyIcon label="Copia risposta" onClick={() => onCopy(answerText)} className="!top-2.5" />}
           {answered && <Sources sources={sources} archiveOk={archiveOk} onOpen={onOpen} />}
           {r && !msg.pending && !answered && r.kind !== "none" && <Nearby items={maybe} onOpen={onOpen} />}
@@ -563,5 +555,53 @@ function Nearby({ items, onOpen }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+// Fino a 4 domande d'esempio fatte con l'archivio: un quartiere con dei
+// ristoranti, come arrivare a un locale, gli eventi in programma e la
+// categoria più usata. Senza AI solo la ricerca per categoria.
+export function domandeEsempio(items, ai) {
+  if (!items.length) return [];
+  const out = [];
+  const top = countBy(items, "categories")[0]?.[0];
+  if (ai) {
+    const locali = restaurantsOf(items);
+    const zone = countBy(locali.map((r) => ({ categories: r.zona ? [r.zona] : [] })), "categories");
+    if (zone[0]?.[1] > 1) out.push(`Dove posso mangiare a ${zone[0][0]}?`);
+    const conVia = locali.find((r) => r.streets?.length);
+    if (conVia) out.push(`Come arrivo a ${conVia.name}?`);
+    if (eventsOf(items).upcoming.length) out.push("Che eventi ho in programma?");
+  }
+  if (top) out.push(`Cosa ho salvato su ${top.toLowerCase()}?`);
+  if (ai && out.length < 3) out.unshift("Cosa ho salvato questa settimana?");
+  return out.slice(0, 4);
+}
+
+// Aiuto pratico oltre i contenuti salvati (conoscenze generali dell'AI, senza
+// fonti) e link da aprire: percorso o posto su Google Maps, ricerca sul web.
+function AiutoPratico({ aiuto, azioni = [] }) {
+  if (!aiuto && !azioni?.length) return null;
+  return (
+    <div className="mt-3 border-t border-riga pt-3" data-aiuto>
+      {aiuto && (
+        <>
+          <p className="micro mb-1 font-bold">Oltre ai tuoi contenuti</p>
+          <AnswerText text={aiuto} count={0} onCite={() => {}} />
+        </>
+      )}
+      {azioni?.length > 0 && (
+        <ul className="mt-2.5 flex flex-wrap gap-1.5" aria-label="Link utili">
+          {azioni.map((a) => (
+            <li key={a.url}>
+              <a href={a.url} target="_blank" rel="noopener noreferrer" className="pillola attiva !h-auto min-h-[38px] py-1.5 text-left">
+                {a.label}
+                <ArrowUpRight className="h-3.5 w-3.5 shrink-0" strokeWidth={2.8} aria-hidden="true" />
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
