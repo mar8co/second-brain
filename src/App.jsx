@@ -1,8 +1,9 @@
 // Radice dell'app: sceglie l'archivio (locale o Supabase), gestisce accesso,
 // navigazione e notifiche brevi.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { BottomNav } from "./components/Layout.jsx";
-import { Spinner } from "./components/ui.jsx";
+import Avvio from "./components/Avvio.jsx";
+import { tieniAvvio } from "./lib/avvio.js";
 import { useRoute } from "./hooks/useRoute.js";
 import { useAuth } from "./hooks/useAuth.js";
 import { useArchive } from "./hooks/useArchive.js";
@@ -26,10 +27,20 @@ import NuovaPassword from "./views/NuovaPassword.jsx";
 
 export default function App() {
   const auth = useAuth();
-  if (isSyncMode && auth.loading) return <Spinner label="Avvio…" />;
-  if (isSyncMode && auth.recovery) return <NuovaPassword setNewPassword={auth.setNewPassword} />;
-  if (isSyncMode && !auth.session) return <Login signIn={auth.signIn} resetPassword={auth.resetPassword} />;
-  return <Shell auth={auth} />;
+  // All'apertura la schermata di avvio copre tutto finché non c'è l'accesso e
+  // la prima lettura dell'archivio (tenuta da Shell).
+  useLayoutEffect(() => tieniAvvio("accesso", Boolean(isSyncMode && auth.loading)), [auth.loading]);
+  let page;
+  if (isSyncMode && auth.loading) page = null;
+  else if (isSyncMode && auth.recovery) page = <NuovaPassword setNewPassword={auth.setNewPassword} />;
+  else if (isSyncMode && !auth.session) page = <Login signIn={auth.signIn} resetPassword={auth.resetPassword} />;
+  else page = <Shell auth={auth} />;
+  return (
+    <>
+      {page}
+      <Avvio />
+    </>
+  );
 }
 
 function Shell({ auth }) {
@@ -47,6 +58,10 @@ function Shell({ auth }) {
   const aiStatus = useAiStatus(true);
   const [settings, setSettings] = useSettings();
   const archive = useArchive(store, { ai: Boolean(aiStatus.ai && settings.autoAi) });
+  useLayoutEffect(() => {
+    tieniAvvio("archivio", archive.loading);
+    return () => tieniAvvio("archivio", false);
+  }, [archive.loading]);
 
   // Avviso breve: 2,4 s, oppure 5 s se ha un'azione ("Annulla"). Un nuovo
   // avviso sostituisce il precedente.
