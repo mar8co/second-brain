@@ -296,3 +296,45 @@ drop policy if exists "push_update_own" on public.push_subscriptions;
 create policy "push_update_own" on public.push_subscriptions for update to authenticated using (user_id = (select auth.uid())) with check (user_id = (select auth.uid()));
 drop policy if exists "push_delete_own" on public.push_subscriptions;
 create policy "push_delete_own" on public.push_subscriptions for delete to authenticated using (user_id = (select auth.uid()));
+
+-- ---------------------------------------------------------------------------
+-- Coda dei lavori fatti dal server anche ad app chiusa (server/lavori.js):
+-- schede dell'AI, riletture, vettori. La "sveglia" (pg_cron + pg_net, vedi
+-- sotto) chiama POST /api/lavori ogni 5 minuti con un token; qui c'è solo il
+-- suo hash. Le tabelle si usano con la chiave di servizio: RLS attiva e
+-- nessuna regola per gli utenti, tranne la lettura dei propri tentativi.
+-- ---------------------------------------------------------------------------
+create table if not exists public.lavori (
+  item_id     uuid not null references public.items (id) on delete cascade,
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  tipo        text not null check (tipo in ('scheda', 'rilettura')),
+  tentativi   int not null default 0,
+  versione    text,
+  ultimo_at   timestamptz not null default now(),
+  primary key (item_id, tipo)
+);
+alter table public.lavori enable row level security;
+drop policy if exists "lavori_select_own" on public.lavori;
+create policy "lavori_select_own" on public.lavori for select to authenticated using (user_id = (select auth.uid()));
+
+create table if not exists public.lavori_stato (
+  id          int primary key check (id = 1),
+  pausa_fino  timestamptz,
+  ultimo      jsonb,
+  ultimo_at   timestamptz
+);
+alter table public.lavori_stato enable row level security;
+
+create table if not exists public.lavori_chiave (
+  hash        text primary key,
+  created_at  timestamptz not null default now()
+);
+alter table public.lavori_chiave enable row level security;
+
+-- Sveglia (una volta, dal pannello SQL; <TOKEN> è un segreto casuale il cui
+-- sha256 va in lavori_chiave):
+--   create extension if not exists pg_cron; create extension if not exists pg_net;
+--   select cron.schedule('lavori', '*/5 * * * *', $$ select net.http_post(
+--     url := 'https://second-brain-qqwi.vercel.app/api/lavori',
+--     headers := '{"Authorization": "Bearer <TOKEN>", "Content-Type": "application/json"}'::jsonb,
+--     body := '{}'::jsonb, timeout_milliseconds := 5000) $$);
