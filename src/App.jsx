@@ -119,7 +119,34 @@ function Shell({ auth }) {
       <BottomNav path={path} navigate={navigate} archive={archive} toast={toast} />
       <div role="status" aria-live="polite">
         {toastMsg && (
-          <div key={toastMsg.key} className="brindisi">
+          <div
+            key={toastMsg.key}
+            className="brindisi"
+            // Swipe verso l'alto: l'avviso segue il dito e, lasciato, sparisce.
+            onTouchStart={(e) => {
+              e.currentTarget.dataset.y = e.touches[0].clientY;
+              e.currentTarget.style.transition = "none";
+            }}
+            onTouchMove={(e) => {
+              const dy = Math.min(0, e.touches[0].clientY - Number(e.currentTarget.dataset.y));
+              e.currentTarget.style.transform = `translateY(${dy}px)`;
+              e.currentTarget.style.opacity = String(1 + dy / 120);
+            }}
+            onTouchEnd={(e) => {
+              const el = e.currentTarget;
+              const dy = e.changedTouches[0].clientY - Number(el.dataset.y);
+              el.style.transition = "transform 0.2s ease-out, opacity 0.2s ease-out";
+              if (dy < -30) {
+                el.style.transform = "translateY(-140px)";
+                el.style.opacity = "0";
+                clearTimeout(timer.current);
+                timer.current = setTimeout(() => setToastMsg(null), 200);
+              } else {
+                el.style.transform = "";
+                el.style.opacity = "";
+              }
+            }}
+          >
             <span>{toastMsg.text}</span>
             {toastMsg.action && (
               <button

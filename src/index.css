@@ -314,7 +314,7 @@ button { cursor: pointer; }
   /* Avviso come in Dispensa: in alto (non tocca la barra di stato), largo
      quasi tutto lo schermo, pillola nera alta ~60px, "Annulla" in giallo. */
   .brindisi {
-    position: fixed; left: 16px; right: 16px; top: calc(env(safe-area-inset-top) + 56px); z-index: 60;
+    position: fixed; left: 16px; right: 16px; top: calc(env(safe-area-inset-top) + 76px); z-index: 60; touch-action: none;
     max-width: 448px; margin: 0 auto; min-height: 60px;
     display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-radius: 30px;
     background: #0a0a0a; color: #fff; font-weight: 650; font-size: 1.1rem; line-height: 1.3;
