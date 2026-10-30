@@ -94,7 +94,9 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
   // testata (così una risposta lunga non resta tagliata in alto; una corta
   // finisce a filo sopra il campo); finché si aspetta, in fondo.
   const listRef = useRef(null);
-  useEffect(() => {
+  // Prima che la pagina si veda: così all'apertura non compare un attimo
+  // l'inizio della chat prima del salto in fondo.
+  useLayoutEffect(() => {
     if (!log.length) return;
     const last = log[log.length - 1];
     const answer = last.result && !last.pending ? listRef.current?.querySelector("li:last-child [data-risposta]") : null;

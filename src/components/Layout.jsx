@@ -1,3 +1,4 @@
+import { flushSync } from "react-dom";
 import AddMenu from "./AddMenu.jsx";
 
 // Struttura della pagina: intestazione, contenuto, barra in basso.
@@ -40,7 +41,8 @@ export function BottomNav({ path, navigate, archive, toast }) {
               href={to}
               onClick={(e) => {
                 e.preventDefault();
-                navigate(to);
+                if (active) return;
+                cambiaScheda(() => navigate(to), to === "/" ? "indietro" : "avanti");
               }}
               aria-current={active ? "page" : undefined}
             >
@@ -52,6 +54,21 @@ export function BottomNav({ path, navigate, archive, toast }) {
       <div className="barra-piu">{path !== "/aggiungi" && <AddMenu archive={archive} navigate={navigate} toast={toast} grande dalDestra />}</div>
     </div>
   );
+}
+
+// Passaggio tra Chat e Archivio: la pagina nuova entra scorrendo di lato
+// (Archivio da destra, Chat da sinistra) mentre la vecchia esce, con la barra in
+// basso ferma. Dove il browser non lo sa fare (o con "riduci movimento") si
+// cambia pagina come prima.
+function cambiaScheda(vai, verso) {
+  const fermo = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (!document.startViewTransition || fermo) return vai();
+  const root = document.documentElement;
+  root.dataset.verso = verso;
+  const t = document.startViewTransition(() => flushSync(vai));
+  t.finished.finally(() => {
+    if (root.dataset.verso === verso) delete root.dataset.verso;
+  });
 }
 
 export function Page({ children }) {
