@@ -15,6 +15,7 @@
 // fonte. Il contenuto degli elementi è trattato come dato, mai come istruzioni.
 
 import { verifyRequest } from "./auth.js";
+import { archiveDb, preparaDomanda } from "./domanda.js";
 import { formatVia } from "../src/lib/indirizzi.js";
 
 // Modelli consigliati da Google per i nuovi progetti (ottobre 2026): i 2.5
@@ -535,6 +536,10 @@ const MAX_MEMORY = 3000;
 const DETAILS_CHARS = 260_000;
 const MEMORY_CHARS = 240_000;
 const PROMPT_CHARS = 330_000;
+// Elementi che non ci stanno nemmeno come scheda breve: una riga ciascuno
+// (titolo, tipo, data, autore), così l'AI sa che esistono e può citarli.
+const INDEX_CHARS = 60_000;
+const NUMERI_CHARS = 30_000;
 const DETAIL_TEXT = 12_000;
 const MAX_HISTORY = 4;
 const MAX_SOURCES = 12;
@@ -580,6 +585,19 @@ function memoryDoc(it, n) {
     posti: postiOf(ai, 3),
     nota_utente: str(it.note, 200),
     estratto: digested ? null : [str(it.description, 200), str(it.extracted_text, 300)].filter(Boolean).join(" … ") || null,
+  });
+}
+
+// Riga di un elemento nell'indice: il minimo per sapere che c'è.
+function rigaDoc(it, n) {
+  const ai = aiOf(it);
+  return compact({
+    n,
+    tipo: str(it.type, 20),
+    titolo: str(ai.titolo || it.title, 100),
+    autore: str(it.author, 60) || null,
+    salvato_il: str(it.created_at, 10),
+    parole_chiave: strArr(ai.keywords, 4, 25),
   });
 }
 
@@ -636,7 +654,7 @@ const dateRule = (now) =>
 // Prompt della domanda. Restituisce anche `refs` (numero → id e testo
 // dell'elemento) per controllare la risposta.
 // `total`: elementi nell'archivio; quelli inviati possono essere meno.
-export function prepareAsk(question, items, memory = [], { total = 0, now = new Date(), history = [] } = {}) {
+export function prepareAsk(question, items, memory = [], { total = 0, now = new Date(), history = [], numeri = "" } = {}) {
   const refs = new Map();
   const seen = new Set();
   const det = [];
@@ -659,16 +677,30 @@ export function prepareAsk(question, items, memory = [], { total = 0, now = new 
   }
   const memBudget = Math.min(MEMORY_CHARS, PROMPT_CHARS - size);
   let memSize = 0;
+  const idx = [];
+  let idxSize = 0;
   for (const it of [...overflow, ...memory]) {
     if (seen.has(it.id)) continue;
-    const doc = memoryDoc(it, refs.size + 1);
+    if (!idx.length) {
+      const doc = memoryDoc(it, refs.size + 1);
+      const json = JSON.stringify(doc);
+      if (memSize + json.length <= memBudget) {
+        memSize += json.length + 1;
+        seen.add(it.id);
+        refs.set(doc.n, { id: it.id, text: sourceText(doc) });
+        mem.push(json);
+        continue;
+      }
+    }
+    const doc = rigaDoc(it, refs.size + 1);
     const json = JSON.stringify(doc);
-    if (memSize + json.length > memBudget) break;
-    memSize += json.length + 1;
+    if (idxSize + json.length > INDEX_CHARS) break;
+    idxSize += json.length + 1;
     seen.add(it.id);
-    refs.set(doc.n, { id: it.id, text: sourceText(doc) });
-    mem.push(json);
+    refs.set(doc.n, { id: it.id, text: norm([doc.titolo, doc.autore].filter(Boolean).join("\n")) });
+    idx.push(json);
   }
+  const numeriTesto = str(numeri, NUMERI_CHARS);
   const all = Math.max(total, refs.size);
   const coverage = [];
   if (!mem.length && det.length >= all) {
@@ -676,11 +708,13 @@ export function prepareAsk(question, items, memory = [], { total = 0, now = new 
   } else {
     coverage.push("- <dettagli> contiene il contenuto completo (didascalia, trascrizione, testo) di una parte degli elementi: quando c'è, è la fonte più affidabile.");
     if (mem.length) coverage.push("- <memoria> contiene una scheda breve di altri elementi: sintesi e punti chiave scritti dall'AI, autore, parole chiave.");
+    if (idx.length) coverage.push("- <indice> elenca gli altri elementi con una riga sola (titolo, tipo, data): bastano per sapere che esistono e citarli, non per i dettagli.");
     if (refs.size < all) coverage.push(`- In tutto ricevi ${refs.size} elementi su ${all} salvati. Se non trovi la risposta, può essere in un elemento non incluso: dillo.`);
   }
+  if (numeriTesto) coverage.push("- <numeri> contiene conteggi ed elenchi esatti calcolati su TUTTO l'archivio (elementi per tipo e categoria, ristoranti e locali, eventi): per domande come \"quanti\", \"quali\", \"che eventi ho\" usa questi numeri, sono più affidabili del contare gli elementi ricevuti.");
   const turns = historyTurns(history);
   const prompt = [
-    `Sei Second Brain, la memoria personale dell'utente: conosci a fondo ciò che ha salvato (Reel, TikTok, post, video, caroselli, immagini, siti, note, posti). Rispondi in italiano alla domanda usando ESCLUSIVAMENTE i dati tra <dettagli> e </dettagli>${mem.length ? " e tra <memoria> e </memoria>" : ""}.`,
+    `Sei Second Brain, la memoria personale dell'utente: conosci a fondo ciò che ha salvato (Reel, TikTok, post, video, caroselli, immagini, siti, note, posti). Rispondi in italiano alla domanda usando ESCLUSIVAMENTE i dati tra <dettagli> e </dettagli>${mem.length ? ", tra <memoria> e </memoria>" : ""}${idx.length ? ", tra <indice> e </indice>" : ""}${numeriTesto ? ", tra <numeri> e </numeri>" : ""}.`,
     ...coverage,
     "Ogni elemento ha un numero \"n\". Regole:",
     "- Rispondi subito alla domanda, in modo diretto e preciso: nomi, profili (@nome), date, luoghi, prezzi, passaggi e quantità quando ci sono. Poi aggiungi i dettagli utili, anche come elenco puntato con \"- \". Niente premesse né giri di parole.",
@@ -699,6 +733,8 @@ export function prepareAsk(question, items, memory = [], { total = 0, now = new 
     ...(turns.length ? [`<conversazione>${JSON.stringify(turns)}</conversazione>`] : []),
     `<dettagli>[${det.join(",")}]</dettagli>`,
     ...(mem.length ? [`<memoria>[${mem.join(",")}]</memoria>`] : []),
+    ...(idx.length ? [`<indice>[${idx.join(",")}]</indice>`] : []),
+    ...(numeriTesto ? [`<numeri>\n${numeriTesto}\n</numeri>`] : []),
     `<domanda>${str(question, 500)}</domanda>`,
   ].join("\n");
   return { prompt, refs, consulted: refs.size };
@@ -961,9 +997,50 @@ export async function embedTexts({ env, texts, taskType = "RETRIEVAL_DOCUMENT", 
   });
 }
 
-const SELECT_MS = 22_000;
+// Risposta dell'AI a una domanda già preparata, in streaming (eventi SSE:
+// "delta" con la risposta scritta finora, poi "done" con fonti ed estratti,
+// oppure "error") o tutta insieme.
+async function rispondi({ env, fetchImpl, question, items, memory, opts, stream, extra = {} }) {
+  const { prompt, refs, consulted } = prepareAsk(question, items, memory, opts);
+  // Ragionamento al minimo: per le domande conta la rapidità (le risposte
+  // vengono solo dai contenuti dati, senza calcoli complessi).
+  const run = (onText) => callGemini({ env, prompt, schema: ASK_SCHEMA, maxTokens: 8192, fetchImpl, deadline: Date.now() + ASK_MS, thinking: "minimal", onText });
+  if (stream) {
+    return {
+      status: 200,
+      stream: async (send) => {
+        let last = "";
+        try {
+          const { out, model } = await run((raw) => {
+            const p = partialAnswer(raw, refs);
+            if (!p.answer || p.answer === last) return;
+            last = p.answer;
+            send({ type: "delta", ...p });
+          });
+          send({ type: "done", ...sanitizeAsk(out, refs), consulted, model, ...extra });
+        } catch (e) {
+          const saved = salvageAsk(e, refs);
+          if (saved) send({ type: "done", ...saved, consulted, ...extra });
+          else send({ type: "error", status: e instanceof AiError ? e.status : 500, error: e instanceof AiError ? e.message : "Errore interno." });
+        }
+      },
+    };
+  }
+  try {
+    const { out, model } = await run(null);
+    return { status: 200, json: { ...sanitizeAsk(out, refs), consulted, model, ...extra } };
+  } catch (e) {
+    const saved = salvageAsk(e, refs);
+    if (!saved) throw e;
+    return { status: 200, json: { ...saved, consulted, ...extra } };
+  }
+}
 
-export async function handleAi({ authHeader, body, env, fetchImpl }) {
+const SELECT_MS = 22_000;
+// Ricerca per significato prima di una domanda: oltre questo tempo si va avanti senza.
+const SEMANTIC_MS = 3500;
+
+export async function handleAi({ authHeader, body, env, fetchImpl, db = null }) {
   const auth = await verifyRequest({ authHeader, env });
   if (!auth.ok) return { status: auth.status, json: { error: auth.error } };
 
@@ -997,42 +1074,27 @@ export async function handleAi({ authHeader, body, env, fetchImpl }) {
         return { status: 200, json: { answer: "", sufficient: false, sources: [] } };
       }
       const total = Number.isInteger(body?.total) && body.total > 0 ? body.total : items.length + memory.length;
-      const { prompt, refs, consulted } = prepareAsk(question, items, memory, { total, history: body?.history });
-      // Ragionamento al minimo: per le domande conta la rapidità (le risposte
-      // vengono solo dai contenuti dati, senza calcoli complessi).
-      const run = (onText) => callGemini({ env, prompt, schema: ASK_SCHEMA, maxTokens: 8192, fetchImpl, deadline: Date.now() + ASK_MS, thinking: "minimal", onText });
-      if (body?.stream === true) {
-        // Risposta in streaming (eventi SSE): "delta" con la risposta scritta
-        // finora mentre l'AI la scrive, poi "done" con fonti ed estratti, oppure
-        // "error".
-        return {
-          status: 200,
-          stream: async (send) => {
-            let last = "";
-            try {
-              const { out, model } = await run((raw) => {
-                const p = partialAnswer(raw, refs);
-                if (!p.answer || p.answer === last) return;
-                last = p.answer;
-                send({ type: "delta", ...p });
-              });
-              send({ type: "done", ...sanitizeAsk(out, refs), consulted, model });
-            } catch (e) {
-              const saved = salvageAsk(e, refs);
-              if (saved) send({ type: "done", ...saved, consulted });
-              else send({ type: "error", status: e instanceof AiError ? e.status : 500, error: e instanceof AiError ? e.message : "Errore interno." });
-            }
-          },
-        };
-      }
+      return rispondi({ env, fetchImpl, question, items, memory, opts: { total, history: body?.history }, stream: body?.stream === true });
+    }
+    if (action === "askArchive") {
+      const question = str(body?.question, 500).trim();
+      if (!question) return { status: 400, json: { error: "Domanda mancante." } };
+      const archivio = db || (env.SUPABASE_URL && env.SUPABASE_ANON_KEY && authHeader ? archiveDb(env, authHeader) : null);
+      if (!archivio) return { status: 503, json: { error: "Archivio non raggiungibile dal server." } };
+      const items = await archivio.list();
+      if (!items.length) return { status: 200, json: { answer: "", sufficient: false, sources: [], total: 0 } };
+      // Ricerca per significato: se è lenta o non va, restano le parole.
+      let near = [];
       try {
-        const { out, model } = await run(null);
-        return { status: 200, json: { ...sanitizeAsk(out, refs), consulted, model } };
-      } catch (e) {
-        const saved = salvageAsk(e, refs);
-        if (!saved) throw e;
-        return { status: 200, json: { ...saved, consulted } };
+        near = await Promise.race([
+          embedTexts({ env, texts: [question], taskType: "RETRIEVAL_QUERY", fetchImpl }).then(([v]) => archivio.match(v, 20)),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("lenta")), SEMANTIC_MS)),
+        ]);
+      } catch {
+        near = [];
       }
+      const p = preparaDomanda(items, question, { history: body?.history, near });
+      return rispondi({ env, fetchImpl, question, items: p.details.slice(0, MAX_DETAILS), memory: p.memory.slice(0, MAX_MEMORY), opts: { total: p.total, history: p.turni, numeri: p.numeri }, stream: body?.stream === true, extra: { total: p.total } });
     }
     if (action === "select") {
       const question = str(body?.question, 500).trim();

@@ -190,6 +190,43 @@ describe("AI", () => {
     expect(prompt).toContain('"risposta":"Sì."');
   });
 
+  it("askArchive: il server legge l'archivio, cerca per significato e manda numeri esatti; nessuno escluso", async () => {
+    const seen = { calls: [] };
+    // 600 elementi: oltre il tutto-per-intero; i più vecchi finiscono nell'indice, non spariscono.
+    const items = Array.from({ length: 600 }, (_, i) => ({
+      id: `i${i}`,
+      type: "social",
+      title: `Post ${i} ${"x".repeat(150)}`,
+      created_at: new Date(Date.UTC(2026, 9, 1) - i * 3600_000).toISOString(),
+      categories: i % 2 ? ["Cibo"] : ["Viaggi"],
+      ai: { summary: "s".repeat(340), points: ["p".repeat(150), "q".repeat(150), "r".repeat(150)], keywords: ["k"], places: i < 3 ? [{ name: `Trattoria ${i}`, kind: "ristorante", address: "Roma" }] : [] },
+    }));
+    const db = { list: async () => items, match: async (v, k) => ((seen.match = { v, k }), ["i599"]) };
+    const fetchImpl = async (url, init) => {
+      seen.calls.push(url);
+      if (url.includes("batchEmbedContents")) return new Response(JSON.stringify({ embeddings: [{ values: Array.from({ length: 768 }, () => 1) }] }));
+      seen.prompt = JSON.parse(init.body).contents[0].parts[0].text;
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ answer: "Hai 3 ristoranti [1].", sufficient: true, sources: [{ n: 1, quote: "" }] }) }] } }] }));
+    };
+    const r = await handleAi({ body: { action: "askArchive", question: "quanti ristoranti?", history: [{ q: "prima", a: "ok", sources: ["i5"] }] }, env, fetchImpl, db });
+    expect(r.status).toBe(200);
+    expect(r.json).toMatchObject({ answer: "Hai 3 ristoranti [1].", sufficient: true, total: 600 });
+    expect(seen.match.k).toBe(20);
+    expect(seen.prompt).toContain("Ristoranti e locali (nome, città o indirizzo, quanti contenuti lo citano): 3");
+    expect(seen.prompt).toContain("Per categoria: Cibo 300, Viaggi 300");
+    expect(seen.prompt).toContain("<indice>");
+    expect(Number(seen.prompt.match(/In tutto ricevi (\d+)/)[1])).toBeGreaterThan(500);
+    // L'elemento trovato per significato e la fonte della risposta precedente sono letti per intero.
+    const dettagli = seen.prompt.slice(seen.prompt.indexOf("<dettagli>["), seen.prompt.lastIndexOf("</dettagli>"));
+    expect(dettagli).toContain('"id":"i599"');
+    expect(dettagli).toContain('"id":"i5"');
+  });
+
+  it("askArchive senza archivio raggiungibile: errore chiaro", async () => {
+    const r = await handleAi({ body: { action: "askArchive", question: "x" }, env });
+    expect(r.status).toBe(503);
+  });
+
   it("ask senza elementi: insufficiente senza chiamare Gemini", async () => {
     let called = false;
     const r = await handleAi({ body: { action: "ask", question: "x", items: [] }, env, fetchImpl: async () => ((called = true), new Response("{}")) });

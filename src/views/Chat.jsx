@@ -18,7 +18,6 @@ import { countBy } from "../lib/search.js";
 import { displayHost, detectType, extractUrl } from "../lib/detect.js";
 import { displayTitle } from "../lib/item.js";
 import { copyText } from "../lib/clipboard.js";
-import { api } from "../lib/api.js";
 import { FileStoreContext } from "../lib/fileurl.js";
 import { LINK_SOURCE, isLink, linkParts } from "../lib/linkify.js";
 import { conTelefoni } from "../lib/telefoni.js";
@@ -148,14 +147,9 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     setIncollati(mergeFiles([], files));
   };
 
-  // Ricerca per significato (solo con l'archivio sincronizzato).
+  // Con l'archivio sincronizzato la domanda la prepara il server.
   const store = useContext(FileStoreContext);
-  const semantic = store?.matchItems
-    ? async (question) => {
-        const { vectors } = await api.embed([question], "RETRIEVAL_QUERY");
-        return store.matchItems(vectors[0], 12);
-      }
-    : null;
+  const server = store?.mode === "sync";
 
   const ask = async (question) => {
     // I turni precedenti servono per le domande di seguito ("e quanto costa?").
@@ -164,7 +158,7 @@ export default function Chat({ archive, query, navigate, openItem, toast, ai, sy
     updateChatLog((cur) => [...cur, { id, at: new Date().toISOString(), q: question, pending: true }]);
     // La risposta arriva anche se nel frattempo si è passati a un'altra
     // schermata; intanto si vede comparire parola per parola.
-    const result = await askArchive(items, question, { ai, history, semantic, onPartial: (p) => setPartial(id, p) });
+    const result = await askArchive(items, question, { ai, history, server, onPartial: (p) => setPartial(id, p) });
     updateChatLog((cur) => cur.map((m) => (m.id === id ? { ...m, pending: false, result, answeredAt: new Date().toISOString() } : m)));
     setPartial(id, null);
   };
