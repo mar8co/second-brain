@@ -130,6 +130,12 @@ export const api = {
     onDelta
       ? postStream("/api/ai", { action: "ask", question, items, memory, total, history, stream: true }, onDelta, { timeoutMs: 45000 })
       : post("/api/ai", { action: "ask", question, items, memory, total, history }, { timeoutMs: 45000 }),
+  // Domanda preparata dal server, che legge l'archivio dal database: si
+  // mandano solo la domanda e i turni precedenti [{ q, a, sources }].
+  askArchive: (question, history = [], onDelta = null) =>
+    onDelta
+      ? postStream("/api/ai", { action: "askArchive", question, history, stream: true }, onDelta, { timeoutMs: 50000 })
+      : post("/api/ai", { action: "askArchive", question, history }, { timeoutMs: 50000 }),
   // Via di un locale dal nome (OpenStreetMap) → { query, found: { street } | null }.
   pushKey: () => post("/api/push", { action: "key" }, { timeoutMs: 15000 }),
   pushTest: () => post("/api/push", { action: "test" }, { timeoutMs: 20000 }),

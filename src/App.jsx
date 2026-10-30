@@ -106,7 +106,7 @@ function Shell({ auth }) {
   else if (path === "/archivio") view = <Archive store={store} {...common} />;
   else if (path === "/impostazioni")
     view = (
-      <Settings {...common} syncMode={isSyncMode} session={auth.session} signOut={auth.signOut} aiStatus={aiStatus} settings={settings} setSettings={setSettings} />
+      <Settings {...common} store={store} syncMode={isSyncMode} session={auth.session} signOut={auth.signOut} aiStatus={aiStatus} settings={settings} setSettings={setSettings} />
     );
   // "/" e il vecchio "/chiedi?q=…" portano alla chat.
   else view = <Chat key="chat" {...common} syncMode={isSyncMode} />;

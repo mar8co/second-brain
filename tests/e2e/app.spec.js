@@ -1667,3 +1667,23 @@ test("chat: i numeri di telefono nella risposta sono sottolineati e si chiamano 
   // Il testo intorno resta com'era.
   await expect(risposta).toContainText("dalle 08.30 alle 19.30 dal 05/11/2026.");
 });
+
+test("backup completo: uno zip con i contenuti, la chat e i file caricati", async ({ page }) => {
+  await page.goto("/");
+  await page.getByLabel("Scegli foto, video o file").setInputFiles({ name: "appunti.md", mimeType: "text/markdown", buffer: Buffer.from("# Docker\nComando utile: docker compose up -d") });
+  await page.getByRole("button", { name: /^Salva \d+ (foto|file)$/ }).click();
+  await expect(page.getByText("Salvato nell'archivio")).toBeVisible();
+  await page.goto("/impostazioni");
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Fai il Backup" }).click();
+  const d = await download;
+  expect(d.suggestedFilename()).toMatch(/^second-brain-\d{4}-\d{2}-\d{2}\.zip$/);
+  const bytes = readFileSync(await d.path());
+  // Zip: firma iniziale, il riepilogo e il file caricato dentro.
+  expect(bytes.subarray(0, 4).toString("hex")).toBe("504b0304");
+  const testo = bytes.toString("latin1");
+  expect(testo).toContain("backup.json");
+  expect(testo).toMatch(/files\/[\w-]+-appunti\.md/);
+  expect(testo).toContain("docker compose up -d");
+  await expect(page.getByText("Backup pronto, con foto, PDF e chat")).toBeVisible();
+});

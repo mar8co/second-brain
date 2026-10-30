@@ -6,6 +6,9 @@ import Notifiche from "../components/Notifiche.jsx";
 import QuickShare from "../components/QuickShare.jsx";
 import { usePageColor } from "../hooks/usePageColor.js";
 import { PAGE } from "../lib/colors.js";
+import { useState } from "react";
+import { creaBackup, preferenze } from "../lib/backup.js";
+import { getChatLog } from "../lib/chatlog.js";
 
 function Section({ title, children }) {
   return (
@@ -16,7 +19,7 @@ function Section({ title, children }) {
   );
 }
 
-export default function Settings({ archive, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back }) {
+export default function Settings({ archive, store, syncMode, session, signOut, aiStatus, settings, setSettings, toast, back }) {
   usePageColor(PAGE.settings);
   const { reanalysis, reanalyzable, reanalyzeAll } = archive;
   const reanalyze = async () => {
@@ -26,13 +29,36 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
     else if (r.failed) toast(`Rianalizzati ${r.done - r.failed} su ${r.total}, ${r.failed} da riprovare`);
     else toast(r.done === 1 ? "1 elemento rianalizzato" : `${r.done} elementi rianalizzati`);
   };
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), items: archive.items }, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `second-brain-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  // Backup completo: contenuti, chat, preferenze e file (foto, PDF) in uno zip.
+  const [backup, setBackup] = useState(null);
+  const faiBackup = async () => {
+    if (backup) return;
+    setBackup({ fatti: 0, totale: 0 });
+    try {
+      const r = await creaBackup({
+        items: archive.items,
+        chat: getChatLog(),
+        prefs: preferenze(),
+        scarica: async (it) => {
+          const url = await store.fileUrl(it);
+          if (!url) throw new Error("indirizzo del file non disponibile");
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`errore ${res.status}`);
+          return new Uint8Array(await res.arrayBuffer());
+        },
+        avanzamento: (fatti, totale) => setBackup({ fatti, totale }),
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([r.zip], { type: "application/zip" }));
+      a.download = `second-brain-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+      toast(r.mancanti ? `Backup pronto, ${r.mancanti} file non scaricati` : "Backup pronto, con foto, PDF e chat");
+    } catch (e) {
+      toast(e?.message || "Backup non riuscito");
+    } finally {
+      setBackup(null);
+    }
   };
 
   return (
@@ -51,9 +77,9 @@ export default function Settings({ archive, syncMode, session, signOut, aiStatus
               {!reanalysis && <span className="conta num">{reanalyzable.length}</span>}
             </button>
           )}
-          <button type="button" className="pillola justify-center" onClick={exportJson} disabled={!archive.items.length}>
+          <button type="button" className="pillola justify-center" onClick={faiBackup} disabled={!archive.items.length || Boolean(backup)}>
             <DatabaseBackup className="h-4 w-4" strokeWidth={2.6} aria-hidden="true" />
-            Fai il Backup
+            {backup ? <span className="num">{backup.totale ? `File ${backup.fatti}/${backup.totale}` : "Preparo…"}</span> : "Fai il Backup"}
           </button>
           {syncMode && (
             <button type="button" className="pillola !border-[#e02a0d] !bg-[#e02a0d] !text-white justify-center" onClick={signOut}>
