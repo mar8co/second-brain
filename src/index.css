@@ -309,6 +309,8 @@ button { cursor: pointer; }
     white-space: nowrap; color: #f3f1ec; text-decoration: none; transition: background-color 0.18s, color 0.18s;
   }
   .schede a[aria-current="page"] { background: #f3f1ec; color: #0a0a0a; }
+  /* Cambio tra Chat e Archivio: la barra resta ferma, le pagine scorrono di lato. */
+  .bottom-nav { view-transition-name: barra; }
 
   /* Avviso breve, appena sopra la barra; "Annulla" in giallo. */
   /* Avviso come in Dispensa: in alto (non tocca la barra di stato), largo
@@ -419,3 +421,20 @@ html.senza-rimbalzo, html.senza-rimbalzo body { overscroll-behavior-y: none; }
   background: #fff; color: #0a0a0a; border: 1.5px solid #0a0a0a;
 }
 .piu-tondo.grande { width: 54px; height: 54px; border-width: 2px; box-shadow: 0 8px 30px rgb(0 0 0 / 0.25); }
+
+/* Passaggio tra Chat e Archivio (View Transitions): la pagina vecchia esce di
+   lato e sfuma, la nuova entra dall'altro lato. "avanti" = verso Archivio. */
+::view-transition-group(root) { animation-duration: 0.34s; }
+::view-transition-old(root),
+::view-transition-new(root) { animation-duration: 0.34s; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+html[data-verso="avanti"]::view-transition-old(root) { animation-name: esceSinistra; }
+html[data-verso="avanti"]::view-transition-new(root) { animation-name: entraDaDestra; }
+html[data-verso="indietro"]::view-transition-old(root) { animation-name: esceDestra; }
+html[data-verso="indietro"]::view-transition-new(root) { animation-name: entraDaSinistra; }
+::view-transition-group(barra) { animation: none; }
+::view-transition-old(barra) { display: none; }
+::view-transition-new(barra) { animation: none; }
+@keyframes esceSinistra { to { transform: translateX(-28%); opacity: 0; } }
+@keyframes esceDestra { to { transform: translateX(28%); opacity: 0; } }
+@keyframes entraDaDestra { from { transform: translateX(28%); opacity: 0; } }
+@keyframes entraDaSinistra { from { transform: translateX(-28%); opacity: 0; } }
