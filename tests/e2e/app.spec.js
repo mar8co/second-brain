@@ -58,12 +58,20 @@ test("chat vuota; second-brain in alto; barra con solo Chat e Archivio; Rianaliz
   const agg = await page.getByRole("button", { name: "Fai il Backup" }).boundingBox();
   const titolo = await page.getByRole("heading", { name: "Impostazioni" }).boundingBox();
   expect(agg.y).toBeLessThan(titolo.y + 300);
-  // Ordine chiaro: Archivio, AI, Dati e account; il resto è in "Informazioni e privacy", chiuso.
+  // Ordine chiaro: Archivio, AI, App, Dati e account; il resto è in "Informazioni e privacy", chiuso.
   const ys = [];
-  for (const n of ["Archivio", "AI", "Dati e account", "Informazioni e privacy"]) ys.push((await page.locator("main").getByText(n, { exact: true }).last().boundingBox()).y);
+  for (const n of ["Archivio", "AI", "App", "Dati e account", "Informazioni e privacy"]) ys.push((await page.locator("main").getByText(n, { exact: true }).last().boundingBox()).y);
   expect([...ys].sort((a, b) => a - b)).toEqual(ys);
   await expect(page.getByRole("switch", { name: /Rielabora con l'AI/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Fai il Backup" })).toBeVisible();
+  // Condividi l'app: senza menu Condividi del sistema, il link viene copiato.
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: async (t) => (window.__copiato = t) }, configurable: true });
+  });
+  await page.getByRole("button", { name: "Condividi l'app" }).click();
+  await expect(page.getByText("Link dell'app copiato")).toBeVisible();
+  expect(await page.evaluate(() => window.__copiato)).toBe(new URL(page.url()).origin);
   await expect(page.getByText(/IndexedDB/)).toBeHidden();
   await page.getByText("Informazioni e privacy").click();
   await expect(page.getByText(/IndexedDB/)).toBeVisible();

@@ -279,6 +279,21 @@ button { cursor: pointer; }
   .griglia-dati b { display: block; font-weight: 750; font-size: 1.05rem; letter-spacing: -0.02em; line-height: 1.15; }
 
   /* Interruttore */
+  /* Impostazioni: una riga per azione, filo sottile sotto ognuna. */
+  .riga-azione {
+    display: flex; align-items: center; gap: 14px; width: 100%; min-height: 58px; padding: 10px 0;
+    background: none; border: none; border-bottom: 1px solid var(--riga); text-align: left; color: inherit;
+    transition: transform 0.08s;
+  }
+  .riga-azione:active { transform: scale(0.99); }
+  .riga-azione:disabled { cursor: default; transform: none; }
+  .riga-azione:disabled b { opacity: 0.45; }
+  .riga-azione.rosso { color: #e02a0d; }
+  .riga-azione.rosso .micro { color: inherit; opacity: 0.8; }
+  .conta-riga {
+    flex: none; min-width: 26px; height: 26px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--inchiostro); color: var(--sfondo); font-size: 0.8rem; font-weight: 800;
+  }
   .riga-interruttore {
     display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 50px;
     padding: 8px 0; background: none; border: none; text-align: left;
