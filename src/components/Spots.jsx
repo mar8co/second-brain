@@ -40,13 +40,15 @@ function SourceLinks({ items }) {
 // Link a Maps: con la via completa mostra la via; senza, "Cerca su Maps" (la
 // ricerca usa comunque nome e città). `plain`: il luogo di un evento si legge
 // comunque, anche senza via.
+// Il link è largo quanto il testo: toccando il resto della riga si apre la
+// scheda del locale, non Maps.
 function MapsLink({ name, where: raw, plain = false, isStreet = false, pin = false }) {
   const where = formatVia(raw);
   const street = isStreet || hasStreet(where);
   return (
     <>
       {plain && where && !street && <p className="micro mt-0.5 text-[0.85rem]">{where}</p>}
-      <a href={mapsUrl(name, where)} target="_blank" rel="noopener noreferrer" className="micro mt-0.5 block text-[0.85rem] underline underline-offset-[3px]">
+      <a href={mapsUrl(name, where)} target="_blank" rel="noopener noreferrer" className="micro mt-0.5 block w-fit max-w-full text-[0.85rem] underline underline-offset-[3px]">
         {pin && <MapPin className="mr-1 inline h-[0.95em] w-[0.95em] align-[-0.12em]" strokeWidth={2.6} aria-hidden="true" />}
         {street ? <>{where} <span aria-hidden="true">↗</span><span className="sr-only"> (apri su Maps)</span></> : <>Cerca su Maps <span aria-hidden="true">↗</span></>}
       </a>
@@ -215,8 +217,9 @@ export function OrdinaLocali({ value, onChange }) {
   );
 }
 
-// Scheda del locale (sale dal basso): tutti gli indirizzi con Maps, modifica
-// degli indirizzi, il contenuto da cui viene ed Elimina.
+// Scheda del locale (sale dal basso): tutti gli indirizzi con Maps, il
+// contenuto da cui viene, la ricerca di via e quartiere (se mancano), modifica
+// degli indirizzi ed Elimina.
 function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onRegeo, onDelete }) {
   const [modifica, setModifica] = useState(false);
   const t = (TIPI_LOCALE[r.tipo] || TIPI_LOCALE.ristorante).label;
@@ -253,24 +256,8 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onRegeo, onDelete 
           }}
         />
       )}
+      {/* Prima Apri scheda; Ricerca via e quartiere solo se manca la via o il quartiere. */}
       <div className="mt-3 border-t border-riga">
-        {onStreet && !modifica && (
-          <button type="button" className={azione} onClick={() => setModifica(true)}>
-            {indirizzi.length ? "Modifica indirizzi" : "Aggiungi indirizzo"}
-          </button>
-        )}
-        {onRegeo && !modifica && (
-          <button
-            type="button"
-            className={azione}
-            onClick={() => {
-              onClose();
-              onRegeo(r.name);
-            }}
-          >
-            Ricerca via e quartiere
-          </button>
-        )}
         {r.items.slice(0, 3).map((it, i, all) => (
           <button
             key={it.id}
@@ -284,6 +271,23 @@ function SchedaLocale({ r, onClose, onOpen, onStreet, onLink, onRegeo, onDelete 
             {all.length > 1 ? `Apri scheda ${i + 1}` : "Apri scheda"}
           </button>
         ))}
+        {onRegeo && !modifica && (!indirizzi.length || !r.zona) && (
+          <button
+            type="button"
+            className={azione}
+            onClick={() => {
+              onClose();
+              onRegeo(r.name);
+            }}
+          >
+            Ricerca via e quartiere
+          </button>
+        )}
+        {onStreet && !modifica && (
+          <button type="button" className={azione} onClick={() => setModifica(true)}>
+            {indirizzi.length ? "Modifica indirizzi" : "Aggiungi indirizzo"}
+          </button>
+        )}
         {onDelete && (
           <button
             type="button"
