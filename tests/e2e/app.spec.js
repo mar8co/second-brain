@@ -643,6 +643,20 @@ test("Archivio a box: Ristoranti ed Eventi con i link ai contenuti; passati in g
   };
   let f = await apriScheda(bar);
   await expect(f.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ })).toBeVisible();
+  // Prima Apri scheda; con via e quartiere trovati niente Ricerca via e quartiere.
+  expect((await f.getByRole("button", { name: /^Apri scheda/ }).first().boundingBox()).y).toBeLessThan((await f.getByRole("button", { name: "Modifica indirizzi" }).boundingBox()).y);
+  await expect(f.getByRole("button", { name: "Ricerca via e quartiere" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(f).toHaveCount(0);
+  // Toccando la riga accanto all'indirizzo si apre la scheda del locale, non Maps:
+  // il link a Maps è largo quanto il suo testo.
+  const viaBar = bar.getByRole("link", { name: /Piazza di San Calisto 3, Roma/ });
+  const rigaBox = await bar.boundingBox();
+  const viaBox = await viaBar.boundingBox();
+  expect(viaBox.x + viaBox.width).toBeLessThan(rigaBox.x + rigaBox.width - 40);
+  await bar.click({ position: { x: rigaBox.width - 16, y: viaBox.y - rigaBox.y + viaBox.height / 2 } });
+  await expect(page.getByRole("dialog", { name: "Scheda di Bar San Calisto" })).toBeVisible();
+  expect(page.context().pages()).toHaveLength(1);
   await page.keyboard.press("Escape");
   await expect(f).toHaveCount(0);
   f = await apriScheda(bar);
@@ -804,6 +818,11 @@ test("Archivio a box: Ristoranti senza via, la scheda del locale offre Aggiungi 
   await bar.getByText("Bar San Calisto", { exact: true }).click();
   await expect(f.getByRole("button", { name: "Modifica indirizzi" })).toHaveCount(0);
   await expect(f.getByRole("button", { name: "Elimina", exact: true })).toBeVisible();
+  // Senza via: Apri scheda, poi Ricerca via e quartiere, poi Aggiungi indirizzo.
+  const yApri = (await f.getByRole("button", { name: /^Apri scheda/ }).first().boundingBox()).y;
+  const yRicerca = (await f.getByRole("button", { name: "Ricerca via e quartiere" }).boundingBox()).y;
+  expect(yApri).toBeLessThan(yRicerca);
+  expect(yRicerca).toBeLessThan((await f.getByRole("button", { name: "Aggiungi indirizzo" }).boundingBox()).y);
   await f.getByRole("button", { name: "Aggiungi indirizzo" }).click();
   await expect(f.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" })).toHaveValue("");
   await f.getByRole("textbox", { name: "Indirizzo 1 di Bar San Calisto" }).fill("Via Nuova 1, Roma");
